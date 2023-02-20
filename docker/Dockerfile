@@ -1,6 +1,6 @@
 ARG PYTORCH="1.9.0"
-ARG CUDA="10.2"
-ARG CUDNN="7"
+ARG CUDA="11.1"
+ARG CUDNN="8"
 
 FROM pytorch/pytorch:${PYTORCH}-cuda${CUDA}-cudnn${CUDNN}-devel
 
@@ -15,10 +15,11 @@ RUN apt-key del 7fa2af80
 RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
 RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/7fa2af80.pub
 
-# install some useful libs
-RUN apt-get update && apt-get install -y ffmpeg libsm6 libxext6 git ninja-build libglib2.0-0 libsm6 libxrender-dev libxext6 git nano sudo python3-dev build-essential \
+# install some useful libs !!added mlflow
+RUN apt-get update && apt-get install -y ffmpeg libsm6 libxext6 git ninja-build libglib2.0-0 libsm6 libxrender-dev libxext6 git nano sudo python3-dev build-essential mlflow\
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
 
 ENV  PATH="/root/.local/bin:${PATH}"
 
@@ -39,7 +40,11 @@ RUN git clone https://github.com/open-mmlab/mmdetection.git mmdetection \
 RUN pip install mmsegmentation==0.20.0 \
     && pip uninstall -y pycocotools \
     && pip install mmpycocotools
+
 RUN conda clean --all
 ENV FORCE_CUDA="1"
 
 WORKDIR /workspace
+
+
+
