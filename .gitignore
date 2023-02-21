@@ -118,6 +118,7 @@ exps/
 *~
 mmdet3d/.mim
 mlruns/
+!mmdetection3d/demo/data
 
 # Pytorch
 *.pth
