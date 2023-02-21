@@ -11,6 +11,7 @@ docker run \
 --rm \
 --publish 6006 \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
+--env DISPLAY=:3 \
 --shm-size=16g \
 --mount source=$repo_dir,target=/workspace,type=bind,consistency=cached \
 --mount source=$nusc_data_dir,target=/workspace/data/nuscenes,type=bind,consistency=cached \
