@@ -10,7 +10,8 @@ exp_dir="/work/zahr/SpatialDETR/work_dirs"
 docker run \
 --rm \
 --publish 6006 \
---gpus all --shm-size=16g \
+--gpus 'all,"capabilities=compute,utility,graphics"' \
+--shm-size=16g \
 --mount source=$repo_dir,target=/workspace,type=bind,consistency=cached \
 --mount source=$nusc_data_dir,target=/workspace/data/nuscenes,type=bind,consistency=cached \
 --mount source=$exp_dir,target=/workspace/work_dirs,type=bind,consistency=cached \
