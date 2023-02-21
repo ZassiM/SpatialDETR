@@ -11,7 +11,11 @@ docker run \
 --rm \
 --publish 6006 \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
---env DISPLAY=:3 \
+--env QT_X11_NO_MITSHM=1 \
+--env DISPLAY=${DISPLAY} \
+--env XAUTHORITY=${XAUTH} \
+--volume ${XAUTH}:${XAUTH} \
+--volume ${XSOCK}:${XSOCK} \
 --shm-size=16g \
 --mount source=$repo_dir,target=/workspace,type=bind,consistency=cached \
 --mount source=$nusc_data_dir,target=/workspace/data/nuscenes,type=bind,consistency=cached \
