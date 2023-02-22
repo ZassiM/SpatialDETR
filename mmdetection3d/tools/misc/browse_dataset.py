@@ -206,6 +206,7 @@ def main():
     progress_bar = mmcv.ProgressBar(len(dataset))
 
     for input in dataset:
+        
         if vis_task in ['det', 'multi_modality-det']:
             # show 3D bboxes on 3D point clouds
             show_det_data(input, args.output_dir, show=args.online)

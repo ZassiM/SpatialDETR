@@ -7,6 +7,11 @@ repo_dir="/home/zahr/Documents/SpatialDETR"
 # path to directory where models / logs shall be stored in
 exp_dir="/home/zahr/Documents/SpatialDETR/work_dirs"
 
+XSOCK=/tmp/.X11-unix  # to support X11 forwarding in isolated containers on local host (not thorugh SSH)
+XAUTH=$(mktemp /tmp/.docker.xauth.XXXXXXXXX)
+xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f $XAUTH nmerge - 2>/dev/null
+chmod 777 $XAUTH
+
 docker run \
 --rm \
 --publish 6006 \
