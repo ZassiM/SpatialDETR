@@ -1,0 +1,5 @@
+config = "configs/submission/frozen_4/query_proj_value_proj.py"
+checkpoint = "checkpoints/sdetr.pth"
+eval = "mAP"
+gpu_id = 0
+launcher = "none"
