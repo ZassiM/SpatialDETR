@@ -120,15 +120,11 @@ def parse_args():
     return args
 
 
-
-
 def main():
-    #args = parse_args()
-
+    
     with open("args.toml", mode = "rb") as argsF:
         args = tomli.load(argsF)
 
-    
     cfg = Config.fromfile(args["config"])
 
     # set multi-process settings
@@ -141,6 +137,7 @@ def main():
     cfg.model.pretrained = None
     # in case the test dataset is concatenated
     samples_per_gpu = 1
+    
     if isinstance(cfg.data.test, dict):
         cfg.data.test.test_mode = True
         samples_per_gpu = cfg.data.test.pop('samples_per_gpu', 1)
@@ -159,7 +156,6 @@ def main():
 
     cfg.gpu_ids = [args["gpu_id"]]
 
-
     # init distributed env first, since logger depends on the dist info.
     if args["launcher"] == 'none':
         distributed = False
@@ -167,7 +163,6 @@ def main():
         distributed = True
         init_dist(args["launcher"], **cfg.dist_params)
     
-
     # build the dataloader
     dataset = build_dataset(cfg.data.test)
     data_loader = build_dataloader(
@@ -177,7 +172,6 @@ def main():
         dist=distributed,
         shuffle=False)
     
-
     # build the model and load checkpoint
     cfg.model.train_cfg = None
     model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
