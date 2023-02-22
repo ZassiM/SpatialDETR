@@ -3,3 +3,6 @@ checkpoint = "checkpoints/sdetr.pth"
 eval = "mAP"
 gpu_id = 0
 launcher = "none"
+fuse_conv_bn = false
+show = true
+show_dir = "./show_results"

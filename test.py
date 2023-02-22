@@ -107,7 +107,7 @@ def parse_args():
         help='job launcher')
     parser.add_argument('--local_rank', type=int, default=0)
     args = parser.parse_args()
-    if 'LOCAL_RANK' not in os.environ:tmpdir
+    if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
 
     if args.options and args.eval_options:
@@ -120,6 +120,8 @@ def parse_args():
     return args
 
 
+
+
 def main():
     #args = parse_args()
 
@@ -128,7 +130,23 @@ def main():
 
     
     cfg = Config.fromfile(args["config"])
-tmpdirsor(
+
+    # set multi-process settings
+    setup_multi_processes(cfg)
+
+    # set cudnn_benchmark
+    if cfg.get('cudnn_benchmark', False):
+        torch.backends.cudnn.benchmark = True
+
+    cfg.model.pretrained = None
+    # in case the test dataset is concatenated
+    samples_per_gpu = 1
+    if isinstance(cfg.data.test, dict):
+        cfg.data.test.test_mode = True
+        samples_per_gpu = cfg.data.test.pop('samples_per_gpu', 1)
+        if samples_per_gpu > 1:
+            # Replace 'ImageToTensor' to 'DefaultFormatBundle'
+            cfg.data.test.pipeline = replace_ImageToTensor(
                 cfg.data.test.pipeline)
     elif isinstance(cfg.data.test, list):
         for ds_cfg in cfg.data.test:
@@ -139,9 +157,9 @@ tmpdirsor(
             for ds_cfg in cfg.data.test:
                 ds_cfg.pipeline = replace_ImageToTensor(ds_cfg.pipeline)
 
-
     cfg.gpu_ids = [args["gpu_id"]]
-tmpdir
+
+
     # init distributed env first, since logger depends on the dist info.
     if args["launcher"] == 'none':
         distributed = False
@@ -167,6 +185,8 @@ tmpdir
     if fp16_cfg is not None:
         wrap_fp16_model(model)
     checkpoint = load_checkpoint(model, args["checkpoint"], map_location='cpu')
+    if args["fuse_conv_bn"]:
+        model = fuse_conv_bn(model)
 
     # old versions did not save class info in checkpoints, this walkaround is for backward compatibility
     if 'CLASSES' in checkpoint.get('meta', {}):
