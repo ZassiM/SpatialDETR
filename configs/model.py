@@ -1,6 +1,7 @@
 _base_ = [
-    "../../../mmdetection3d/configs/_base_/datasets/nus-mono3d.py",
-    "../../mlflow_runtime.py",
+    "../mmdetection3d/configs/_base_/datasets/nus-3d.py",
+    "mlflow_runtime.py",
+    "shedules/detr3d.py"
 ]
 
 custom_imports = dict(
@@ -94,9 +95,10 @@ model = dict(
                             dropout=0.1,
                         ),
                         dict(
-                            type="MultiheadAttention",
+                            type="QueryValueProjectCrossAttention",
                             embed_dims=256,
                             num_heads=8,
+                            pc_range={{_base_.point_cloud_range}},
                             dropout=0.1,
                         ),
                     ],

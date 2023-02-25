@@ -1,6 +1,7 @@
 _base_ = [
-    "../../../mmdetection3d/configs/_base_/datasets/nus-mono3d.py",
-    "../../mlflow_runtime.py",
+    "../mmdetection3d/configs/_base_/datasets/nus-3d.py",
+    "mlflow_runtime.py",
+    "shedules/detr3d.py"
 ]
 
 custom_imports = dict(
@@ -94,9 +95,10 @@ model = dict(
                             dropout=0.1,
                         ),
                         dict(
-                            type="MultiheadAttention",
+                            type="QueryValueProjectCrossAttention",
                             embed_dims=256,
                             num_heads=8,
+                            pc_range={{_base_.point_cloud_range}},
                             dropout=0.1,
                         ),
                     ],
@@ -236,48 +238,21 @@ train_pipeline = [
     ),
 ]
 test_pipeline = [
-    dict(type="LoadMultiViewImageFromFiles", to_float32=True),
-    dict(type="NormalizeMultiviewImage", **img_norm_cfg),
-    dict(type="PadMultiViewImage", size_divisor=32),
+    dict(type='LoadImageFromFileMono3D'),
     dict(
-        type="MultiScaleFlipAug3D",
-        img_scale=(1333, 800),
-        pts_scale_ratio=1,
+        type='MultiScaleFlipAug',
+        scale_factor=1.0,
         flip=False,
         transforms=[
+            dict(type='RandomFlip3D'),
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='Pad', size_divisor=32),
             dict(
-                type="DefaultFormatBundle3D", class_names=class_names, with_label=False
-            ),
-            dict(
-                type="Collect3D",
-                keys=["img"],
-                meta_keys=(
-                    "filename",
-                    "ori_shape",
-                    "img_shape",
-                    "lidar2img",
-                    "depth2img",
-                    "cam2img",
-                    "pad_shape",
-                    "scale_factor",
-                    "flip",
-                    "pcd_horizontal_flip",
-                    "pcd_vertical_flip",
-                    "box_mode_3d",
-                    "box_type_3d",
-                    "img_norm_cfg",
-                    "pcd_trans",
-                    "sample_idx",
-                    "pcd_scale_factor",
-                    "pcd_rotation",
-                    "pts_filename",
-                    "transformation_3d_flow",
-                    "cam_intrinsic",
-                    "lidar2cam",
-                ),
-            ),
-        ],
-    ),
+                type='DefaultFormatBundle3D',
+                class_names=class_names,
+                with_label=False),
+            dict(type='Collect3D', keys=['img']),
+        ])
 ]
 
 

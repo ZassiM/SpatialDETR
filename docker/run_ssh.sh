@@ -3,9 +3,9 @@ DOCKER_NAME=spatial_detr
 # path to directory where nusenes data is stored
 nusc_data_dir="/work/data01/zahr/datasets/nuscenes"
 # path to this repository root
-repo_dir="/work/zahr/SpatialDETR"
+repo_dir="/work/zahr/Project/SpatialDETR"
 # path to directory where models / logs shall be stored in
-exp_dir="/work/zahr/SpatialDETR/work_dirs"
+exp_dir="/work/zahr/Project/SpatialDETR/work_dirs"
 
 docker run \
 --rm \
