@@ -133,6 +133,7 @@ class Detr3DHead(DETRHead):
                 reference = init_reference
             else:
                 reference = inter_references[lvl - 1]
+                
             reference = inverse_sigmoid(reference)
             outputs_class = self.cls_branches[lvl](hs[lvl])
             tmp = self.reg_branches[lvl](hs[lvl])

@@ -197,7 +197,21 @@ def main():
 
     if not distributed:
         model = MMDataParallel(model, device_ids=cfg.gpu_ids)
-        outputs = single_gpu_test(model, data_loader, args["show"], args["show_dir"])
+        model.eval()
+        outputs = []
+        dataset = data_loader.dataset
+        prog_bar = mmcv.ProgressBar(len(dataset))
+
+        for i, data in enumerate(data_loader):
+            with torch.no_grad():
+                result = model(return_loss=False, rescale=True, **data)
+            outputs.extend(result)
+
+            batch_size = len(result)
+            for _ in range(batch_size):
+                prog_bar.update()
+
+
     else:
         model = MMDistributedDataParallel(
             model.cuda(),

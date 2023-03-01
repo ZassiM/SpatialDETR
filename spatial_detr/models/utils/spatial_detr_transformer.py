@@ -97,11 +97,9 @@ class SpatialDETRTransformer(BaseModule):
         query_pos_encoding, query_prior = torch.split(query_embed, self.embed_dims, dim=1)
         
         # encodings are the same for each elem in the batch
-        query_pos_encoding = query_pos_encoding.unsqueeze(0)
-        query_pos_encoding = query_pos_encoding.expand(BS, -1, -1)
-
-        # same holds for the query priors
+        query_pos_encoding = query_pos_encoding.unsqueeze(0).expand(BS, -1, -1)
         query_prior = query_prior.unsqueeze(0).expand(BS, -1, -1)
+        
         ref_points = self.latent2ref(query_pos_encoding)
 
         # convert to sigmoid space
