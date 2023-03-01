@@ -6,3 +6,5 @@ launcher = "none"
 fuse_conv_bn = false
 show = true
 show_dir = "./show_results"
+tmpdir = "none"
+gpu_collect = false
