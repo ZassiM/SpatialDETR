@@ -278,7 +278,7 @@ def show_multi_modality_result(img,
         mmcv.imshow(show_img, win_name='project_bbox3d_img', wait_time=0)
 
     if img is not None:
-        mmcv.imwrite(img, osp.join(result_path, f'{filename}_img.png'))
+        mmcv.imwrite(img[0], osp.join(result_path, f'{filename}_img.png'))
 
     if gt_bboxes is not None:
         gt_img = draw_bbox(

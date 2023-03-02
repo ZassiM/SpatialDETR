@@ -197,6 +197,7 @@ def main():
 
     if not distributed:
         model = MMDataParallel(model, device_ids=cfg.gpu_ids)
+
         model.eval()
         outputs = []
         dataset = data_loader.dataset
@@ -205,19 +206,20 @@ def main():
         for i, data in enumerate(data_loader):
             with torch.no_grad():
                 result = model(return_loss=False, rescale=True, **data)
+            
             outputs.extend(result)
-
             batch_size = len(result)
             for _ in range(batch_size):
                 prog_bar.update()
-
-
+    
+            
     else:
         model = MMDistributedDataParallel(
             model.cuda(),
             device_ids=[torch.cuda.current_device()],
             broadcast_buffers=False)
         outputs = multi_gpu_test(model, data_loader, args["tmpdir"], args["gpu_collect"])
+
 
     # rank, _ = get_dist_info()
     # if rank == 0:
