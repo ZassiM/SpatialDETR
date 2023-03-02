@@ -21,11 +21,24 @@ simple_test(img_metas,img,rescale):
 			# positional encoding of img position mask (key) by interpolating with img size
 
 			2.1.1) inter_queries, inter_ref_points = self.DECODER(query=query_prior,key=mlvl_img_feats,value=mlvl_img_feats,query_pos=query_pos_encoding,key_pos=pos_encodings,ref_points=ref_points,reg_branches=reg_branches,**kwargs): run the 6x decoder layers
+
+				# BaseTransformerLayer manages the 6 decoder layers. Each layer contains self-attn, cross-attn, norm and ffn
 				
 				for each decoder layer:
 
-					# update query by applying self-attention+norm+cross-attention+norm+ffn+norm
-					query = layer(*args,query,value=value[0],key=key[0],key_pos=key_pos[0],reference_points=ref_points_input,**kwargs)
+					# update query by applying SelfAttention+norm+CrossAttention+norm+ffn+norm
+					2.1.1.1) query = layer(*args,query,value=value[0],key=key[0],key_pos=key_pos[0],reference_points=ref_points_input,**kwargs)
+
+							# operation_order=("self_attn","norm", "cross_attn", "norm", "ffn", "norm")
+
+						    # MultiheadAttention.forward: self-attention (query=key) to update the queries by interacting with themselves
+
+						    # Applies norm (LayerNorm) to the queries
+
+						    # QueryValueProjectCrossAttention.forward: cross-attention between queries and feature keys
+
+						    # Norm+FFN+Norm
+
 
 					# obb calculated with regression branch
 					obb = reg_branches[layer_num](query)
@@ -58,13 +71,12 @@ simple_test(img_metas,img,rescale):
         outputs_classes = torch.stack(outputs_classes)
         outputs_coords = torch.stack(outputs_coords)
         outs = {
-            'all_cls_scores': outputs_classes,
-            'all_bbox_preds': outputs_coords,
+            'all_cls_scores': outputs_classes, [6,1,900,10]
+            'all_bbox_preds': outputs_coords, [6,1,900,10]
             'enc_cls_scores': None,
             'enc_bbox_preds': None, 
         }
-        return outs
-
+ 
 
 	3) bbox_list = self.PTS_BBOX_HEAD.GET_BBOXES(outs, img_metas) : apply NMS-free bbox coder
 

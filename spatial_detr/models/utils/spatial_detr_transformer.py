@@ -253,6 +253,9 @@ class MixedScaleSpatialDETRTransformerDecoder(BaseModule):
 
         intermediate_queries = []
         intermediate_ref_points = []
+        
+        # operation_order=("self_attn","norm", "cross_attn", "norm", "ffn", "norm")
+
         for lid, layer in enumerate(self.layers):
 
             if lid >= self.switch_scale_layer_num:
