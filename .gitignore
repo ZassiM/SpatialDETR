@@ -119,6 +119,8 @@ exps/
 mmdet3d/.mim
 mlruns/
 !mmdetection3d/demo/data
+ExplanationGenerator.py
+grad_rollout.py
 
 # Pytorch
 *.pth
