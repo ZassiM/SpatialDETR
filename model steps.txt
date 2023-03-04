@@ -12,7 +12,7 @@ simple_test(img_metas,img,rescale):
 
 			# split query embedding to query_prior and query_pos_encoding
 
-			# project query_pos_enc to 3d space, sigmoid it and save in ref_points_prior (=ref_points)
+			# project query_pos_enc to 3d space, sigmoid it and save in ref_points_prior (=ref_points) ### Formula 4 ###
 
 			# extract img h,w and padding from metas
 
@@ -24,7 +24,7 @@ simple_test(img_metas,img,rescale):
 
 				# BaseTransformerLayer manages the 6 decoder layers. Each layer contains self-attn, cross-attn, norm and ffn
 				
-				for each decoder layer:
+				FOR EACH DECODER LAYER:
 
 					# update query by applying SelfAttention+norm+CrossAttention+norm+ffn+norm
 					2.1.1.1) query = layer(*args,query,value=value[0],key=key[0],key_pos=key_pos[0],reference_points=ref_points_input,**kwargs)
@@ -37,14 +37,44 @@ simple_test(img_metas,img,rescale):
 
 						    # QueryValueProjectCrossAttention.forward: cross-attention between queries and feature keys
 
+						    	# Extract BS, CAMS and QUERIES dimensions from shapes
+
+						    	# Extract cam_T_lidar from img_metas, and calculate lidar_T_cam as inverse of it
+
+						    	# Save reference_points in reference_points_orig, it will be used after attention
+
+						    	# Update reference_points with pc_range
+
+						    	# Create reference_points_homogenous = torch.cat(reference_points, ones_query)
+
+						    	# Create query_per_cam tensor [CAMS, QUERIES, BS, self.embed_dims]
+
+						    	# Create values_global tensor
+
+						    	# UPDATE LATENT KEY WITH GEOMETRICAL POSITIONAL ENCODING: feats_with_dir = value + self.query_loc2latent(key_pos) ### Formula 3 ###
+
+						    	# COMPUTE DEPTH ESTIMATE FOR EACH LATENT KEY : value_3d_cam = self.value2depth(feats_with_dir) ### Formula 8 ###
+
+						    	# SCALE THE DIRECTION VECTOR KEY_POS WITH THE DEPTH ESTIMATE: value_3d_cam = value_3d_cam * key_pos ### Formula 9 ###
+
+						    	FOR EACH CAM:
+
+						    		# PROJECT QUERY CENTER TO CAMERA: reference_points_cam = torch.bmm(reference_points_homogenous, cam_T_lidar_tensor[cam_idx])[..., 0:3] ### Formula 5 ###
+
+						    		# normalize it
+
+						    		# query_per_cam[cam_idx] = query + query_pos + self.query_loc2latent(reference_points_cam) ### Formula 6 ###
+
+						    		
+						     
 						    # Norm+FFN+Norm
 
 
 					# obb calculated with regression branch
 					obb = reg_branches[layer_num](query)
 
-					# query object center are updated
-					ref_points = sigmoid(sigm_inv(ref_points) + obb)
+					# query object center are updated [formula 1]
+					ref_points = sigmoid(sigm_inv(ref_points) + obb) 
 
 					# append query and ref_points to inter_queries and inter_ref_points list
 
