@@ -170,11 +170,11 @@ class QueryValueProjectCrossAttention(BaseModule):
 
         for cam_idx in range(CAMS):
             # perform the attention for each query in each camera
-            # (B, Nt, E) x (B, E, Ns) -> (B, Nt, Ns)
+            # (B, Nt, E) x (B, E, Ns) -> (B, Nt, Ns) # [8,900,32]*[8,32,1450] = [8,900,1450] 
             attn = torch.bmm(q[cam_idx], k[cam_idx].transpose(-2, -1))
 
             attn = F.softmax(attn, dim=-1)
-            if dropout_p > 0.0:
+            if dropout_p > 0.0: # dropout_p = 0
                 attn = F.dropout(attn, p=dropout_p)
 
             attn_full[cam_idx] = attn
