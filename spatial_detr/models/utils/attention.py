@@ -189,6 +189,8 @@ class QueryValueProjectCrossAttention(BaseModule):
 
         # (B, Nt, Ns) x (B, Ns, E) -> (B, Nt, E)
         output = torch.bmm(attn_full, v)
+
+        attn_full = attn_full.reshape(CAMS, B, Q, patches_per_img)
         return output, attn_full
 
     def forward(self,
