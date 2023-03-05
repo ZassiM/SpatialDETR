@@ -52,8 +52,12 @@ def evaluate(model, gen, im, device, image_id = None):
     # mean-std normalize the input image (batch-size: 1)
     #img = transform(im).unsqueeze(0).to(device)
 
-    # propagate through the model
+    # propagate through the model for obtaining keep indices
+    with torch.no_grad():
+        output = model(return_loss=False, rescale=True, **im)[0]
 
+    probas = output['pts_bbox']['scores_3d']
+    keep = probas>0.7
 
     # # keep only predictions with 0.7+ confidence
     # probas = outputs['pred_logits'].softmax(-1)[0, :, :-1]
@@ -68,7 +72,7 @@ def evaluate(model, gen, im, device, image_id = None):
     # bboxes_scaled = rescale_bboxes(outputs['pred_boxes'][0, keep], im.size)
 
     # use lists to store the outputs via up-values
-    conv_features, dec_self_attn_weights, dec_cross_attn_weights = [], [], []
+    conv_features, dec_self_attn_weights, dec_cross_attn_weights, dec_self_attn_grad, dec_cross_attn_grad = [], [], [], [], []
 
     hooks = [
         model.module.img_neck.fpn_convs[0].conv.register_forward_hook(
@@ -82,6 +86,12 @@ def evaluate(model, gen, im, device, image_id = None):
             lambda self, input, output: dec_self_attn_weights.append(output[1])
         )
         hooks.append(hook)
+        
+    for layer in model.module.pts_bbox_head.transformer.decoder.layers:
+        hook = layer.attentions[0].attn.register_backward_hook(
+            lambda self, grad_input, grad_output: dec_self_attn_grad.append(grad_input)
+        )
+        hooks.append(hook)
 
     for layer in model.module.pts_bbox_head.transformer.decoder.layers:
         hook = layer.attentions[1].attn.register_forward_hook(
@@ -89,8 +99,23 @@ def evaluate(model, gen, im, device, image_id = None):
         )
         hooks.append(hook)
 
-    with torch.no_grad():
-        model(return_loss=False, rescale=True, **im)
+    for layer in model.module.pts_bbox_head.transformer.decoder.layers:
+        hook = layer.attentions[1].attn.register_backward_hook(
+            lambda self, grad_input, grad_output: dec_cross_attn_grad.append(grad_input)
+        )
+        hooks.append(hook)
+
+    model.zero_grad()
+    outputs = model(return_loss=False, rescale=True, **im)[0]
+
+    outputs = outputs['pts_bbox']['scores_3d']
+    one_hot = torch.zeros_like(outputs).to(outputs.device)
+    one_hot[0] = 1
+    one_hot_vector = one_hot
+    one_hot.requires_grad_(True)
+    one_hot = torch.sum(one_hot.cuda() * outputs.cuda())
+
+    one_hot.backward(retain_graph=True)
 
     for hook in hooks:
         hook.remove()
@@ -101,10 +126,11 @@ def evaluate(model, gen, im, device, image_id = None):
     dec_cross_attn_weights = dec_cross_attn_weights[0]
 
     # get the feature map shape
-    h, w = conv_features.shape[-2:]
-    cam = gen.generate_ours(im, 0, use_lrp=False)
+    #h, w = conv_features.shape[-2:]
+    idx = keep.nonzero()[0] # try first query with score>0.7
+    cam = gen.generate_ours(im, idx, dec_self_attn_weights, dec_cross_attn_weights, dec_self_attn_grad, dec_cross_attn_grad, use_lrp=False)
 
-    #fig, axs = plt.subplots(ncols=len(bboxes_scaled), nrows=2, figsize=(22, 7))
+    # fig, axs = plt.subplots(ncols=len(bboxes_scaled), nrows=2, figsize=(22, 7))
     # for idx, ax_i, (xmin, ymin, xmax, ymax) in zip(keep.nonzero(), axs.T, bboxes_scaled):
     #     ax = ax_i[0]
     #     cam = gen.generate_ours(img, idx, use_lrp=False)

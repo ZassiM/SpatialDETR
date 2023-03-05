@@ -165,7 +165,7 @@ simple_test(img_metas,img,rescale):
 
 				# RETURN predictions -> [{'bboxes': final_box_preds[300,9], 'scores': scores[300], 'labels': labels[300]}]
 
-		# Apply some bbox normalization and convert to LidarInstance3dBoxes
+		# Apply some bbox normalization and convert to LidarInstance3dBoxes -> ['bev','center','bottom_center','bottom_height','corners','top_height',....]
 
 	4) bbox_results = [bbox3d2result(bboxes, scores, labels) for bboxes, scores, labels in bbox_list] 
 
