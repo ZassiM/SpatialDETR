@@ -23,8 +23,12 @@ from mmdetection3d.tools.misc.browse_dataset import show_proj_bbox_img
 from PIL import Image
 import numpy as np
 import cv2
+from ExplanationGenerator import Generator
 
-from vit_rollout import VITAttentionRollout
+# from vit_rollout import VITAttentionRollout
+# from vit_rollout import evaluate
+from vit_rollout import *
+
 
 try:
     # If mmdet version > 2.20.0, setup_multi_processes would be imported and
@@ -127,14 +131,6 @@ def parse_args():
         args.eval_options = args.options
     return args
 
-def show_mask_on_image(img, mask):
-    img = np.float32(img) / 255
-    heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
-    heatmap = np.float32(heatmap) / 255
-    cam = heatmap + np.float32(img)
-    cam = cam / np.max(cam)
-    return np.uint8(255 * cam)
-
 def main():
     
     with open("args.toml", mode = "rb") as argsF:
@@ -213,23 +209,27 @@ def main():
     if not distributed:
         model = MMDataParallel(model, device_ids=cfg.gpu_ids)
         model.eval()
-        attention_rollout = VITAttentionRollout(model, head_fusion="min", discard_ratio=0.9)
+        gen=Generator(model)
 
+        
         outputs = []
         dataset = data_loader.dataset
         dataset_type = cfg.dataset_type
         prog_bar = mmcv.ProgressBar(len(dataset))
 
-        for i, data in enumerate(data_loader):
+        for i, data in enumerate(data_loader):        
 
-            paths = data['img_metas'][0]._data[0][0]['filename']
-            imgs = []
-            for idx in range(len(paths)):
-                img = Image.open(paths[idx])
-                img = img.resize((224,224))
-                img = np.array(img)[:,:,::-1]
-                imgs.append(img)
+            evaluate(model, gen, data, 'cuda')
 
+            break
+
+            # paths = data['img_metas'][0]._data[0][0]['filename']
+            # imgs = []
+            # for idx in range(len(paths)):
+            #     img = Image.open(paths[idx])
+            #     img = img.resize((224,224))
+            #     img = np.array(img)[:,:,::-1]
+            #     imgs.append(img)
             # front = np.concatenate((imgs[2],imgs[0],imgs[1]), axis=1)
             # vert = np.concatenate((imgs[5],imgs[3],imgs[4]), axis=1)
             # conc = np.concatenate((front,vert),axis=0)
@@ -237,22 +237,15 @@ def main():
             # cv2.imshow("Cameras", conc)
             # cv2.waitKey(-1)
 
-            with torch.no_grad():
-                #result = model(return_loss=False, rescale=True, **data)
-                mask = attention_rollout(data)
-                mask = cv2.resize(mask, (imgs[0].shape[1], imgs[0].shape[0]))
-                mask = show_mask_on_image(imgs[0], mask)
+            # with torch.no_grad():
+            #     #result = model(return_loss=False, rescale=True, **data)
 
-                cv2.imshow("Input Image", imgs[0])
-                cv2.imshow("Attention", mask[0])
-                break
+            #     break
             # outputs.extend(result)
             # batch_size = len(result)
             # for _ in range(batch_size):
             #     prog_bar.update()
-            
-    
-            
+                    
     else:
         model = MMDistributedDataParallel(
             model.cuda(),

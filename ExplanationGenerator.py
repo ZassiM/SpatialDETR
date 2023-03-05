@@ -143,8 +143,11 @@ class Generator:
         self.use_lrp = use_lrp
         self.normalize_self_attention = normalize_self_attention
         self.apply_self_in_rule_10 = apply_self_in_rule_10
-        outputs = self.model(img)
-        outputs = outputs['pred_logits']
+
+        with torch.no_grad():
+            outputs = self.model(return_loss=False, rescale=True, **img)[0]
+
+        outputs = outputs['pts_bbox']['scores_3d']
         kwargs = {"alpha": 1,
                   "target_index": target_index}
 

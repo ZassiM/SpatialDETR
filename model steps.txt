@@ -102,7 +102,7 @@ simple_test(img_metas,img,rescale):
 
 							     	# output = output.transpose(0, 1).contiguous().view(900, 1, 256) -> [900,1,256]
  
-							     	# return output, attn_full
+							     	# return output [8,900,32], attn_full [8,900,8700] 
 
 						     	# return query + self.dropout_layer(self.proj_drop(weighted_values)) + self.position_encoder_out(reference_points_orig) -> 
 
@@ -136,14 +136,36 @@ simple_test(img_metas,img,rescale):
         outputs_classes = torch.stack(outputs_classes)
         outputs_coords = torch.stack(outputs_coords)
         outs = {
-            'all_cls_scores': outputs_classes, [6,1,900,10]
+            'all_cls_scores': outputs_classes, [6,1,900,10] 
             'all_bbox_preds': outputs_coords, [6,1,900,10]
             'enc_cls_scores': None,
             'enc_bbox_preds': None, 
         }
+        ## N.B: 6 is the number of decoder layers, not the number of cams! Only the last decoder output will be needed, since it is not in training mode
  
 
-	3) bbox_list = self.PTS_BBOX_HEAD.GET_BBOXES(outs, img_metas) : apply NMS-free bbox coder
+	3) bbox_list = self.PTS_BBOX_HEAD.GET_BBOXES(outs, img_metas) 
+
+		# APPLY NMS-FREE CODER: preds_dicts = self.bbox_coder.decode(preds_dicts)
+
+			# TAKE ONLY CLASSIFICATION PREDICTION FOR LAST DECODER: all_cls_scores = preds_dicts['all_cls_scores'][-1] -> [1,900,10]
+			# TAKE ONLY BBOX PREDICTION FOR LAST DECODER: all_bbox_preds = preds_dicts['all_bbox_preds'][-1] -> [1,900,10]
+
+			predictions = self.decode_single(all_cls_scores[0], all_bbox_preds[0]):
+
+		        # APPLY SIGMOID ON SCORES: cls_scores = cls_scores.sigmoid() -> [900,10]
+		        # FLATTEN THE SCORES AND EXTRACT SCORES AND INDICES OF THE TOP-300: scores, indexs = cls_scores.view(-1).topk(max_num) ->[300],[300]
+		        # CALCULATE CORRESPONDING LABEL INDEXES: labels = indexs % self.num_classes -> [300] = [0,8,0,8,8,0.....]
+		        # SAME FOR BBOXES: bbox_index = indexs // self.num_classes
+		        # EXTRACT ONLY THE TOP-300 BBOXES: bbox_preds = bbox_preds[bbox_index]
+
+		        # Denormalize bbox by removing last dimension -> final_box_preds [300,9]
+
+		        # Apply mask (in this case all True)
+
+				# RETURN predictions -> [{'bboxes': final_box_preds[300,9], 'scores': scores[300], 'labels': labels[300]}]
+
+		# Apply some bbox normalization and convert to LidarInstance3dBoxes
 
 	4) bbox_results = [bbox3d2result(bboxes, scores, labels) for bboxes, scores, labels in bbox_list] 
 
