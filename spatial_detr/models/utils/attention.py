@@ -330,7 +330,7 @@ class QueryValueProjectCrossAttention(BaseModule):
             values_global[cam_idx] = value[cam_idx] + value_3d_ref
 
         # the keys and queries are camera specific now, values are in global coordinates
-        weighted_values, _ = self.attn(
+        weighted_values, attn_full = self.attn(
             query=query_per_cam,
             key=feats_with_dir,
             value=values_global,
@@ -338,7 +338,7 @@ class QueryValueProjectCrossAttention(BaseModule):
             query_pos=None,
             attn_mask=None,
             key_padding_mask=None,
-            need_weights=False,
+            need_weights=True,
             attn_func=self._attn_weights_only_dot_prod_attn
         )
 

@@ -243,8 +243,9 @@ def multi_head_attention_forward(
     attn_output = F.linear(attn_output, out_proj_weight, out_proj_bias)
 
     if need_weights:
-        raise NotImplementedError(
-            "not working with sensor specific attention yet")
+        # raise NotImplementedError(
+        #     "not working with sensor specific attention yet")
+        return attn_output, attn_output_weights
     else:
         return attn_output, None
 
