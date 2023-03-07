@@ -24,10 +24,15 @@ from PIL import Image
 import numpy as np
 import cv2
 from ExplanationGenerator import Generator
+import matplotlib.pyplot as plt
 
-# from vit_rollout import VITAttentionRollout
-# from vit_rollout import evaluate
 from vit_rollout import *
+
+from mmdet3d.core.visualizer import (show_multi_modality_result, show_result,
+                                     show_seg_result)
+
+from pathlib import Path
+
 
 
 try:
@@ -209,7 +214,7 @@ def main():
     if not distributed:
         model = MMDataParallel(model, device_ids=cfg.gpu_ids)
         model.eval()
-        gen=Generator(model)
+        #gen=Generator(model)
 
         
         outputs = []
@@ -217,9 +222,48 @@ def main():
         dataset_type = cfg.dataset_type
         prog_bar = mmcv.ProgressBar(len(dataset))
 
-        for i, data in enumerate(data_loader):        
+        for i, data in enumerate(data_loader):      
+            if i<10: continue  
+            with torch.no_grad():
+                #points = data.pop("points")
+                results = model(return_loss=False, rescale=True, **data)
+                #data["points"] = points
+                   
+                camidx = 0
+                
+                inds = results[0]['pts_bbox']['scores_3d'] > 0.5
+                pred_bbox = results[0]['pts_bbox']['boxes_3d'][inds]
+                labels=results[0]['pts_bbox']['labels_3d'][inds]
+                for l in labels:
+                    print(data_loader.dataset.CLASSES[l])
 
-            evaluate(model, gen, data, 'cuda')
+                img_metas = data['img_metas'][0]._data[0][0]
+                # img = data['img'][0]._data[0][0]
+                # img = img[camidx].numpy().astype(np.uint8).transpose(1,2,0)
+
+                # no 3D gt bboxes, just show img
+                filename = Path(img_metas['filename'][camidx]).name
+                filename = filename.split('.')[0]
+                
+                path = img_metas['filename'][camidx]
+                img = mmcv.imread(path)
+                img = mmcv.impad_to_multiple(img, 32, 0) #pad to (928,1600,3)
+                #mmcv.imshow(img)
+
+                pred_img=show_multi_modality_result(
+                    img,
+                    None,
+                    pred_bbox,
+                    img_metas['lidar2img'][camidx],
+                    args["show_dir"],
+                    filename,
+                    box_mode='lidar',
+                    img_metas=img_metas,
+                    show=False)
+                
+                mmcv.imshow(pred_img)
+                debug=0
+            #evaluate(model, gen, data, 'cuda')
 
             break
 

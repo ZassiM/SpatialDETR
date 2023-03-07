@@ -239,6 +239,16 @@ train_pipeline = [
 ]
 test_pipeline = [
     dict(type="LoadMultiViewImageFromFiles", to_float32=True),
+    # dict(
+    #     type='LoadPointsFromFile',
+    #     coord_type='LIDAR',
+    #     load_dim=5,
+    #     use_dim=5,
+    #     file_client_args=file_client_args),
+    # dict(
+    #     type='LoadPointsFromMultiSweeps',
+    #     sweeps_num=10,
+    #     file_client_args=file_client_args),
     dict(type="NormalizeMultiviewImage", **img_norm_cfg),
     dict(type="PadMultiViewImage", size_divisor=32),
     dict(

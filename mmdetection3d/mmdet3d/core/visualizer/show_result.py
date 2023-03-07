@@ -98,7 +98,7 @@ def show_result(points,
     result_path = osp.join(out_dir, filename)
     mmcv.mkdir_or_exist(result_path)
 
-    if not show:
+    if show:
         from .open3d_vis import Visualizer
 
         vis = Visualizer(points)
@@ -278,7 +278,8 @@ def show_multi_modality_result(img,
         mmcv.imshow(show_img, win_name='project_bbox3d_img', wait_time=0)
 
     if img is not None:
-        mmcv.imwrite(img[0], osp.join(result_path, f'{filename}_img.png'))
+        #mmcv.imwrite(img, osp.join(result_path, f'{filename}_img.png'))
+        mmcv.imwrite(img, osp.join(result_path, f'{filename}.jpg'))
 
     if gt_bboxes is not None:
         gt_img = draw_bbox(
@@ -289,3 +290,4 @@ def show_multi_modality_result(img,
         pred_img = draw_bbox(
             pred_bboxes, img, proj_mat, img_metas, color=pred_bbox_color)
         mmcv.imwrite(pred_img, osp.join(result_path, f'{filename}_pred.png'))
+        return pred_img

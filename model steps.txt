@@ -1,8 +1,28 @@
-input: 6 images 3x900x1600
+data=input= {"img_metas": 
+				"filename": 6xjpg paths from the 6 camera
+				"ori_shape": (900,1600,3,6)
+				"img_shape": 6x(928,1600,3)
+				"lidar2img": 6x[4x4]
+				"pad_shape": 6x(928,1600,3)
+				"scale_factor": 1.0
+				"flip": False
+				"pcd_hor_flip": False
+				"pcd_ver_flip": False
+				"box_mode_3d": <Box3DMode.LIDAR: 0>
+				"box_type_3d": <class 'mmdet3d.core.bbox.structures.lidar_box3d.LiDARInstance3DBoxes'> 
+				"img_norm_cfg": {"mean": [103.53, 116.28, 123.675], "std": [1,1,1]}
+				"sample_idx": '3e8750f331d7499e9b5123e9eb70f2e2'
+				"pcd_scale_factor": 1.0
+				"pts_filename": path of LIDAR TOP pcd.bin 
+				"cam_intrinsic": 6x[4x4]
+				"lidar2cam": 6x[4x4]
+
+			, "img":}
+
 
 simple_test(img_metas,img,rescale):
 
-	1) img_feats = self.EXTRACT_FEATS(img=img, img_metas=img_metas) : extract feature with ResNet+FPN -> 6x256x29x50
+	1) img_feats = self.EXTRACT_FEATS(img=img, img_metas=img_metas) : extract feature with ResNet+FPN -> [6x256x29x50]
 
 	2) outs = self.PTS_BBOX_HEAD(img_feats, img_metas) : features go into Detr3d Head 
 
