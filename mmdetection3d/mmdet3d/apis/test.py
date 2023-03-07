@@ -45,7 +45,7 @@ def single_gpu_test(model,
             models_3d = (Base3DDetector, Base3DSegmentor,
                          SingleStageMono3DDetector)
             if isinstance(model.module, models_3d):
-                model.module.show_results_1(
+                model.module.show_results(
                     data,
                     result,
                     out_dir=out_dir)

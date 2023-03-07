@@ -1,3 +1,5 @@
+#!/bin/bash
+
 DOCKER_NAME=spatial_detr
 
 # path to directory where nusenes data is stored

@@ -187,6 +187,14 @@ def main():
         workers_per_gpu=cfg.data.workers_per_gpu,
         dist=distributed,
         shuffle=False)
+
+    dataset_train = build_dataset(cfg.data.train)
+    data_loader_train = build_dataloader(
+        dataset_train,
+        samples_per_gpu=samples_per_gpu,
+        workers_per_gpu=cfg.data.workers_per_gpu,
+        dist=distributed,
+        shuffle=False) 
     
     # build the model and load checkpoint
     cfg.model.train_cfg = None
@@ -215,58 +223,67 @@ def main():
         model = MMDataParallel(model, device_ids=cfg.gpu_ids)
         model.eval()
         #gen=Generator(model)
-
-        
         outputs = []
-        dataset = data_loader.dataset
-        dataset_type = cfg.dataset_type
         prog_bar = mmcv.ProgressBar(len(dataset))
+        
+        dataset = data_loader.dataset
 
         for i, data in enumerate(data_loader):      
-            if i<10: continue  
+ 
             with torch.no_grad():
-                #points = data.pop("points")
-                results = model(return_loss=False, rescale=True, **data)
-                #data["points"] = points
-                   
-                camidx = 0
-                
-                inds = results[0]['pts_bbox']['scores_3d'] > 0.5
-                pred_bbox = results[0]['pts_bbox']['boxes_3d'][inds]
-                labels=results[0]['pts_bbox']['labels_3d'][inds]
-                for l in labels:
-                    print(data_loader.dataset.CLASSES[l])
+                points = data.pop("points")
 
-                img_metas = data['img_metas'][0]._data[0][0]
-                # img = data['img'][0]._data[0][0]
-                # img = img[camidx].numpy().astype(np.uint8).transpose(1,2,0)
+                result = model(return_loss=False, rescale=True, **data)
 
-                # no 3D gt bboxes, just show img
-                filename = Path(img_metas['filename'][camidx]).name
-                filename = filename.split('.')[0]
-                
-                path = img_metas['filename'][camidx]
-                img = mmcv.imread(path)
-                img = mmcv.impad_to_multiple(img, 32, 0) #pad to (928,1600,3)
-                #mmcv.imshow(img)
+                dataset.show(result, args["show_dir"], show = True)
 
-                pred_img=show_multi_modality_result(
-                    img,
-                    None,
-                    pred_bbox,
-                    img_metas['lidar2img'][camidx],
-                    args["show_dir"],
-                    filename,
-                    box_mode='lidar',
-                    img_metas=img_metas,
-                    show=False)
+                data["points"] = points
+                outputs.extend(result)
+                batch_size = len(result)
+                for _ in range(batch_size):
+                    prog_bar.update()
+                    
+                #model.module.show_results_mod(data, results, out_dir = args["show_dir"], show = True)
                 
-                mmcv.imshow(pred_img)
-                debug=0
+                debug = 0
+                # camidx = 0
+                
+                # inds = results[0]['pts_bbox']['scores_3d'] > 0.5
+                # pred_bbox = results[0]['pts_bbox']['boxes_3d'][inds]
+                
+                # labels=results[0]['pts_bbox']['labels_3d'][inds]
+                # for l in labels:
+                #     print(data_loader.dataset.CLASSES[l])
+
+                # img_metas = data['img_metas'][0]._data[0][0]
+                # # img = data['img'][0]._data[0][0]
+                # # img = img[camidx].numpy().astype(np.uint8).transpose(1,2,0)
+
+                # # no 3D gt bboxes, just show img
+                # filename = Path(img_metas['filename'][camidx]).name
+                # filename = filename.split('.')[0]
+                
+                # path = img_metas['filename'][camidx]
+                # img = mmcv.imread(path)
+                # img = mmcv.impad_to_multiple(img, 32, 0) #pad to (928,1600,3)
+                # #mmcv.imshow(img)
+
+                # pred_img=show_multi_modality_result(
+                #     img,
+                #     None,
+                #     pred_bbox,
+                #     img_metas['lidar2img'][camidx],
+                #     args["show_dir"],
+                #     filename,
+                #     box_mode='lidar',
+                #     img_metas=img_metas,
+                #     show=False)
+                
+                # mmcv.imshow(pred_img)
+                
             #evaluate(model, gen, data, 'cuda')
 
-            break
-
+            
             # paths = data['img_metas'][0]._data[0][0]['filename']
             # imgs = []
             # for idx in range(len(paths)):
@@ -298,24 +315,25 @@ def main():
         outputs = multi_gpu_test(model, data_loader, args["tmpdir"], args["gpu_collect"])
 
 
-    # rank, _ = get_dist_info()
-    # if rank == 0:
-    #     if args["out"]:
-    #         print(f'\nwriting results to {args["out"]}')
-    #         mmcv.dump(outputs, args["out"])
-    #     kwargs = {} if args["eval_options"] is None else args["eval_options"]
-    #     if args["format_only"]:
-    #         dataset.format_results(outputs, **kwargs)
-        # if args["eval"]:
-        #     eval_kwargs = cfg.get('evaluation', {}).copy()
-        #     #hard-code way to remove EvalHook args
-        #     for key in [
-        #             'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
-        #             'rule'
-        #     ]:
-        #         eval_kwargs.pop(key, None)
-        #     eval_kwargs.update(dict(metric=args["eval"], **kwargs))
-        #     print(dataset.evaluate(outputs, **eval_kwargs))
+    rank, _ = get_dist_info()
+    if rank == 0:
+        if args["out"]:
+            print(f'\nwriting results to {args["out"]}')
+            mmcv.dump(outputs, args["out"])
+        #kwargs = {} if args["eval_options"] is None else args["eval_options"]
+        kwargs = {}
+        if args["format_only"]:
+            dataset.format_results(outputs, **kwargs)
+        if args["eval"]:
+            eval_kwargs = cfg.get('evaluation', {}).copy()
+            #hard-code way to remove EvalHook args
+            for key in [
+                    'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
+                    'rule'
+            ]:
+                eval_kwargs.pop(key, None)
+            eval_kwargs.update(dict(metric=args["eval"], **kwargs))
+            print(dataset.evaluate(outputs, **eval_kwargs))
 
 
 if __name__ == '__main__':

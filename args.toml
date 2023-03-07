@@ -1,13 +1,13 @@
 config = "configs/model.py"
 checkpoint = "checkpoints/sdetr.pth"
 eval = "mAP"
-gpu_id = 0
+gpu_id = 3
 launcher = "none"
 fuse_conv_bn = false
 tmpdir = "none"
 gpu_collect = false
 format_only = false
-eval_options = "None"
+eval_options = "none"
 out = "./show_results/sdetr.pkl"
 show = true
 show_dir = "./show_results"

@@ -501,3 +501,53 @@ class MVXTwoStageDetector(Base3DDetector):
 
             pred_bboxes = pred_bboxes.tensor.cpu().numpy()
             show_result(points, None, pred_bboxes, out_dir, file_name)
+
+    def show_results_mod(self, data, result, out_dir, show = False):
+        """Results visualization.
+
+        Args:
+            data (dict): Input points and the information of the sample.
+            result (dict): Prediction results.
+            out_dir (str): Output directory of visualization result.
+        """
+        for batch_id in range(len(result)):
+            if isinstance(data['points'][0], DC):
+                points = data['points'][0]._data[0][batch_id].numpy()
+            elif mmcv.is_list_of(data['points'][0], torch.Tensor):
+                points = data['points'][0][batch_id]
+            else:
+                ValueError(f"Unsupported data type {type(data['points'][0])} "
+                           f'for visualization!')
+            if isinstance(data['img_metas'][0], DC):
+                pts_filename = data['img_metas'][0]._data[0][batch_id][
+                    'pts_filename']
+                box_mode_3d = data['img_metas'][0]._data[0][batch_id][
+                    'box_mode_3d']
+            elif mmcv.is_list_of(data['img_metas'][0], dict):
+                pts_filename = data['img_metas'][0][batch_id]['pts_filename']
+                box_mode_3d = data['img_metas'][0][batch_id]['box_mode_3d']
+            else:
+                ValueError(
+                    f"Unsupported data type {type(data['img_metas'][0])} "
+                    f'for visualization!')
+            file_name = osp.split(pts_filename)[-1].split('.')[0]
+
+            assert out_dir is not None, 'Expect out_dir, got none.'
+            inds = result[batch_id]['pts_bbox']['scores_3d'] > 0.1
+            pred_bboxes = result[batch_id]['pts_bbox']['boxes_3d'][inds]
+            
+            labels = result[batch_id]['pts_bbox']['labels_3d'][inds]
+
+            # for now we convert points and bbox into depth mode
+            if (box_mode_3d == Box3DMode.CAM) or (box_mode_3d
+                                                  == Box3DMode.LIDAR):
+                points = Coord3DMode.convert_point(points, Coord3DMode.LIDAR,
+                                                   Coord3DMode.DEPTH)
+                pred_bboxes = Box3DMode.convert(pred_bboxes, box_mode_3d,
+                                                Box3DMode.DEPTH)
+            elif box_mode_3d != Box3DMode.DEPTH:
+                ValueError(
+                    f'Unsupported box_mode_3d {box_mode_3d} for conversion!')
+
+            pred_bboxes = pred_bboxes.tensor.cpu().numpy()
+            show_result(points, None, pred_bboxes, out_dir, file_name, pred_labels = labels, show = show)

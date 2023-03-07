@@ -196,6 +196,12 @@ db_sampler = dict(
 
 train_pipeline = [
     dict(type="LoadMultiViewImageFromFiles", to_float32=True),
+    dict(
+        type='LoadPointsFromFile',
+        coord_type='LIDAR',
+        load_dim=5,
+        use_dim=5,
+        file_client_args=file_client_args),
     dict(type="PhotoMetricDistortionMultiViewImage"),
     dict(
         type="LoadAnnotations3D",
@@ -210,7 +216,7 @@ train_pipeline = [
     dict(type="DefaultFormatBundle3D", class_names=class_names),
     dict(
         type="Collect3D",
-        keys=["gt_bboxes_3d", "gt_labels_3d", "img"],
+        keys=["gt_bboxes_3d", "gt_labels_3d", "img", "points"],
         meta_keys=(
             "filename",
             "ori_shape",
@@ -239,16 +245,16 @@ train_pipeline = [
 ]
 test_pipeline = [
     dict(type="LoadMultiViewImageFromFiles", to_float32=True),
-    # dict(
-    #     type='LoadPointsFromFile',
-    #     coord_type='LIDAR',
-    #     load_dim=5,
-    #     use_dim=5,
-    #     file_client_args=file_client_args),
-    # dict(
-    #     type='LoadPointsFromMultiSweeps',
-    #     sweeps_num=10,
-    #     file_client_args=file_client_args),
+    dict(
+        type='LoadPointsFromFile',
+        coord_type='LIDAR',
+        load_dim=5,
+        use_dim=5,
+        file_client_args=file_client_args),
+    dict(
+        type='LoadPointsFromMultiSweeps',
+        sweeps_num=10,
+        file_client_args=file_client_args),
     dict(type="NormalizeMultiviewImage", **img_norm_cfg),
     dict(type="PadMultiViewImage", size_divisor=32),
     dict(
@@ -262,7 +268,7 @@ test_pipeline = [
             ),
             dict(
                 type="Collect3D",
-                keys=["img"],
+                keys=["img","points"],
                 meta_keys=(
                     "filename",
                     "ori_shape",
@@ -291,6 +297,8 @@ test_pipeline = [
         ],
     ),
 ]
+
+
 
 
 data = dict(
