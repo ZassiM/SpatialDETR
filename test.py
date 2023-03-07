@@ -33,14 +33,9 @@ from mmdet3d.core.visualizer import (show_multi_modality_result, show_result,
 
 from pathlib import Path
 
+from mmcv import Config, DictAction, mkdir_or_exist, track_iter_progress
 
 
-try:
-    # If mmdet version > 2.20.0, setup_multi_processes would be imported and
-    # used from mmdet instead of mmdet3d.
-    from mmdet.utils import setup_multi_processes
-except ImportError:
-    from mmdet3d.utils import setup_multi_processes
 
 
 def parse_args():
@@ -54,12 +49,6 @@ def parse_args():
         action='store_true',
         help='Whether to fuse conv and bn, this will slightly increase'
         'the inference speed')
-    parser.add_argument(
-        '--gpu-ids',
-        type=int,
-        nargs='+',
-        help='(Deprecated, please use --gpu-id) ids of gpus to use '
-        '(only applicable to non-distributed training)')
     parser.add_argument(
         '--gpu-id',
         type=int,
@@ -140,12 +129,42 @@ def main():
     
     with open("args.toml", mode = "rb") as argsF:
         args = tomli.load(argsF)
+    
+    args["config"] = args["config_"+args["model"]]
+    args["checkpoint"] = args["checkpoint_"+args["model"]]
 
+    if args["out"] is not None and not args["out"].endswith(('.pkl', '.pickle')):
+        raise ValueError('The output file must be a pkl file.')
+    
     cfg = Config.fromfile(args["config"])
+    if cfg.get('custom_imports', None):
+        from mmcv.utils import import_modules_from_strings
+        import_modules_from_strings(**cfg['custom_imports'])
+    
+    # import modules from plguin/xx, registry will be updated
+    if hasattr(cfg, 'plugin'):
+        if cfg.plugin:
+            import importlib
+            if hasattr(cfg, 'plugin_dir'):
+                plugin_dir = cfg.plugin_dir
+                _module_dir = os.path.dirname(plugin_dir)
+                _module_dir = _module_dir.split('/')
+                _module_path = _module_dir[0]
 
-    # set multi-process settings
-    setup_multi_processes(cfg)
-
+                for m in _module_dir[1:]:
+                    _module_path = _module_path + '.' + m
+                print(_module_path)
+                plg_lib = importlib.import_module(_module_path)
+            else:
+                # import dir is the dirpath for the config file
+                _module_dir = os.path.dirname(args.config)
+                _module_dir = _module_dir.split('/')
+                _module_path = _module_dir[0]
+                for m in _module_dir[1:]:
+                    _module_path = _module_path + '.' + m
+                print(_module_path)
+                plg_lib = importlib.import_module(_module_path)
+                
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
@@ -232,21 +251,20 @@ def main():
  
             with torch.no_grad():
                 points = data.pop("points")
-
                 result = model(return_loss=False, rescale=True, **data)
 
-                dataset.show(result, args["show_dir"], show = True)
+            dataset.show(result, args["show_dir"], show = True)
 
-                data["points"] = points
-                outputs.extend(result)
-                batch_size = len(result)
-                for _ in range(batch_size):
-                    prog_bar.update()
-                    
-                #model.module.show_results_mod(data, results, out_dir = args["show_dir"], show = True)
+            #data["points"] = points
+            outputs.extend(result)
+            batch_size = len(result)
+            for _ in range(batch_size):
+                prog_bar.update()
                 
-                debug = 0
-                # camidx = 0
+            #model.module.show_results_mod(data, results, out_dir = args["show_dir"], show = True)
+            
+            debug = 0
+                #camidx = 0
                 
                 # inds = results[0]['pts_bbox']['scores_3d'] > 0.5
                 # pred_bbox = results[0]['pts_bbox']['boxes_3d'][inds]

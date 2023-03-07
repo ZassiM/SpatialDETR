@@ -454,7 +454,7 @@ class Visualizer(object):
         self.o3d_visualizer.run()
 
         if save_path is not None:
-            self.o3d_visualizer.capture_screen_image(save_path)
+            self.o3d_visualizer.capture_screen_image(save_path, True)
 
         self.o3d_visualizer.destroy_window()
         return
