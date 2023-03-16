@@ -227,8 +227,7 @@ def show_multi_modality_result(img,
                                img_metas=None,
                                show=False,
                                gt_bbox_color=(61, 102, 255),
-                               pred_bbox_color=(241, 101, 72),
-                               points = None):
+                               pred_bbox_color=(241, 101, 72)):
     """Convert multi-modality detection results into 2D results.
 
     Project the predicted 3D bbox to 2D image plane and visualize them.

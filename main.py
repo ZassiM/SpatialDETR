@@ -43,6 +43,8 @@ def init(args):
         raise ValueError('The output file must be a pkl file.')
     
     cfg = Config.fromfile(args["config"])
+    #cfg = build_data_cfg(args["config"], args["skip_type"], cfg_options = None)
+    
     if cfg.get('custom_imports', None):
         from mmcv.utils import import_modules_from_strings
         import_modules_from_strings(**cfg['custom_imports'])
@@ -106,8 +108,8 @@ def init(args):
     
     # build the dataloader
     mode = args["mode"]
-    
-    if mode == "test": dataset = build_dataset(cfg.data.test)
+
+    if mode == "test": dataset = build_dataset(cfg.data.test,default_args=dict(filter_empty_gt=False))
     elif mode == "train": dataset = build_dataset(cfg.data.train)
     elif mode == "val": dataset = build_dataset(cfg.data.val)
     else: raise ValueError(f"{mode} is not a valid mode.\n")
@@ -144,14 +146,36 @@ def init(args):
     
     return model, dataset, data_loader, gpu_ids, cfg, distributed
 
+def build_data_cfg(config_path, skip_type, cfg_options):
+    """Build data config for loading visualization data."""
+    cfg = Config.fromfile(config_path)
+    if cfg_options is not None:
+        cfg.merge_from_dict(cfg_options)
+    # import modules from string list.
+    if cfg.get('custom_imports', None):
+        from mmcv.utils import import_modules_from_strings
+        import_modules_from_strings(**cfg['custom_imports'])
+    # extract inner dataset of `RepeatDataset` as `cfg.data.train`
+    # so we don't need to worry about it later
+    if cfg.data.train['type'] == 'RepeatDataset':
+        cfg.data.train = cfg.data.train.dataset
+    # use only first dataset for `ConcatDataset`
+    if cfg.data.train['type'] == 'ConcatDataset':
+        cfg.data.train = cfg.data.train.datasets[0]
+    train_data_cfg = cfg.data.train
+    # eval_pipeline purely consists of loading functions
+    # use eval_pipeline for data loading
+    train_data_cfg['pipeline'] = [
+        x for x in cfg.eval_pipeline if x['type'] not in skip_type
+    ]
+
+    return cfg
 def main():
     
     with open("args.toml", mode = "rb") as argsF:
         args = tomli.load(argsF)
     
     model, dataset, data_loader, gpu_ids, cfg, distributed = init(args)
-
-    dataset_T = build_dataset(cfg.data.train)
 
     
     if not distributed:
@@ -162,32 +186,40 @@ def main():
         prog_bar = mmcv.ProgressBar(len(dataset))
         
         for i, data in enumerate(data_loader):    
-
-            #points = data.pop("points")
-            # gt_bboxes = data.pop("gt_bboxes_3d")
-            # gt_labels = data.pop("gt_labels_3d")
+            
+            try:
+                example = dataset.prepare_train_data(i)
+            except AttributeError:  # for Mono-3D datasets
+                example = dataset.prepare_train_img(i)
+                
+                
+            points = data.pop("points")
+            #gt_bboxes = data.pop("gt_bboxes_3d")
+            #gt_labels = data.pop("gt_labels_3d")
             with torch.no_grad():
                 result = model(return_loss=False, rescale=True, **data)
 
-            #data["points"] = points
+            data["points"] = points
             
-            try:
-                example = dataset_T.prepare_train_data(i)
-            except AttributeError:  # for Mono-3D datasets
-                example = dataset_T.prepare_train_img(i)
             
             # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
-            camidx = 0
+            camidx = 2
+            score_thr = 0.3
             
-            gt_bboxes = dataset_T.get_ann_info(i)['gt_bboxes_3d']
-            pred_bboxes = result[0]["pts_bbox"]["boxes_3d"]
-            img_metas = example['img_metas']._data
+            inds = result[0]["pts_bbox"]['scores_3d'] > score_thr      
+            
+            gt_bboxes = dataset.get_ann_info(i)['gt_bboxes_3d']
+            pred_bboxes = result[0]["pts_bbox"]["boxes_3d"][inds]
+            
+            img_metas = example['img_metas'][0]._data
             img_metas_test = data["img_metas"][0]._data[0][0]
-            img = example['img']._data[camidx].numpy()
-            img_test = data["img"][0]._data[0][0][camidx].numpy()
+            
+            img = example['img'][0]._data.numpy()[camidx]
+            img_test = data["img"][0]._data[0].numpy()[0][camidx]
             
             img = img.transpose(1, 2, 0)
-            img_test = img_test.transpose(1, 2, 0)
+            img_test = img_test.transpose(1,2,0)
+            
             if gt_bboxes.tensor.shape[0] == 0:
                 gt_bboxes = None
             
@@ -196,7 +228,7 @@ def main():
             
             show_multi_modality_result(
                 img_test,
-                None,
+                gt_bboxes,
                 pred_bboxes,
                 img_metas_test['lidar2img'][camidx],
                 args["show_dir"],
@@ -207,7 +239,7 @@ def main():
                 pred_bbox_color = (0,255,0),
                 show=True)
             
-            dataset.show(result, args["show_dir"], show = True, score_thr = 0.3)
+            #dataset.show(result, args["show_dir"], show = True, score_thr = 0.1)
         
 
             outputs.extend(result)

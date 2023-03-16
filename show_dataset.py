@@ -193,6 +193,7 @@ def main():
         mkdir_or_exist(args["output_dir"])
 
     cfg = build_data_cfg(args["config"], args["skip_type"], cfg_options = None)
+    
     #cfg = Config.fromfile(args["config"])
     try:
         dataset = build_dataset(
@@ -205,7 +206,7 @@ def main():
     # configure visualization mode
     vis_task = args["task"]  # 'det', 'seg', 'multi_modality-det', 'mono-det'
 
-    camidx = 0
+    camidx = 3
     
     for idx, data_info in enumerate(track_iter_progress(data_infos)):
         # if dataset_type in ['KittiDataset', 'WaymoDataset']:
@@ -237,7 +238,7 @@ def main():
                 args["output_dir"],
                 "example",
                 show=args["online"],
-                is_nus_mono=(dataset_type == 'NuScenesMonoDataset'))
+                is_nus_mono=(dataset_type == 'NuScenesMonoDataset'), camidx=camidx)
         elif vis_task in ['seg']:
             # show 3D segmentation mask on 3D point clouds
             show_seg_data(

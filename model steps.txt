@@ -17,8 +17,8 @@ data=input= {"img_metas":
                 "cam_intrinsic": 6x[4x4]
                 "lidar2cam": 6x[4x4] = 
 
-            , "img":}
-            
+            , "img": [6x3x900x1600]}
+
 # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
 
 

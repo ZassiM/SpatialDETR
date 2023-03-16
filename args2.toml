@@ -1,4 +1,4 @@
-config_1= "mmdetection3d/configs/_base_/datasets/nus-3d.py"
+config1= "mmdetection3d/configs/_base_/datasets/nus-mono3d.py"
 
 config = "configs/model.py"
 
