@@ -542,7 +542,7 @@ class NuScenesDataset(Custom3DDataset):
         ]
         return Compose(pipeline)
 
-    def show(self, results, out_dir, show=False, pipeline=None):
+    def show(self, results, out_dir, show=False, pipeline=None, score_thr = 0.1):
         """Results visualization.
 
         Args:
@@ -566,7 +566,7 @@ class NuScenesDataset(Custom3DDataset):
                 # for now we convert points into depth mode
                 points = Coord3DMode.convert_point(points, Coord3DMode.LIDAR,
                                                 Coord3DMode.DEPTH)
-                inds = result['scores_3d'] > 0.1
+                inds = result['scores_3d'] > score_thr
                 gt_bboxes = self.get_ann_info(i)['gt_bboxes_3d'].tensor.numpy()
                 show_gt_bboxes = Box3DMode.convert(gt_bboxes, Box3DMode.LIDAR,
                                                 Box3DMode.DEPTH)

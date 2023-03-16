@@ -1,157 +1,159 @@
 data=input= {"img_metas": 
-				"filename": 6xjpg paths from the 6 camera
-				"ori_shape": (900,1600,3,6)
-				"img_shape": 6x(928,1600,3)
-				"lidar2img": 6x[4x4]
-				"pad_shape": 6x(928,1600,3)
-				"scale_factor": 1.0
-				"flip": False
-				"pcd_hor_flip": False
-				"pcd_ver_flip": False
-				"box_mode_3d": <Box3DMode.LIDAR: 0>
-				"box_type_3d": <class 'mmdet3d.core.bbox.structures.lidar_box3d.LiDARInstance3DBoxes'> 
-				"img_norm_cfg": {"mean": [103.53, 116.28, 123.675], "std": [1,1,1]}
-				"sample_idx": '3e8750f331d7499e9b5123e9eb70f2e2'
-				"pcd_scale_factor": 1.0
-				"pts_filename": path of LIDAR TOP pcd.bin 
-				"cam_intrinsic": 6x[4x4]
-				"lidar2cam": 6x[4x4]
+                "filename": 6xjpg paths from the 6 camera
+                "ori_shape": (900,1600,3,6)
+                "img_shape": 6x(928,1600,3)
+                "lidar2img": 6x[4x4] = cam_intrinsic * lidar2cam
+                "pad_shape": 6x(928,1600,3)
+                "scale_factor": 1.0
+                "flip": False
+                "pcd_horizontal_flip": False
+                "pcd_vertical_flip": False
+                "box_mode_3d": <Box3DMode.LIDAR: 0>
+                "box_type_3d": <class 'mmdet3d.core.bbox.structures.lidar_box3d.LiDARInstance3DBoxes'> 
+                "img_norm_cfg": {"mean": [103.53, 116.28, 123.675], "std": [1,1,1]}
+                "sample_idx": '3e8750f331d7499e9b5123e9eb70f2e2'
+                "pcd_scale_factor": 1.0
+                "pts_filename": path of LIDAR TOP pcd.bin 
+                "cam_intrinsic": 6x[4x4]
+                "lidar2cam": 6x[4x4] = 
 
-			, "img":}
+            , "img":}
+            
+# 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
 
 
 simple_test(img_metas,img,rescale):
 
-	1) img_feats = self.EXTRACT_FEATS(img=img, img_metas=img_metas) : extract feature with ResNet+FPN -> [6x256x29x50]
+    1) img_feats = self.EXTRACT_FEATS(img=img, img_metas=img_metas) : extract feature with ResNet+FPN -> [6x256x29x50]
 
-	2) outs = self.PTS_BBOX_HEAD(img_feats, img_metas) : features go into Detr3d Head 
+    2) outs = self.PTS_BBOX_HEAD(img_feats, img_metas) : features go into Detr3d Head 
 
-		# create embedding of 900 queries of size 512, and extract the weights
+        # create embedding of 900 queries of size 512, and extract the weights
 
-		2.1) hs, init_reference, inter_references = self.TRANSFORMER(mlvl_feats,query_embeds,reg_branches=self.reg_branches,img_metas=img_metas):
+        2.1) hs, init_reference, inter_references = self.TRANSFORMER(mlvl_feats,query_embeds,reg_branches=self.reg_branches,img_metas=img_metas):
 
-			# split query embedding to query_prior and query_pos_encoding
+            # split query embedding to query_prior and query_pos_encoding
 
-			### Formula 4 ###
-			# PROJECT QUERY_POS_ENC TO 3D SPACE, SIGMOID IT AND SAVE IN REF_POINTS_PRIOR (=REF_POITS):  ref_points = self.latent2ref(query_pos_encoding).sigmoid
+            ### Formula 4 ###
+            # PROJECT QUERY_POS_ENC TO 3D SPACE, SIGMOID IT AND SAVE IN REF_POINTS_PRIOR (=REF_POITS):  ref_points = self.latent2ref(query_pos_encoding).sigmoid
 
-			# extract img h,w and padding from metas
+            # extract img h,w and padding from metas
 
-			# create img position mask 
+            # create img position mask 
 
-			# positional encoding of img position mask (key) by interpolating with img size
+            # positional encoding of img position mask (key) by interpolating with img size
 
-			2.1.1) inter_queries, inter_ref_points = self.DECODER(query=query_prior,key=mlvl_img_feats,value=mlvl_img_feats,query_pos=query_pos_encoding,key_pos=pos_encodings,ref_points=ref_points,reg_branches=reg_branches,**kwargs): run the 6x decoder layers
+            2.1.1) inter_queries, inter_ref_points = self.DECODER(query=query_prior,key=mlvl_img_feats,value=mlvl_img_feats,query_pos=query_pos_encoding,key_pos=pos_encodings,ref_points=ref_points,reg_branches=reg_branches,**kwargs): run the 6x decoder layers
 
-				# BaseTransformerLayer manages the 6 decoder layers. Each layer contains self-attn, cross-attn, norm and ffn
-				
-				FOR EACH DECODER LAYER:
+                # BaseTransformerLayer manages the 6 decoder layers. Each layer contains self-attn, cross-attn, norm and ffn
+                
+                FOR EACH DECODER LAYER:
 
-					# update query by applying ("self_attn","norm", "cross_attn", "norm", "ffn", "norm"). After each layer, query and ref_points are updated
-					2.1.1.1) query = layer(*args,query,value=value[0],key=key[0],key_pos=key_pos[0],reference_points=ref_points_input,**kwargs)
+                    # update query by applying ("self_attn","norm", "cross_attn", "norm", "ffn", "norm"). After each layer, query and ref_points are updated
+                    2.1.1.1) query = layer(*args,query,value=value[0],key=key[0],key_pos=key_pos[0],reference_points=ref_points_input,**kwargs)
 
 
-						    # MultiheadAttention.forward: self-attention (query=key) to update the queries by interacting with themselves
+                            # MultiheadAttention.forward: self-attention (query=key) to update the queries by interacting with themselves
 
-						    # Applies norm (LayerNorm) to the queries
+                            # Applies norm (LayerNorm) to the queries
 
-						    # QueryValueProjectCrossAttention.forward: spatial-aware cross-attention between queries and feature keys
+                            # QueryValueProjectCrossAttention.forward: spatial-aware cross-attention between queries and feature keys
 
-						    	## query [900,1,256], key = value [1,6,256,29,50], query_pos [900,1,256], key_pos [1,6,3,29,50], reference_points [1,900,3]
+                                ## query [900,1,256], key = value [1,6,256,29,50], query_pos [900,1,256], key_pos [1,6,3,29,50], reference_points [1,900,3]
 
-						    	# Transform shape of key_pos and value -> key_pos [6,1450,1,3], value [6,1450,1,256]
+                                # Transform shape of key_pos and value -> key_pos [6,1450,1,3], value [6,1450,1,256]
 
-						    	# Extract CAM (6), PATCHES_PER_CAM (1450), BS (1) and QUERIES (900) dimensions from shapes 
+                                # Extract CAM (6), PATCHES_PER_CAM (1450), BS (1) and QUERIES (900) dimensions from shapes 
 
-						    	# Extract cam_T_lidar from img_metas, and calculate lidar_T_cam as inverse of it -> [6,4,4]
+                                # Extract cam_T_lidar from img_metas, and calculate lidar_T_cam as inverse of it -> [6,4,4]
 
-						    	# Save reference_points in reference_points_orig, it will be used after attention
+                                # Save reference_points in reference_points_orig, it will be used after attention
 
-						    	# Update reference_points with pc_range
+                                # Update reference_points with pc_range
 
-						    	# Create reference_points_homogenous = torch.cat(reference_points, ones_query) -> [1,900,4], last column is filled with ones
+                                # Create reference_points_homogenous = torch.cat(reference_points, ones_query) -> [1,900,4], last column is filled with ones
 
-						    	# Create query_per_cam tensor [CAMS, QUERIES, BS, self.embed_dims] -> [6,900,1,256]
+                                # Create query_per_cam tensor [CAMS, QUERIES, BS, self.embed_dims] -> [6,900,1,256]
 
-						    	# Create values_global tensor -> []
+                                # Create values_global tensor -> []
 
-								### Formula 3 ###
-						    	# UPDATE LATENT KEY WITH GEOMETRICAL POSITIONAL ENCODING: feats_with_dir = value + self.query_loc2latent(key_pos) -> [6,1450,1,256] 
+                                ### Formula 3 ###
+                                # UPDATE LATENT KEY WITH GEOMETRICAL POSITIONAL ENCODING: feats_with_dir = value + self.query_loc2latent(key_pos) -> [6,1450,1,256] 
 
-						    	### Formula 8 ###
-						    	# COMPUTE DEPTH ESTIMATE FOR EACH LATENT KEY : value_3d_cam = self.value2depth(feats_with_dir) -> [6,1450,1,1] 
+                                ### Formula 8 ###
+                                # COMPUTE DEPTH ESTIMATE FOR EACH LATENT KEY : value_3d_cam = self.value2depth(feats_with_dir) -> [6,1450,1,1] 
 
-						    	### Formula 9 ###
-						    	# SCALE THE DIRECTION VECTOR KEY_POS WITH THE DEPTH ESTIMATE: value_3d_cam = value_3d_cam * key_pos -> [6,1,1450,3] 
+                                ### Formula 9 ###
+                                # SCALE THE DIRECTION VECTOR KEY_POS WITH THE DEPTH ESTIMATE: value_3d_cam = value_3d_cam * key_pos -> [6,1,1450,3] 
 
-						    	FOR EACH CAM:
+                                FOR EACH CAM:
 
-						    		### Formula 5 ###
-						    		# PROJECT QUERY CENTER TO CAMERA: reference_points_cam = torch.bmm(reference_points_homogenous, cam_T_lidar_tensor[cam_idx])[..., 0:3] -> [1,900,3] 
+                                    ### Formula 5 ###
+                                    # PROJECT QUERY CENTER TO CAMERA: reference_points_cam = torch.bmm(reference_points_homogenous, cam_T_lidar_tensor[cam_idx])[..., 0:3] -> [1,900,3] 
 
-						    		### Formula 6 ###
-						    		# ENCORPORATE QUERY POS AND CAMERA FRAME TO QUERY: query_per_cam[cam_idx] = query + query_pos + self.query_loc2latent(reference_points_cam) -> [900,1,256] 
+                                    ### Formula 6 ###
+                                    # ENCORPORATE QUERY POS AND CAMERA FRAME TO QUERY: query_per_cam[cam_idx] = query + query_pos + self.query_loc2latent(reference_points_cam) -> [900,1,256] 
 
-						    		### Formula 10 ###
-						    		# PROJECT VALUE TO REFERENCE: value_3d_ref = torch.bmm(value_3d_cam[cam_idx], lidar_T_cam_tensor[cam_idx])[..., 0:3] -> [1,1450,3]
+                                    ### Formula 10 ###
+                                    # PROJECT VALUE TO REFERENCE: value_3d_ref = torch.bmm(value_3d_cam[cam_idx], lidar_T_cam_tensor[cam_idx])[..., 0:3] -> [1,1450,3]
 
-						    		### Formula 11 ###
-						    		# ENCORPORATE REFERENCE FRAME TO VALUE: values_global[cam_idx] = value[cam_idx] + self.value_loc2latent(value_3d_ref) -> [1450,1,256]
-						     
-						     	# Call cross-attention function _attn_weights_only_dot_prod_attn(q=query_per_cam, k=feats_with_dir, v=values_global)-> weighted_values
-						     	  This is executed in paralled for each of the 8 heads, each with embed_dim=256/8=32
-						     	  Q [6,8,900,32], K [6,8,1450,32], V [6,8,1450,32]
+                                    ### Formula 11 ###
+                                    # ENCORPORATE REFERENCE FRAME TO VALUE: values_global[cam_idx] = value[cam_idx] + self.value_loc2latent(value_3d_ref) -> [1450,1,256]
+                             
+                                # Call cross-attention function _attn_weights_only_dot_prod_attn(q=query_per_cam, k=feats_with_dir, v=values_global)-> weighted_values
+                                  This is executed in paralled for each of the 8 heads, each with embed_dim=256/8=32
+                                  Q [6,8,900,32], K [6,8,1450,32], V [6,8,1450,32]
 
-						     	  	# Extract CAMS[6], B[8], Q[900], E[32], patches_per_img [1450]
+                                    # Extract CAMS[6], B[8], Q[900], E[32], patches_per_img [1450]
 
-						     	  	# Create attn_full [6,8,900,1450]
+                                    # Create attn_full [6,8,900,1450]
 
-							     	FOR EACH CAM:
+                                    FOR EACH CAM:
 
-							     		# attn = torch.bmm(q[cam_idx], k[cam_idx].transpose(-2,-1)) -> [8,900,32]*[8,32,1450] = [8,900,1450]
+                                        # attn = torch.bmm(q[cam_idx], k[cam_idx].transpose(-2,-1)) -> [8,900,32]*[8,32,1450] = [8,900,1450]
 
-							     		# attn = F.softmax(attn)
+                                        # attn = F.softmax(attn)
 
-							     		# attn_full[cam_idx] = attn -> [6,8,900,1450]
+                                        # attn_full[cam_idx] = attn -> [6,8,900,1450]
 
-							     	# v.permute(1,0,2,3).reshape(B,-1,E) -> [8,8700,32]
+                                    # v.permute(1,0,2,3).reshape(B,-1,E) -> [8,8700,32]
 
-							     	# attn_full.permute(1,2,0,3).reshape(B,Q,-1) -> [8,900,8700] 
+                                    # attn_full.permute(1,2,0,3).reshape(B,Q,-1) -> [8,900,8700] 
 
-							     	# output = torch.bmm(attn_full, v) -> [8,900,32]
+                                    # output = torch.bmm(attn_full, v) -> [8,900,32]
 
-							     	# output = output.transpose(0, 1).contiguous().view(900, 1, 256) -> [900,1,256]
+                                    # output = output.transpose(0, 1).contiguous().view(900, 1, 256) -> [900,1,256]
  
-							     	# return output [8,900,32], attn_full [8,900,8700] 
+                                    # return output [8,900,32], attn_full [8,900,8700] 
 
-						     	# return query + self.dropout_layer(self.proj_drop(weighted_values)) + self.position_encoder_out(reference_points_orig) -> 
+                                # return query + self.dropout_layer(self.proj_drop(weighted_values)) + self.position_encoder_out(reference_points_orig) -> 
 
-						    # Norm + FFN + Norm
+                            # Norm + FFN + Norm
 
-					# OBB CALCULATED WITH REG_BRANCH FOR EACH LAYER: obb = reg_branches[layer_num](query)
+                    # OBB CALCULATED WITH REG_BRANCH FOR EACH LAYER: obb = reg_branches[layer_num](query)
 
-					### Formula 1 ###
-					# QUERY OBJECT CENTER ARE UPDATED: ref_points = sigmoid(sigm_inv(ref_points) + obb)
+                    ### Formula 1 ###
+                    # QUERY OBJECT CENTER ARE UPDATED: ref_points = sigmoid(sigm_inv(ref_points) + obb)
 
-					# append query and ref_points to inter_queries and inter_ref_points list
+                    # append query and ref_points to inter_queries and inter_ref_points list
 
-		    	return inter_queries, inter_ref_points
+                return inter_queries, inter_ref_points
 
-		
-		 	return inter_queries (hs), ref_points_prior (init_referece), inter_ref_points (inter_references)
+        
+            return inter_queries (hs), ref_points_prior (init_referece), inter_ref_points (inter_references)
 
-		
-		for each decoder layer:
+        
+        for each decoder layer:
 
-			# take reference as ref_points_prior if it is the first layer, otherwise take the corrisponding inter_reference; inverse sigmoid it
+            # take reference as ref_points_prior if it is the first layer, otherwise take the corrisponding inter_reference; inverse sigmoid it
 
-			# INFER OUTPUS CLASS FROM QUERY HS WITH CORRISPONDING CLS_BRANCH LAYER: outputs_class = self.cls_branches[lvl](hs[lvl])
+            # INFER OUTPUS CLASS FROM QUERY HS WITH CORRISPONDING CLS_BRANCH LAYER: outputs_class = self.cls_branches[lvl](hs[lvl])
 
-			# INFER BBOX COORD FROM QUERY HS WITH CORRISPONDING REG_BRANCH LAYER: tmp = self.reg_branches[lvl](hs[lvl])
+            # INFER BBOX COORD FROM QUERY HS WITH CORRISPONDING REG_BRANCH LAYER: tmp = self.reg_branches[lvl](hs[lvl])
 
-			# update bbox coord by offsetting with reference, and do the sigmoid.
+            # update bbox coord by offsetting with reference, and do the sigmoid.
 
-			# append the output class and the updated bbox coord to lists
+            # append the output class and the updated bbox coord to lists
 
         outputs_classes = torch.stack(outputs_classes)
         outputs_coords = torch.stack(outputs_coords)
@@ -164,33 +166,33 @@ simple_test(img_metas,img,rescale):
         ## N.B: 6 is the number of decoder layers, not the number of cams! Only the last decoder output will be needed, since it is not in training mode
  
 
-	3) bbox_list = self.PTS_BBOX_HEAD.GET_BBOXES(outs, img_metas) 
+    3) bbox_list = self.PTS_BBOX_HEAD.GET_BBOXES(outs, img_metas) 
 
-		# APPLY NMS-FREE CODER: preds_dicts = self.bbox_coder.decode(preds_dicts)
+        # APPLY NMS-FREE CODER: preds_dicts = self.bbox_coder.decode(preds_dicts)
 
-			# TAKE ONLY CLASSIFICATION PREDICTION FOR LAST DECODER: all_cls_scores = preds_dicts['all_cls_scores'][-1] -> [1,900,10]
-			# TAKE ONLY BBOX PREDICTION FOR LAST DECODER: all_bbox_preds = preds_dicts['all_bbox_preds'][-1] -> [1,900,10]
+            # TAKE ONLY CLASSIFICATION PREDICTION FOR LAST DECODER: all_cls_scores = preds_dicts['all_cls_scores'][-1] -> [1,900,10]
+            # TAKE ONLY BBOX PREDICTION FOR LAST DECODER: all_bbox_preds = preds_dicts['all_bbox_preds'][-1] -> [1,900,10]
 
-			predictions = self.decode_single(all_cls_scores[0], all_bbox_preds[0]):
+            predictions = self.decode_single(all_cls_scores[0], all_bbox_preds[0]):
 
-		        # APPLY SIGMOID ON SCORES: cls_scores = cls_scores.sigmoid() -> [900,10]
-		        # FLATTEN THE SCORES AND EXTRACT SCORES AND INDICES OF THE TOP-300: scores, indexs = cls_scores.view(-1).topk(max_num) ->[300],[300]
-		        # CALCULATE CORRESPONDING LABEL INDEXES: labels = indexs % self.num_classes -> [300] = [0,8,0,8,8,0.....]
-		        # SAME FOR BBOXES: bbox_index = indexs // self.num_classes
-		        # EXTRACT ONLY THE TOP-300 BBOXES: bbox_preds = bbox_preds[bbox_index]
+                # APPLY SIGMOID ON SCORES: cls_scores = cls_scores.sigmoid() -> [900,10]
+                # FLATTEN THE SCORES AND EXTRACT SCORES AND INDICES OF THE TOP-300: scores, indexs = cls_scores.view(-1).topk(max_num) ->[300],[300]
+                # CALCULATE CORRESPONDING LABEL INDEXES: labels = indexs % self.num_classes -> [300] = [0,8,0,8,8,0.....]
+                # SAME FOR BBOXES: bbox_index = indexs // self.num_classes
+                # EXTRACT ONLY THE TOP-300 BBOXES: bbox_preds = bbox_preds[bbox_index]
 
-		        # Denormalize bbox by removing last dimension -> final_box_preds [300,9]
+                # Denormalize bbox by removing last dimension -> final_box_preds [300,9]
 
-		        # Apply mask (in this case all True)
+                # Apply mask (in this case all True)
 
-				# RETURN predictions -> [{'bboxes': final_box_preds[300,9], 'scores': scores[300], 'labels': labels[300]}]
+                # RETURN predictions -> [{'bboxes': final_box_preds[300,9], 'scores': scores[300], 'labels': labels[300]}]
 
-		# Apply some bbox normalization and convert to LidarInstance3dBoxes -> ['bev','center','bottom_center','bottom_height','corners','top_height',....]
+        # Apply some bbox normalization and convert to LidarInstance3dBoxes -> ['bev','center','bottom_center','bottom_height','corners','top_height',....]
 
-	4) bbox_results = [bbox3d2result(bboxes, scores, labels) for bboxes, scores, labels in bbox_list] 
+    4) bbox_results = [bbox3d2result(bboxes, scores, labels) for bboxes, scores, labels in bbox_list] 
 
-	return bbox_results 
-	
+    return bbox_results 
+    
 Creates list of dict, with bbox and labels, and returns
 
 return bbox_list -> {"pts_bbox" : {"boxes_3d" = LidarInstance3dBoxes.., "scores_3d" = [300], "labels_3d" = [300]}}

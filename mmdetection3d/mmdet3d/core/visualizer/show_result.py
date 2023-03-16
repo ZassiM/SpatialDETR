@@ -6,7 +6,7 @@ import numpy as np
 import trimesh
 
 from .image_vis import (draw_camera_bbox3d_on_img, draw_depth_bbox3d_on_img,
-                        draw_lidar_bbox3d_on_img)
+                        draw_lidar_bbox3d_on_img, project_pts_on_img)
 
 
 def _write_obj(points, out_filename):
@@ -227,7 +227,8 @@ def show_multi_modality_result(img,
                                img_metas=None,
                                show=False,
                                gt_bbox_color=(61, 102, 255),
-                               pred_bbox_color=(241, 101, 72)):
+                               pred_bbox_color=(241, 101, 72),
+                               points = None):
     """Convert multi-modality detection results into 2D results.
 
     Project the predicted 3D bbox to 2D image plane and visualize them.
@@ -265,6 +266,7 @@ def show_multi_modality_result(img,
 
     if show:
         show_img = img.copy()
+        
         if gt_bboxes is not None:
             show_img = draw_bbox(
                 gt_bboxes, show_img, proj_mat, img_metas, color=gt_bbox_color)

@@ -502,7 +502,7 @@ class MVXTwoStageDetector(Base3DDetector):
             pred_bboxes = pred_bboxes.tensor.cpu().numpy()
             show_result(points, None, pred_bboxes, out_dir, file_name)
 
-    def show_results_mod(self, data, result, out_dir, show = False):
+    def show_results_mod(self, data, result, out_dir, show = False, score_thr = 0.3):
         """Results visualization.
 
         Args:
@@ -533,10 +533,14 @@ class MVXTwoStageDetector(Base3DDetector):
             file_name = osp.split(pts_filename)[-1].split('.')[0]
 
             assert out_dir is not None, 'Expect out_dir, got none.'
-            inds = result[batch_id]['pts_bbox']['scores_3d'] > 0.1
-            pred_bboxes = result[batch_id]['pts_bbox']['boxes_3d'][inds]
             
-            labels = result[batch_id]['pts_bbox']['labels_3d'][inds]
+            pred_bboxes = result[batch_id]["pts_bbox"]['boxes_3d']
+            pred_labels = result[batch_id]["pts_bbox"]['labels_3d']
+
+            if score_thr is not None:
+                mask = result[batch_id]["pts_bbox"]['scores_3d'] > score_thr
+                pred_bboxes = pred_bboxes[mask]
+                pred_labels = pred_labels[mask]
 
             # for now we convert points and bbox into depth mode
             if (box_mode_3d == Box3DMode.CAM) or (box_mode_3d
@@ -550,4 +554,4 @@ class MVXTwoStageDetector(Base3DDetector):
                     f'Unsupported box_mode_3d {box_mode_3d} for conversion!')
 
             pred_bboxes = pred_bboxes.tensor.cpu().numpy()
-            show_result(points, None, pred_bboxes, out_dir, file_name, pred_labels = labels, show = show)
+            show_result(points, None, pred_bboxes, out_dir, file_name, pred_labels = pred_labels, show = show)

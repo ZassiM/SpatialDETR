@@ -1,0 +1,9 @@
+config_1= "mmdetection3d/configs/_base_/datasets/nus-3d.py"
+
+config = "configs/model.py"
+
+
+task = "mono-det"
+output_dir = "./show_results"
+online = true
+skip_type = "Normalize"

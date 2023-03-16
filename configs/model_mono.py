@@ -195,22 +195,23 @@ db_sampler = dict(
 )
 
 train_pipeline = [
-    dict(type="LoadMultiViewImageFromFiles", to_float32=True),
-    dict(type="PhotoMetricDistortionMultiViewImage"),
+    dict(type='LoadImageFromFileMono3D'),
     dict(
-        type="LoadAnnotations3D",
+        type='LoadAnnotations3D',
+        with_bbox=True,
+        with_label=True,
+        with_attr_label=True,
         with_bbox_3d=True,
         with_label_3d=True,
-        with_attr_label=False,
-    ),
-    dict(type="ObjectRangeFilter", point_cloud_range=point_cloud_range),
-    dict(type="ObjectNameFilter", classes=class_names),
-    dict(type="NormalizeMultiviewImage", **img_norm_cfg),
-    dict(type="PadMultiViewImage", size_divisor=32),
-    dict(type="DefaultFormatBundle3D", class_names=class_names),
+        with_bbox_depth=True),
+    dict(type='Resize', img_scale=(1600, 900), keep_ratio=True),
+    dict(type='RandomFlip3D', flip_ratio_bev_horizontal=0.5),
+    dict(type='Normalize', **img_norm_cfg),
+    dict(type='Pad', size_divisor=32),
+    dict(type='DefaultFormatBundle3D', class_names=class_names),
     dict(
         type="Collect3D",
-        keys=["gt_bboxes_3d", "gt_labels_3d", "img"],
+        keys=["gt_bboxes_3d", "gt_labels_3d", "img", "points"],
         meta_keys=(
             "filename",
             "ori_shape",
@@ -238,22 +239,61 @@ train_pipeline = [
     ),
 ]
 test_pipeline = [
-    dict(type='LoadImageFromFileMono3D'),
+    dict(type="LoadMultiViewImageFromFiles", to_float32=True),
     dict(
-        type='MultiScaleFlipAug',
-        scale_factor=1.0,
+        type='LoadPointsFromFile',
+        coord_type='LIDAR',
+        load_dim=5,
+        use_dim=5,
+        file_client_args=file_client_args),
+    dict(
+        type='LoadPointsFromMultiSweeps',
+        sweeps_num=10,
+        file_client_args=file_client_args),
+    #dict(type="NormalizeMultiviewImage", **img_norm_cfg),
+    dict(type="PadMultiViewImage", size_divisor=32),
+    dict(
+        type="MultiScaleFlipAug3D",
+        img_scale=(1333, 800),
+        pts_scale_ratio=1,
         flip=False,
         transforms=[
-            dict(type='RandomFlip3D'),
-            dict(type='Normalize', **img_norm_cfg),
-            dict(type='Pad', size_divisor=32),
             dict(
-                type='DefaultFormatBundle3D',
-                class_names=class_names,
-                with_label=False),
-            dict(type='Collect3D', keys=['img']),
-        ])
+                type="DefaultFormatBundle3D", class_names=class_names, with_label=False
+            ),
+            dict(
+                type="Collect3D",
+                keys=["img","points"],
+                meta_keys=(
+                    "filename",
+                    "ori_shape",
+                    "img_shape",
+                    "lidar2img",
+                    "depth2img",
+                    "cam2img",
+                    "pad_shape",
+                    "scale_factor",
+                    "flip",
+                    "pcd_horizontal_flip",
+                    "pcd_vertical_flip",
+                    "box_mode_3d",
+                    "box_type_3d",
+                    "img_norm_cfg",
+                    "pcd_trans",
+                    "sample_idx",
+                    "pcd_scale_factor",
+                    "pcd_rotation",
+                    "pts_filename",
+                    "transformation_3d_flow",
+                    "cam_intrinsic",
+                    "lidar2cam",
+                ),
+            ),
+        ],
+    ),
 ]
+
+
 
 
 data = dict(

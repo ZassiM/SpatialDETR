@@ -27,108 +27,14 @@ from ExplanationGenerator import Generator
 import matplotlib.pyplot as plt
 
 from vit_rollout import *
-
 from mmdet3d.core.visualizer import (show_multi_modality_result, show_result,
                                      show_seg_result)
-
 from pathlib import Path
-
 from mmcv import Config, DictAction, mkdir_or_exist, track_iter_progress
 
 
 
-
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description='MMDet test (and eval) a model')
-    parser.add_argument('config', help='test config file path')
-    parser.add_argument('checkpoint', help='checkpoint file')
-    parser.add_argument('--out', help='output result file in pickle format')
-    parser.add_argument(
-        '--fuse-conv-bn',
-        action='store_true',
-        help='Whether to fuse conv and bn, this will slightly increase'
-        'the inference speed')
-    parser.add_argument(
-        '--gpu-id',
-        type=int,
-        default=0,
-        help='id of gpu to use '
-        '(only applicable to non-distributed testing)')
-    parser.add_argument(
-        '--format-only',
-        action='store_true',
-        help='Format the output results without perform evaluation. It is'
-        'useful when you want to format the result to a specific format and '
-        'submit it to the test server')
-    parser.add_argument(
-        '--eval',
-        type=str,
-        nargs='+',
-        help='evaluation metrics, which depends on the dataset, e.g., "bbox",'
-        ' "segm", "proposal" for COCO, and "mAP", "recall" for PASCAL VOC')
-    parser.add_argument('--show', action='store_true', help='show results')
-    parser.add_argument(
-        '--show-dir', help='directory where results will be saved')
-    parser.add_argument(
-        '--gpu-collect',
-        action='store_true',
-        help='whether to use gpu to collect results.')
-    parser.add_argument(
-        '--tmpdir',
-        help='tmp directory used for collecting results from multiple '
-        'workers, available when gpu-collect is not specified')
-    parser.add_argument('--seed', type=int, default=0, help='random seed')
-    parser.add_argument(
-        '--deterministic',
-        action='store_true',
-        help='whether to set deterministic options for CUDNN backend.')
-    parser.add_argument(
-        '--cfg-options',
-        nargs='+',
-        action=DictAction,
-        help='override some settings in the used config, the key-value pair '
-        'in xxx=yyy format will be merged into config file. If the value to '
-        'be overwritten is a list, it should be like key="[a,b]" or key=a,b '
-        'It also allows nested list/tuple values, e.g. key="[(a,b),(c,d)]" '
-        'Note that the quotation marks are necessary and that no white space '
-        'is allowed.')
-    parser.add_argument(
-        '--options',
-        nargs='+',
-        action=DictAction,
-        help='custom options for evaluation, the key-value pair in xxx=yyy '
-        'format will be kwargs for dataset.evaluate() function (deprecate), '
-        'change to --eval-options instead.')
-    parser.add_argument(
-        '--eval-options',
-        nargs='+',
-        action=DictAction,
-        help='custom options for evaluation, the key-value pair in xxx=yyy '
-        'format will be kwargs for dataset.evaluate() function')
-    parser.add_argument(
-        '--launcher',
-        choices=['none', 'pytorch', 'slurm', 'mpi'],
-        default='none',
-        help='job launcher')
-    parser.add_argument('--local_rank', type=int, default=0)
-    args = parser.parse_args()
-    if 'LOCAL_RANK' not in os.environ:
-        os.environ['LOCAL_RANK'] = str(args.local_rank)
-
-    if args.options and args.eval_options:
-        raise ValueError(
-            '--options and --eval-options cannot be both specified, '
-            '--options is deprecated in favor of --eval-options')
-    if args.options:
-        warnings.warn('--options is deprecated in favor of --eval-options')
-        args.eval_options = args.options
-    return args
-
-def main():
-    
-    with open("args.toml", mode = "rb") as argsF:
-        args = tomli.load(argsF)
+def init(args):
     
     args["config"] = args["config_"+args["model"]]
     args["checkpoint"] = args["checkpoint_"+args["model"]]
@@ -189,7 +95,7 @@ def main():
             for ds_cfg in cfg.data.test:
                 ds_cfg.pipeline = replace_ImageToTensor(ds_cfg.pipeline)
 
-    cfg.gpu_ids = [args["gpu_id"]]
+    gpu_ids = [args["gpu_id"]]
 
     # init distributed env first, since logger depends on the dist info.
     if args["launcher"] == 'none':
@@ -199,21 +105,19 @@ def main():
         init_dist(args["launcher"], **cfg.dist_params)
     
     # build the dataloader
-    dataset = build_dataset(cfg.data.test)
+    mode = args["mode"]
+    
+    if mode == "test": dataset = build_dataset(cfg.data.test)
+    elif mode == "train": dataset = build_dataset(cfg.data.train)
+    elif mode == "val": dataset = build_dataset(cfg.data.val)
+    else: raise ValueError(f"{mode} is not a valid mode.\n")
+    
     data_loader = build_dataloader(
         dataset,
         samples_per_gpu=samples_per_gpu,
         workers_per_gpu=cfg.data.workers_per_gpu,
         dist=distributed,
         shuffle=False)
-
-    dataset_train = build_dataset(cfg.data.train)
-    data_loader_train = build_dataloader(
-        dataset_train,
-        samples_per_gpu=samples_per_gpu,
-        workers_per_gpu=cfg.data.workers_per_gpu,
-        dist=distributed,
-        shuffle=False) 
     
     # build the model and load checkpoint
     cfg.model.train_cfg = None
@@ -237,33 +141,83 @@ def main():
     elif hasattr(dataset, 'PALETTE'):
         # segmentation dataset has `PALETTE` attribute
         model.PALETTE = dataset.PALETTE
+    
+    return model, dataset, data_loader, gpu_ids, cfg, distributed
 
+def main():
+    
+    with open("args.toml", mode = "rb") as argsF:
+        args = tomli.load(argsF)
+    
+    model, dataset, data_loader, gpu_ids, cfg, distributed = init(args)
+
+    dataset_T = build_dataset(cfg.data.train)
+
+    
     if not distributed:
-        model = MMDataParallel(model, device_ids=cfg.gpu_ids)
+        model = MMDataParallel(model, device_ids = gpu_ids)
+
         model.eval()
-        #gen=Generator(model)
         outputs = []
         prog_bar = mmcv.ProgressBar(len(dataset))
         
-        dataset = data_loader.dataset
+        for i, data in enumerate(data_loader):    
 
-        for i, data in enumerate(data_loader):      
- 
+            #points = data.pop("points")
+            # gt_bboxes = data.pop("gt_bboxes_3d")
+            # gt_labels = data.pop("gt_labels_3d")
             with torch.no_grad():
-                points = data.pop("points")
                 result = model(return_loss=False, rescale=True, **data)
 
-            dataset.show(result, args["show_dir"], show = True)
-
             #data["points"] = points
+            
+            try:
+                example = dataset_T.prepare_train_data(i)
+            except AttributeError:  # for Mono-3D datasets
+                example = dataset_T.prepare_train_img(i)
+            
+            # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
+            camidx = 0
+            
+            gt_bboxes = dataset_T.get_ann_info(i)['gt_bboxes_3d']
+            pred_bboxes = result[0]["pts_bbox"]["boxes_3d"]
+            img_metas = example['img_metas']._data
+            img_metas_test = data["img_metas"][0]._data[0][0]
+            img = example['img']._data[camidx].numpy()
+            img_test = data["img"][0]._data[0][0][camidx].numpy()
+            
+            img = img.transpose(1, 2, 0)
+            img_test = img_test.transpose(1, 2, 0)
+            if gt_bboxes.tensor.shape[0] == 0:
+                gt_bboxes = None
+            
+            filename = Path(img_metas['filename'][camidx]).name
+            filename = filename.split('.')[0]
+            
+            show_multi_modality_result(
+                img_test,
+                None,
+                pred_bboxes,
+                img_metas_test['lidar2img'][camidx],
+                args["show_dir"],
+                filename,
+                box_mode='lidar',
+                img_metas=img_metas_test,
+                gt_bbox_color = (0,0,255),
+                pred_bbox_color = (0,255,0),
+                show=True)
+            
+            dataset.show(result, args["show_dir"], show = True, score_thr = 0.3)
+        
+
             outputs.extend(result)
             batch_size = len(result)
             for _ in range(batch_size):
                 prog_bar.update()
-                
+
+
             #model.module.show_results_mod(data, results, out_dir = args["show_dir"], show = True)
-            
-            debug = 0
+
                 #camidx = 0
                 
                 # inds = results[0]['pts_bbox']['scores_3d'] > 0.5
@@ -286,7 +240,7 @@ def main():
                 # img = mmcv.impad_to_multiple(img, 32, 0) #pad to (928,1600,3)
                 # #mmcv.imshow(img)
 
-                # pred_img=show_multi_modality_result(
+                # show_multi_modality_result(
                 #     img,
                 #     None,
                 #     pred_bbox,
@@ -298,39 +252,12 @@ def main():
                 #     show=False)
                 
                 # mmcv.imshow(pred_img)
-                
-            #evaluate(model, gen, data, 'cuda')
-
-            
-            # paths = data['img_metas'][0]._data[0][0]['filename']
-            # imgs = []
-            # for idx in range(len(paths)):
-            #     img = Image.open(paths[idx])
-            #     img = img.resize((224,224))
-            #     img = np.array(img)[:,:,::-1]
-            #     imgs.append(img)
-            # front = np.concatenate((imgs[2],imgs[0],imgs[1]), axis=1)
-            # vert = np.concatenate((imgs[5],imgs[3],imgs[4]), axis=1)
-            # conc = np.concatenate((front,vert),axis=0)
-
-            # cv2.imshow("Cameras", conc)
-            # cv2.waitKey(-1)
-
-            # with torch.no_grad():
-            #     #result = model(return_loss=False, rescale=True, **data)
-
-            #     break
-            # outputs.extend(result)
-            # batch_size = len(result)
-            # for _ in range(batch_size):
-            #     prog_bar.update()
-                    
     else:
         model = MMDistributedDataParallel(
             model.cuda(),
             device_ids=[torch.cuda.current_device()],
             broadcast_buffers=False)
-        outputs = multi_gpu_test(model, data_loader, args["tmpdir"], args["gpu_collect"])
+        outputs = multi_gpu_test(model, data_loader, args["tmpdir"], args["gpu_collect"])     
 
 
     rank, _ = get_dist_info()
