@@ -1,4 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+
 import argparse
 import os
 import tomli
@@ -27,7 +28,7 @@ from ExplanationGenerator import Generator
 import matplotlib.pyplot as plt
 
 from vit_rollout import *
-from mmdet3d.core.visualizer import (show_multi_modality_result, show_result,
+from mmdet3d.core.visualizer import (show_multi_modality_result,show_result,
                                      show_seg_result)
 from pathlib import Path
 from mmcv import Config, DictAction, mkdir_or_exist, track_iter_progress
@@ -109,7 +110,7 @@ def init(args):
     # build the dataloader
     mode = args["mode"]
 
-    if mode == "test": dataset = build_dataset(cfg.data.test,default_args=dict(filter_empty_gt=False))
+    if mode == "test": dataset = build_dataset(cfg.data.test)
     elif mode == "train": dataset = build_dataset(cfg.data.train)
     elif mode == "val": dataset = build_dataset(cfg.data.val)
     else: raise ValueError(f"{mode} is not a valid mode.\n")
@@ -186,21 +187,14 @@ def main():
         prog_bar = mmcv.ProgressBar(len(dataset))
         
         for i, data in enumerate(data_loader):    
+            if i<40: continue
             
-            try:
-                example = dataset.prepare_train_data(i)
-            except AttributeError:  # for Mono-3D datasets
-                example = dataset.prepare_train_img(i)
-                
-                
             points = data.pop("points")
-            #gt_bboxes = data.pop("gt_bboxes_3d")
-            #gt_labels = data.pop("gt_labels_3d")
+
             with torch.no_grad():
                 result = model(return_loss=False, rescale=True, **data)
 
             data["points"] = points
-            
             
             # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
             camidx = 2
@@ -211,79 +205,38 @@ def main():
             gt_bboxes = dataset.get_ann_info(i)['gt_bboxes_3d']
             pred_bboxes = result[0]["pts_bbox"]["boxes_3d"][inds]
             
-            img_metas = example['img_metas'][0]._data
-            img_metas_test = data["img_metas"][0]._data[0][0]
-            
-            img = example['img'][0]._data.numpy()[camidx]
-            img_test = data["img"][0]._data[0].numpy()[0][camidx]
-            
-            img = img.transpose(1, 2, 0)
-            img_test = img_test.transpose(1,2,0)
+            img_metas = data["img_metas"][0]._data[0][0]
+
+            img = data["img"][0]._data[0].numpy()[0]
+                    
+            img = img.transpose(0,2,3,1)
             
             if gt_bboxes.tensor.shape[0] == 0:
                 gt_bboxes = None
             
             filename = Path(img_metas['filename'][camidx]).name
             filename = filename.split('.')[0]
-            
+
             show_multi_modality_result(
-                img_test,
+                img,
                 gt_bboxes,
                 pred_bboxes,
-                img_metas_test['lidar2img'][camidx],
+                img_metas['lidar2img'],
                 args["show_dir"],
                 filename,
                 box_mode='lidar',
-                img_metas=img_metas_test,
+                img_metas=None,
                 gt_bbox_color = (0,0,255),
                 pred_bbox_color = (0,255,0),
-                show=True)
+                show=True, multi=True)
             
-            #dataset.show(result, args["show_dir"], show = True, score_thr = 0.1)
+            # dataset.show(result, points[0]._data[0][0], gt_bboxes.tensor.numpy(), args["show_dir"], show=True, pipeline=None, score_thr = score_thr)
         
-
             outputs.extend(result)
             batch_size = len(result)
             for _ in range(batch_size):
                 prog_bar.update()
 
-
-            #model.module.show_results_mod(data, results, out_dir = args["show_dir"], show = True)
-
-                #camidx = 0
-                
-                # inds = results[0]['pts_bbox']['scores_3d'] > 0.5
-                # pred_bbox = results[0]['pts_bbox']['boxes_3d'][inds]
-                
-                # labels=results[0]['pts_bbox']['labels_3d'][inds]
-                # for l in labels:
-                #     print(data_loader.dataset.CLASSES[l])
-
-                # img_metas = data['img_metas'][0]._data[0][0]
-                # # img = data['img'][0]._data[0][0]
-                # # img = img[camidx].numpy().astype(np.uint8).transpose(1,2,0)
-
-                # # no 3D gt bboxes, just show img
-                # filename = Path(img_metas['filename'][camidx]).name
-                # filename = filename.split('.')[0]
-                
-                # path = img_metas['filename'][camidx]
-                # img = mmcv.imread(path)
-                # img = mmcv.impad_to_multiple(img, 32, 0) #pad to (928,1600,3)
-                # #mmcv.imshow(img)
-
-                # show_multi_modality_result(
-                #     img,
-                #     None,
-                #     pred_bbox,
-                #     img_metas['lidar2img'][camidx],
-                #     args["show_dir"],
-                #     filename,
-                #     box_mode='lidar',
-                #     img_metas=img_metas,
-                #     show=False)
-                
-                # mmcv.imshow(pred_img)
     else:
         model = MMDistributedDataParallel(
             model.cuda(),

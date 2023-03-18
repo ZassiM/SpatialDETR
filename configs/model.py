@@ -303,7 +303,6 @@ test_pipeline = [
 ]
 
 eval_pipeline = [
-    dict(type="LoadMultiViewImageFromFiles", to_float32=True),
     dict(
         type='LoadPointsFromFile',
         coord_type='LIDAR',
@@ -311,14 +310,10 @@ eval_pipeline = [
         use_dim=5,
         file_client_args=file_client_args),
     dict(
-        type='LoadPointsFromMultiSweeps',
-        sweeps_num=10,
-        file_client_args=file_client_args),
-    dict(
         type='DefaultFormatBundle3D',
         class_names=class_names,
         with_label=False),
-    dict(type='Collect3D', keys=['points', 'img'])
+    dict(type='Collect3D', keys=['points'])
 ]
 
 

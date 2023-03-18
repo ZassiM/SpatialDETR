@@ -576,6 +576,37 @@ class NuScenesDataset(Custom3DDataset):
                 show_result(points, show_gt_bboxes, show_pred_bboxes, out_dir,
                             file_name, show)
 
+    def show(self, results, points, gt_bboxes, out_dir, show=False, pipeline=None, score_thr = 0.1):
+        """Results visualization.
+
+        Args:
+            results (list[dict]): List of bounding boxes results.
+            out_dir (str): Output directory of visualization result.
+            show (bool): Whether to visualize the results online.
+                Default: False.
+            pipeline (list[dict], optional): raw data loading for showing.
+                Default: None.
+        """
+        assert out_dir is not None, 'Expect out_dir, got none.'
+        pipeline = self._get_pipeline(pipeline)
+        for i, result in enumerate(results):
+            if 'pts_bbox' in result.keys():
+                result = result['pts_bbox']
+            data_info = self.data_infos[i]
+            pts_path = data_info['lidar_path']
+            file_name = osp.split(pts_path)[-1].split('.')[0]
+
+            # for now we convert points into depth mode
+            points = Coord3DMode.convert_point(points, Coord3DMode.LIDAR,
+                                            Coord3DMode.DEPTH)
+            inds = result['scores_3d'] > score_thr
+            show_gt_bboxes = Box3DMode.convert(gt_bboxes, Box3DMode.LIDAR,
+                                            Box3DMode.DEPTH)
+            pred_bboxes = result['boxes_3d'][inds].tensor.numpy()
+            show_pred_bboxes = Box3DMode.convert(pred_bboxes, Box3DMode.LIDAR,
+                                                Box3DMode.DEPTH)
+            show_result(points, show_gt_bboxes, show_pred_bboxes, out_dir,
+                        file_name, show)
 
 def output_to_nusc_box(detection):
     """Convert the output to the box class in the nuScenes.
