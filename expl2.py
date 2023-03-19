@@ -171,6 +171,15 @@ def build_data_cfg(config_path, skip_type, cfg_options):
     ]
 
     return cfg
+
+      
+def show_mask_on_image(img, mask):
+    img = np.float32(img) / 255
+    heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
+    heatmap = np.float32(heatmap) / 255
+    mask = heatmap + np.float32(img)
+    mask = mask / np.max(mask)
+    return np.uint8(255 * mask)
 def main():
     
     with open("args.toml", mode = "rb") as argsF:
@@ -186,56 +195,63 @@ def main():
         outputs = []
         prog_bar = mmcv.ProgressBar(len(dataset))
         
+        gen = Generator(model)
         for i, data in enumerate(data_loader):    
-            if i<40: continue
+            dec_self_attn_weights, dec_cross_attn_weights = [], []
             
-            points = data.pop("points")
+            hooks = []
+            for layer in model.module.pts_bbox_head.transformer.decoder.layers:
+                hooks.append(
+                layer.attentions[0].attn.register_forward_hook(
+                    lambda self, input, output: dec_self_attn_weights.append(output[1])
+                ))
+                hooks.append(
+                layer.attentions[1].attn.register_forward_hook(
+                    lambda self, input, output: dec_cross_attn_weights.append(output[1])
+                ))
 
+
+            # propagate through the model
             with torch.no_grad():
+                points = data.pop("points")
                 result = model(return_loss=False, rescale=True, **data)
-
-            data["points"] = points
-            
-            # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
+                #data["points"] = points
+                
+            for hook in hooks:
+                hook.remove()     
+                          
+            indexes = model.module.pts_bbox_head.bbox_coder.get_indexes()  
             camidx = 0
-            score_thr = 0.2
             
-            inds = result[0]["pts_bbox"]['scores_3d'] > score_thr      
-            
-            gt_bboxes = dataset.get_ann_info(i)['gt_bboxes_3d']
-            pred_bboxes = result[0]["pts_bbox"]["boxes_3d"][inds]
-            
-            img_metas = data["img_metas"][0]._data[0][0]
-
             img = data["img"][0]._data[0].numpy()[0]
-                    
             img = img.transpose(0,2,3,1)
+            img = img[camidx].astype(np.uint8)
             
-            if gt_bboxes.tensor.shape[0] == 0:
-                gt_bboxes = None
-            
-            filename = Path(img_metas['filename'][camidx]).name
-            filename = filename.split('.')[0]
 
-            show_multi_modality_result(
-                img,
-                gt_bboxes,
-                pred_bboxes,
-                img_metas['lidar2img'],
-                args["show_dir"],
-                filename,
-                box_mode='lidar',
-                img_metas=None,
-                gt_bbox_color = (0,0,255),
-                pred_bbox_color = (0,255,0),
-                show=True, multi=True)
+            R_q_i, cam_q_i, R_q_q = gen.generate_rollout(data, self_attn = dec_self_attn_weights, cross_attn = dec_cross_attn_weights, camidx = camidx)
+
+            mask = R_q_i[indexes]
+            inds = result[0]["pts_bbox"]['scores_3d'] > 0.3 
+            mask = mask[inds]
+            mask = mask.sum(axis=0)
+            mask = (mask - mask.min()) / (mask.max() - mask.min())
+            mask = mask.view(29,50).cpu().numpy()
+            mask = mmcv.imresize(mask, (img.shape[1],img.shape[0]), return_scale=False)
+            mask = show_mask_on_image(img, mask)
+
+            mmcv.imshow(mask, win_name='attn', wait_time=0)
             
-            # dataset.show(result, points[0]._data[0][0], gt_bboxes.tensor.numpy(), args["show_dir"], show=True, pipeline=None, score_thr = score_thr)
-        
-            outputs.extend(result)
-            batch_size = len(result)
-            for _ in range(batch_size):
-                prog_bar.update()
+                        
+            # 
+            # mmcv.imshow(mask, "Attn")
+            
+                    
+            # outputs.extend(result)
+            # batch_size = len(result)
+            # for _ in range(batch_size):
+            #     prog_bar.update()
+            
+            
 
     else:
         model = MMDistributedDataParallel(

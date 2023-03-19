@@ -76,16 +76,13 @@ def plot_rect3d_on_img(img,
     """
     line_indices = ((0, 1), (0, 3), (0, 4), (1, 2), (1, 5), (3, 2), (3, 7),
                     (4, 5), (4, 7), (2, 6), (5, 6), (6, 7))
-    count = 0
     for i in range(num_rects): 
         corners = rect_corners[i].astype(np.int)
         if corners.min() < 0: continue
-        count += 1
         for start, end in line_indices:
                 cv2.line(img, (corners[start, 0], corners[start, 1]),
                         (corners[end, 0], corners[end, 1]), color, thickness,
                         cv2.LINE_AA)
-    print("\nNumber of bboxes: ", count)
     return img.astype(np.uint8)
 
 
@@ -94,7 +91,7 @@ def draw_lidar_bbox3d_on_img(bboxes3d,
                              lidar2img_rt,
                              img_metas,
                              color=(0, 255, 0),
-                             thickness=1):
+                             thickness=2):
     """Project the 3D bbox on 2D plane and draw on input image.
 
     Args:

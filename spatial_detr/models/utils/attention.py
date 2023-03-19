@@ -183,6 +183,7 @@ class QueryValueProjectCrossAttention(BaseModule):
         v = v.permute(1, 0, 2, 3)
         v = v.reshape(B, -1, E)
 
+        attn_full_orig = attn_full
         # cams x B x Nt x patches -> B x Nt x cams x patches
         attn_full = attn_full.permute(1, 2, 0, 3)
         attn_full = attn_full.reshape(B, Q, -1)
@@ -190,8 +191,7 @@ class QueryValueProjectCrossAttention(BaseModule):
         # (B, Nt, Ns) x (B, Ns, E) -> (B, Nt, E)
         output = torch.bmm(attn_full, v)
 
-        attn_full = attn_full.reshape(CAMS, B, Q, patches_per_img)
-        return output, attn_full
+        return output, attn_full_orig
 
     def forward(self,
                 query,

@@ -54,6 +54,9 @@ class NMSFreeCoder(BaseBBoxCoder):
         scores, indexs = cls_scores.view(-1).topk(max_num)
         labels = indexs % self.num_classes
         bbox_index = indexs // self.num_classes
+        # for hook purposes
+        self.indexes = bbox_index
+        
         bbox_preds = bbox_preds[bbox_index]
 
         final_box_preds = denormalize_bbox(bbox_preds, self.pc_range)   
@@ -109,3 +112,6 @@ class NMSFreeCoder(BaseBBoxCoder):
         for i in range(batch_size):
             predictions_list.append(self.decode_single(all_cls_scores[i], all_bbox_preds[i]))
         return predictions_list
+    
+    def get_indexes(self):
+        return self.indexes

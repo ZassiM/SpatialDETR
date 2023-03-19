@@ -30,8 +30,11 @@ import matplotlib.pyplot as plt
 from vit_rollout import *
 from mmdet3d.core.visualizer import (show_multi_modality_result,show_result,
                                      show_seg_result)
+from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
+
 from pathlib import Path
 from mmcv import Config, DictAction, mkdir_or_exist, track_iter_progress
+
 
 
 
@@ -171,6 +174,29 @@ def build_data_cfg(config_path, skip_type, cfg_options):
     ]
 
     return cfg
+
+      
+def show_mask_on_image(img, mask):
+    img = np.float32(img) / 255
+    heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
+    heatmap = np.float32(heatmap) / 255
+    mask = heatmap + np.float32(img)
+    mask = mask / np.max(mask)
+    return np.uint8(255 * mask)
+
+class_names = [
+    "car",
+    "truck",
+    "construction_vehicle",
+    "bus",
+    "trailer",
+    "barrier",
+    "motorcycle",
+    "bicycle",
+    "pedestrian",
+    "traffic_cone",
+]
+
 def main():
     
     with open("args.toml", mode = "rb") as argsF:
@@ -186,56 +212,112 @@ def main():
         outputs = []
         prog_bar = mmcv.ProgressBar(len(dataset))
         
-        for i, data in enumerate(data_loader):    
-            if i<40: continue
+        gen = Generator(model)
+        for i, data in enumerate(data_loader):  
+            if i<15: continue
+            dec_self_attn_weights, dec_cross_attn_weights = [], []
             
-            points = data.pop("points")
+            hooks = []
+            for layer in model.module.pts_bbox_head.transformer.decoder.layers:
+                hooks.append(
+                layer.attentions[0].attn.register_forward_hook(
+                    lambda self, input, output: dec_self_attn_weights.append(output[1])
+                ))
+                hooks.append(
+                layer.attentions[1].attn.register_forward_hook(
+                    lambda self, input, output: dec_cross_attn_weights.append(output[1])
+                ))
+            
 
+            # propagate through the model
             with torch.no_grad():
+                points = data.pop("points")
                 result = model(return_loss=False, rescale=True, **data)
+                #data["points"] = points
+                
+            for hook in hooks:
+                hook.remove()     
 
-            data["points"] = points
-            
-            # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
+            # # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
+
+            indexes = model.module.pts_bbox_head.bbox_coder.get_indexes()  
             camidx = 0
-            score_thr = 0.2
             
-            inds = result[0]["pts_bbox"]['scores_3d'] > score_thr      
-            
-            gt_bboxes = dataset.get_ann_info(i)['gt_bboxes_3d']
-            pred_bboxes = result[0]["pts_bbox"]["boxes_3d"][inds]
-            
-            img_metas = data["img_metas"][0]._data[0][0]
-
             img = data["img"][0]._data[0].numpy()[0]
-                    
             img = img.transpose(0,2,3,1)
-            
-            if gt_bboxes.tensor.shape[0] == 0:
-                gt_bboxes = None
-            
-            filename = Path(img_metas['filename'][camidx]).name
-            filename = filename.split('.')[0]
+            img = img[camidx].astype(np.uint8)
 
-            show_multi_modality_result(
-                img,
-                gt_bboxes,
-                pred_bboxes,
-                img_metas['lidar2img'],
-                args["show_dir"],
-                filename,
-                box_mode='lidar',
-                img_metas=None,
-                gt_bbox_color = (0,0,255),
-                pred_bbox_color = (0,255,0),
-                show=True, multi=True)
+            h, w = (29, 50)
+            #dec_attn_weights = dec_cross_attn_weights[-1][camidx].min(axis=0)[0].cpu()
+            dec_attn_weights = dec_cross_attn_weights
             
-            # dataset.show(result, points[0]._data[0][0], gt_bboxes.tensor.numpy(), args["show_dir"], show=True, pipeline=None, score_thr = score_thr)
-        
-            outputs.extend(result)
-            batch_size = len(result)
-            for _ in range(batch_size):
-                prog_bar.update()
+            full_attn = torch.eye(dec_attn_weights[0].size(-2), dec_attn_weights[0].size(-1))            
+            
+            for attn in dec_attn_weights: #6x(6x8x900x1450)
+                attn = attn[camidx].cpu() #8x900x1450
+                attn = attn.min(axis=0)[0] #900x1450
+
+                flat = attn.view(attn.size(0), -1)
+                _, indices = flat.topk(int(flat.size(-1)*0.5), -1, False)
+                indices = indices[indices != 0]
+                flat[0, indices] = 0
+
+                I = torch.eye(attn.size(-2),attn.size(-1))
+                a = (attn + 1.0*I)/2
+                a = a / a.sum(dim=-2)
+
+                full_attn = attn
+                
+                
+            
+            #dec_attn_weights = dec_attn_weights[indexes]
+            dec_attn_weights = full_attn[indexes]
+            inds = result[0]["pts_bbox"]['scores_3d'] > 0.6
+            pred_bboxes = result[0]["pts_bbox"]["boxes_3d"][inds]
+            img_metas = data["img_metas"][0]._data[0][0]
+            
+            fig, axs = plt.subplots(ncols=5, nrows=2, figsize=(22, 7))
+            k=0
+            for idx, ax_i in zip(inds.nonzero(), axs.T):
+                
+                ax = ax_i[0]
+                mask = dec_attn_weights[idx].view(h, w)
+                ax.imshow(mask)
+                ax.axis('off')
+                ax.set_title(f'query id: {indexes[k]}')
+                
+                ax = ax_i[1]
+                img_show = draw_lidar_bbox3d_on_img(
+                    pred_bboxes[idx],
+                    img,
+                    img_metas['lidar2img'][camidx],
+                    img_metas,
+                    color=(255,0,0))
+                #ax.imshow(img_show)
+                mmcv.imshow(img_show, win_name='attn', wait_time=0)
+                ax.axis('off')
+                class_name = class_names[result[0]['pts_bbox']['labels_3d'][k]]
+                score = result[0]['pts_bbox']['scores_3d'][k].item()
+                score = round(score,3)
+                
+                ax.set_title(f'{class_name}: {score}%')
+                k+=1
+
+            fig.tight_layout()           
+            
+            debug = 1
+
+            
+            # 
+            # mmcv.imshow(mask, "Attn")
+            
+                    
+            # outputs.extend(result)
+            # batch_size = len(result)
+            # for _ in range(batch_size):
+            #     prog_bar.update()
+            
+            
 
     else:
         model = MMDistributedDataParallel(
@@ -244,26 +326,6 @@ def main():
             broadcast_buffers=False)
         outputs = multi_gpu_test(model, data_loader, args["tmpdir"], args["gpu_collect"])     
 
-
-    rank, _ = get_dist_info()
-    if rank == 0:
-        if args["out"]:
-            print(f'\nwriting results to {args["out"]}')
-            mmcv.dump(outputs, args["out"])
-        #kwargs = {} if args["eval_options"] is None else args["eval_options"]
-        kwargs = {}
-        if args["format_only"]:
-            dataset.format_results(outputs, **kwargs)
-        if args["eval"]:
-            eval_kwargs = cfg.get('evaluation', {}).copy()
-            #hard-code way to remove EvalHook args
-            for key in [
-                    'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
-                    'rule'
-            ]:
-                eval_kwargs.pop(key, None)
-            eval_kwargs.update(dict(metric=args["eval"], **kwargs))
-            print(dataset.evaluate(outputs, **eval_kwargs))
 
 
 if __name__ == '__main__':

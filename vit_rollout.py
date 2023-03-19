@@ -192,7 +192,7 @@ class VITAttentionRollout:
         for name, module in self.model.named_modules():
             if attention_layer_name in name and "attentions.1" in name and "out_proj" not in name:
                 module.register_forward_hook(self.get_attention)
-                i+=1
+                i+=1    
 
         self.attentions = []
 
