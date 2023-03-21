@@ -126,7 +126,7 @@ class QueryValueProjectCrossAttention(BaseModule):
         self.proj_drop = nn.Dropout(proj_drop)
         self.dropout_layer = build_dropout(
             dropout_layer) if dropout_layer else nn.Identity()
-
+        
     def _attn_weights_only_dot_prod_attn(self,
                                          q: Tensor,
                                          k: Tensor,
@@ -179,11 +179,11 @@ class QueryValueProjectCrossAttention(BaseModule):
 
             attn_full[cam_idx] = attn
 
+        attn_full_orig = attn_full
         # cams x b x patches x dims -> b x cams x patches x dims
         v = v.permute(1, 0, 2, 3)
         v = v.reshape(B, -1, E)
-
-        attn_full_orig = attn_full
+        
         # cams x B x Nt x patches -> B x Nt x cams x patches
         attn_full = attn_full.permute(1, 2, 0, 3)
         attn_full = attn_full.reshape(B, Q, -1)

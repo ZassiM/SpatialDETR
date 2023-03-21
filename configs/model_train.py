@@ -239,7 +239,7 @@ train_pipeline = [
 ]
 test_pipeline = [
     dict(type="LoadMultiViewImageFromFiles", to_float32=True),
-    #dict(type="NormalizeMultiviewImage", **img_norm_cfg),
+    dict(type="NormalizeMultiviewImage", **img_norm_cfg),
     dict(type="PadMultiViewImage", size_divisor=32),
     dict(
         type="MultiScaleFlipAug3D",
@@ -280,20 +280,6 @@ test_pipeline = [
             ),
         ],
     ),
-]
-
-eval_pipeline = [
-    dict(
-        type='LoadPointsFromFile',
-        coord_type='LIDAR',
-        load_dim=5,
-        use_dim=5,
-        file_client_args=file_client_args),
-    dict(
-        type='DefaultFormatBundle3D',
-        class_names=class_names,
-        with_label=False),
-    dict(type='Collect3D', keys=['points'])
 ]
 
 

@@ -78,7 +78,7 @@ def plot_rect3d_on_img(img,
                     (4, 5), (4, 7), (2, 6), (5, 6), (6, 7))
     for i in range(num_rects): 
         corners = rect_corners[i].astype(np.int)
-        if corners.min() < 0: continue
+        if corners.min() < 0 or corners.max() > 10000: continue
         for start, end in line_indices:
                 cv2.line(img, (corners[start, 0], corners[start, 1]),
                         (corners[end, 0], corners[end, 1]), color, thickness,
@@ -106,7 +106,7 @@ def draw_lidar_bbox3d_on_img(bboxes3d,
         thickness (int, optional): The thickness of bboxes. Default: 1.
     """
     img = raw_img.copy()
-    corners_3d = bboxes3d.corners
+    corners_3d = bboxes3d.corners.detach()
     num_bbox = corners_3d.shape[0]
     pts_4d = np.concatenate(
         [corners_3d.reshape(-1, 3),

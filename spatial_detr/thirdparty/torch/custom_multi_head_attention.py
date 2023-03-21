@@ -20,12 +20,17 @@ class CustomMultiheadAttention(nn.MultiheadAttention):
     This allows to use a custom attn_func
     All credits for the original code belong to the authors / contributors of pytorch.
     """
-
+    def save_attn_gradients(self, attn_gradients):
+        self.attn_gradients = attn_gradients
+        
+    def get_attn_gradients(self):
+        return self.attn_gradients
+    
     def forward(self, query: Tensor, key: Tensor, value: Tensor, query_pos: Optional[Tensor] = None, key_pos: Optional[Tensor] = None, key_padding_mask: Optional[Tensor] = None,
                 need_weights: bool = True, attn_mask: Optional[Tensor] = None, attn_func=F_custom._scaled_dot_product_attention, **kwargs) -> Tuple[Tensor, Optional[Tensor]]:
         """@see nn.MultiheadAttention for details
         """
-
+        self.attn_gradients = None
         # TODO refactor currently only batch_last is supported
         assert self.batch_first == False
 
@@ -58,4 +63,6 @@ class CustomMultiheadAttention(nn.MultiheadAttention):
                 attn_func=attn_func,
                 **kwargs)
 
+        #attn_output_weights.register_hook(self.save_attn_gradients) # FOR EXTRACTING GRADIENT DURING BACKWARD
+        
         return attn_output, attn_output_weights

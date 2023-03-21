@@ -147,30 +147,6 @@ def init(args):
     
     return model, dataset, data_loader, gpu_ids, cfg, distributed
 
-def build_data_cfg(config_path, skip_type, cfg_options):
-    """Build data config for loading visualization data."""
-    cfg = Config.fromfile(config_path)
-    if cfg_options is not None:
-        cfg.merge_from_dict(cfg_options)
-    # import modules from string list.
-    if cfg.get('custom_imports', None):
-        from mmcv.utils import import_modules_from_strings
-        import_modules_from_strings(**cfg['custom_imports'])
-    # extract inner dataset of `RepeatDataset` as `cfg.data.train`
-    # so we don't need to worry about it later
-    if cfg.data.train['type'] == 'RepeatDataset':
-        cfg.data.train = cfg.data.train.dataset
-    # use only first dataset for `ConcatDataset`
-    if cfg.data.train['type'] == 'ConcatDataset':
-        cfg.data.train = cfg.data.train.datasets[0]
-    train_data_cfg = cfg.data.train
-    # eval_pipeline purely consists of loading functions
-    # use eval_pipeline for data loading
-    train_data_cfg['pipeline'] = [
-        x for x in cfg.eval_pipeline if x['type'] not in skip_type
-    ]
-
-    return cfg
 def main():
     
     with open("args.toml", mode = "rb") as argsF:
@@ -187,7 +163,7 @@ def main():
         prog_bar = mmcv.ProgressBar(len(dataset))
         
         for i, data in enumerate(data_loader):    
-            if i<40: continue
+            
             
             points = data.pop("points")
 
@@ -198,7 +174,7 @@ def main():
             
             # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
             camidx = 0
-            score_thr = 0.2
+            score_thr = 0.3
             
             inds = result[0]["pts_bbox"]['scores_3d'] > score_thr      
             
