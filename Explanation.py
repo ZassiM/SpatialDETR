@@ -23,9 +23,17 @@ def avg_heads(attn, grad):
     attn = attn.clamp(min=0).mean(dim=0)
     return attn
 
-def avg_heads(attn):
-    attn = attn.reshape(-1, attn.shape[-2], attn.shape[-1])
-    attn = attn.clamp(min=0).mean(dim=0)
+def avg_heads(attn, head_fusion = "min", discard_ratio = 0.9):
+    if head_fusion == "mean":
+        attn = attn.mean(dim=0)
+    elif head_fusion == "max":
+        attn = attn.max(dim=0)[0]
+    elif head_fusion == "min":
+        attn = attn.min(dim=0)[0]
+
+    flat = attn.view(attn.size(0), -1)
+    _, indices = flat.topk(int(flat.size(-1)*discard_ratio), -1, False)
+    flat[0, indices] = 0
     return attn
 
 # rules 6 + 7 from paper
@@ -161,11 +169,11 @@ class Generator:
         aggregated = self.R_q_i[indexes[target_index], :].detach()
         return aggregated
     
-    def generate_rollout(self, data, target_index, indexes, camidx, head_fusion = "min"):
+    def generate_rollout(self, data, target_index, indexes, camidx, head_fusion = "min", discard_ratio = 0.5, raw = False):
 
         self.camidx = camidx
         self.head_fusion = head_fusion
-        dec_self_attn_weights, dec_cross_attn_weights = [], []
+        dec_self_attn_weights, dec_cross_attn_weights , dec_cross_attn_grad= [], [], []
         
         hooks = []
         for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
@@ -182,29 +190,17 @@ class Generator:
         # I have to select one attnera, and backpropagate one class
         outputs = self.model(return_loss=False, rescale=True, **data)
         
+            
         for hook in hooks:
             hook.remove()
         
         for i in range(len(dec_self_attn_weights)):
-            if head_fusion == "mean":
-                dec_self_attn_weights[i] = dec_self_attn_weights[i].detach().mean(dim=0)
-            elif head_fusion == "max":
-                dec_self_attn_weights[i] = dec_self_attn_weights[i].detach().max(dim=0)[0]
-            elif head_fusion == "min":
-                dec_self_attn_weights[i] = dec_self_attn_weights[i].detach().min(dim=0)[0]
+            dec_self_attn_weights[i] = avg_heads(dec_self_attn_weights[i], head_fusion = head_fusion, discard_ratio = discard_ratio)
             
 
         
-        self.dec_self_attn_weights, self.dec_cross_attn_weights,  = \
-            dec_self_attn_weights, dec_cross_attn_weights,
-        
-        # H, Q, K = self.dec_cross_attn_weights[0].shape
-        # CAMS = 6
-        # K_NEW = int(K/CAMS)
-        # n_layers = len(self.dec_cross_attn_weights)
-        
-        # for i in range(n_layers):
-        #     self.dec_cross_attn_weights[i] = self.dec_cross_attn_weights[i].reshape(CAMS, H, Q, K_NEW)
+        self.dec_self_attn_weights, self.dec_cross_attn_weights = \
+            dec_self_attn_weights, dec_cross_attn_weights
         
         # initialize relevancy matrices
         image_bboxes = self.dec_cross_attn_weights[0].shape[-1]
@@ -216,18 +212,100 @@ class Generator:
         # queries self attention matrix
         self.R_q_q = torch.eye(queries_num, queries_num).to(device)
 
-
         self.R_q_q = compute_rollout_attention(self.dec_self_attn_weights)
 
         cam_q_i = self.dec_cross_attn_weights[-1][camidx]
-        cam_q_i = cam_q_i.reshape(-1, cam_q_i.shape[-2], cam_q_i.shape[-1])
-        if head_fusion == "mean":
-            cam_q_i = cam_q_i.mean(dim=0)
-        elif head_fusion == "max":
-            cam_q_i = cam_q_i.max(dim=0)[0]
-        elif head_fusion == "min":
-            cam_q_i = cam_q_i.min(dim=0)[0]
-        #self.R_q_i = torch.matmul(self.R_q_q.t(), torch.matmul(cam_q_i, self.R_i_i))
+        cam_q_i = avg_heads(cam_q_i, head_fusion = head_fusion, discard_ratio = discard_ratio)
+
+        if raw: 
+            self.R_q_i = cam_q_i # RAW ATTN  
+              
+        else: 
+            self.R_q_i = torch.matmul(self.R_q_q.t(), torch.matmul(cam_q_i, self.R_i_i))   
+              
+        aggregated = self.R_q_i[indexes[target_index].item()].detach()
+                
+        return aggregated
+
+    def gradcam(self, cam, grad):
+        cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
+        grad = grad.reshape(-1, grad.shape[-2], grad.shape[-1])
+        grad = grad.mean(dim=[1, 2], keepdim=True)
+        cam = (cam * grad).mean(0).clamp(min=0)
+        return cam
+    
+    
+    def generate_attn_gradcam(self, data, target_index, indexes, camidx):
+
+        dec_cross_attn_weights , dec_cross_attn_grad= [], []
+        
+        hooks = []
+        for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
+            hooks.append(
+            layer.attentions[1].attn.register_forward_hook(
+                lambda self, input, output: dec_cross_attn_weights.append(output[1])
+            ))
+            
+        # self: 900x900, cross: 6x8x900x1450
+        # I have to select one attnera, and backpropagate one class
+        outputs = self.model(return_loss=False, rescale=True, **data)
+        outputs = outputs[0]["pts_bbox"]['scores_3d']
+
+        one_hot = torch.zeros_like(outputs).to(outputs.device)
+        one_hot[target_index] = 1
+        one_hot.requires_grad_(True)
+        one_hot = torch.sum(one_hot * outputs)
+
+        self.model.zero_grad()
+        one_hot.backward()
+        
+        
+        for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
+            dec_cross_attn_grad.append(layer.attentions[1].attn.get_attn_gradients())
+            
+        for hook in hooks:
+            hook.remove()
+
+        self.dec_cross_attn_weights, self.dec_cross_attn_grad = dec_cross_attn_weights, dec_cross_attn_grad
+
+        # get cross attn cam from last decoder layer
+        cam_q_i = self.dec_cross_attn_weights[-1][camidx].detach()
+        grad_q_i = self.dec_cross_attn_grad[-1][camidx].detach()
+        cam_q_i = self.gradcam(cam_q_i, grad_q_i)
+        
         self.R_q_i = cam_q_i
-        aggregated = self.R_q_i[indexes[target_index].item(), :].detach()
+        aggregated = self.R_q_i[indexes[target_index].item()]
+        
+        return aggregated
+    
+    def generate_rollout(self, dec_self_attn_weights, dec_cross_attn_weights, target_index, indexes, camidx, head_fusion = "min", discard_ratio = 0.9, raw = True):
+        self.camidx = camidx
+        self.head_fusion = head_fusion
+        self.discard_ratio = discard_ratio
+        self.dec_self_attn_weights, self.dec_cross_attn_weights = dec_self_attn_weights, dec_cross_attn_weights
+        
+
+        # initialize relevancy matrices
+        image_bboxes = self.dec_cross_attn_weights[0].shape[-1]
+        queries_num = self.dec_self_attn_weights[0].shape[-1]
+
+        device = self.dec_cross_attn_weights[0].device
+        # image self attention matrix
+        self.R_i_i = torch.eye(image_bboxes, image_bboxes).to(device)
+        # queries self attention matrix
+        self.R_q_q = torch.eye(queries_num, queries_num).to(device)
+
+        self.R_q_q = compute_rollout_attention(self.dec_self_attn_weights)
+
+        cam_q_i = self.dec_cross_attn_weights[-1][self.camidx]
+        cam_q_i = avg_heads(cam_q_i, head_fusion = self.head_fusion, discard_ratio = self.discard_ratio)
+
+        if raw: 
+            self.R_q_i = cam_q_i # RAW ATTN  
+              
+        else: 
+            self.R_q_i = torch.matmul(self.R_q_q.t(), torch.matmul(cam_q_i, self.R_i_i))   
+              
+        aggregated = self.R_q_i[indexes[target_index].item()].detach()
+                
         return aggregated

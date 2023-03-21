@@ -1,7 +1,9 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 
+import argparse
 import os
 import tomli
+import warnings
 
 import mmcv
 import torch
@@ -11,6 +13,7 @@ from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
                          wrap_fp16_model)
 
+from mmdet3d.apis import single_gpu_test
 from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_model
 from mmdet.apis import multi_gpu_test, set_random_seed
@@ -18,11 +21,13 @@ from mmdet.datasets import replace_ImageToTensor
 
 from mmdetection3d.tools.misc.browse_dataset import show_proj_bbox_img
 
+from PIL import Image
 import numpy as np
-
+import cv2
 from Explanation import Generator
 import matplotlib.pyplot as plt
 
+from vit_rollout import *
 from mmdet3d.core.visualizer import (show_multi_modality_result,show_result,
                                      show_seg_result)
 from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
@@ -30,7 +35,12 @@ from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 from pathlib import Path
 from mmcv import Config, DictAction, mkdir_or_exist, track_iter_progress
 
-from tkinter_class import App
+from widgetclass import AttentionVisualizer
+
+from matplotlib.widgets import Slider
+
+import matplotlib.gridspec as gridspec
+
 
 
 def init(args):
@@ -145,6 +155,15 @@ def init(args):
     
     return model, dataset, data_loader, gpu_ids, cfg, distributed
 
+      
+def show_mask_on_image(img, mask):
+    img = np.float32(img) / 255
+    heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
+    heatmap = np.float32(heatmap) / 255
+    mask = heatmap + np.float32(img)
+    mask = mask / np.max(mask)
+    return np.uint8(255 * mask)
+
 class_names = [
     "car",
     "truck",
@@ -161,6 +180,7 @@ class_names = [
 
 def main():
     
+    
     with open("args.toml", mode = "rb") as argsF:
         args = tomli.load(argsF)
     
@@ -175,26 +195,85 @@ def main():
         prog_bar = mmcv.ProgressBar(len(dataset))
         
         for i, data in enumerate(data_loader):  
+            if i<29: continue
 
             # # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
+            camtarget = 0
             
             data.pop("points")
             result = model(return_loss=False, rescale=True, **data)
                 
-            nms_idxs = model.module.pts_bbox_head.bbox_coder.get_indexes()  
+            indexes = model.module.pts_bbox_head.bbox_coder.get_indexes()  
 
-            imgs = data["img"][0]._data[0].numpy()[0]
-            imgs = imgs.transpose(0,2,3,1)
-            imgs = imgs.astype(np.uint8)
+            img = data["img"][0]._data[0].numpy()[0]
+            img = img.transpose(0,2,3,1)
+            img = img[camtarget].astype(np.uint8)
             
-            thr_idxs = result[0]["pts_bbox"]['scores_3d'] > 0.6
-            pred_bboxes = result[0]["pts_bbox"]["boxes_3d"][thr_idxs]
+            inds = result[0]["pts_bbox"]['scores_3d'] > 0.6
+            pred_bboxes = result[0]["pts_bbox"]["boxes_3d"][inds]
             img_metas = data["img_metas"][0]._data[0][0]
             
             pred_bboxes.tensor.detach()
             
-            app = App(model, data, imgs, pred_bboxes, img_metas, thr_idxs, nms_idxs)
-            app.mainloop()
+            h, w = (29, 50)
+            gen = Generator(model)
+            
+            fig = plt.figure(figsize=(22, 7), layout="constrained")
+            #nbboxes = len(inds.nonzero())
+            nbboxes = 4
+            spec = fig.add_gridspec(3, 2*nbboxes)
+
+            k = 0
+            for target in inds.nonzero():
+                if k == 2*nbboxes: break
+                #if result[0]['pts_bbox']['labels_3d'][target] in (0,8): continue
+                aximg = fig.add_subplot(spec[0, k:k+2])
+                img_show = draw_lidar_bbox3d_on_img(
+                    pred_bboxes[target],
+                    img,
+                    img_metas['lidar2img'][camtarget],
+                    img_metas,
+                    color=(255,0,0))
+                aximg.imshow(img_show)
+                aximg.axis('off')
+                class_name = class_names[result[0]['pts_bbox']['labels_3d'][target]]
+                score = result[0]['pts_bbox']['scores_3d'][target].item()
+                score = round(score,3)
+                
+                aximg.set_title(f'{class_name}: {score}%')
+                
+
+                #attn0 = gen.generate_ours(data, target, indexes, camtarget)
+                attn0 = gen.generate_rollout(data, target, indexes, camtarget, head_fusion = "max", discard_ratio = 0.9)
+                attn1 = gen.generate_rollout(data, target, indexes, camtarget, head_fusion = "min", discard_ratio = 0.9)
+                attn2 = gen.generate_rollout(data, target, indexes, camtarget, head_fusion = "min", discard_ratio = 0.9, raw = True)
+                attn3 = gen.generate_attn_gradcam(data, target, indexes, camtarget)
+                
+                ax_attn0 = fig.add_subplot(spec[1, k:k+1])
+                ax_attn1 = fig.add_subplot(spec[1, k+1:k+2])
+                ax_attn2 = fig.add_subplot(spec[2, k:k+1])
+                ax_attn3 = fig.add_subplot(spec[2, k+1:k+2])
+                #attn = (attn - attn.min()) / (attn.max() - attn.min())
+                
+                ax_attn0.imshow(attn0.view(h, w).cpu())
+                ax_attn0.axis('off')
+                
+                ax_attn1.imshow(attn1.view(h, w).cpu())
+                ax_attn1.axis('off')
+                
+                ax_attn2.imshow(attn2.view(h, w).cpu())
+                ax_attn2.axis('off')
+                
+                ax_attn3.imshow(attn3.view(h, w).cpu())
+                ax_attn3.axis('off')
+                #ax.set_title(f'query id: {indexes[target].item()}')
+
+                k+=2
+
+            fig.tight_layout()    
+            plt.show()
+            debug = 1
+            plt.close(fig)
             
             
     else:
