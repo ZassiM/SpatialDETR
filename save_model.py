@@ -3,7 +3,7 @@
 import os
 import tomli
 
-import mmcv
+#import mmcv
 import torch
 from mmcv import Config, DictAction
 from mmcv.cnn import fuse_conv_bn
@@ -15,23 +15,22 @@ from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_model
 from mmdet.apis import multi_gpu_test, set_random_seed
 from mmdet.datasets import replace_ImageToTensor
+#from mmdetection3d.tools.misc.browse_dataset import show_proj_bbox_img
 
-from mmdetection3d.tools.misc.browse_dataset import show_proj_bbox_img
+#import numpy as np
 
-import numpy as np
+# from Explanation import Generator
+# import matplotlib.pyplot as plt
 
-from Explanation import Generator
-import matplotlib.pyplot as plt
+# from mmdet3d.core.visualizer import (show_multi_modality_result,show_result,
+#                                      show_seg_result)
+# from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 
-from mmdet3d.core.visualizer import (show_multi_modality_result,show_result,
-                                     show_seg_result)
-from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
+# from pathlib import Path
+# from mmcv import Config, DictAction, mkdir_or_exist, track_iter_progress
 
-from pathlib import Path
-from mmcv import Config, DictAction, mkdir_or_exist, track_iter_progress
-
-from tkinter_class import App
-
+from app_class import App
+import pickle
 
 def init(args):
     
@@ -166,25 +165,16 @@ def main():
     
     model, dataset, data_loader, gpu_ids, cfg, distributed = init(args)
 
+    # filename_model = 'model.sav'
+    # pickle.dump(model, open(filename_model, 'wb'))#
+    model_filename = args["model_filename"]
+    print(f"Saving Model in {model_filename}...")
+    torch.save(model, model_filename)
     
-    if not distributed:
-        
-        model = MMDataParallel(model, device_ids = gpu_ids)
-        model.eval()
-        
-        
-        # # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
-
-        app = App(model, data_loader)
-        app.mainloop()
-            
-    else:
-        model = MMDistributedDataParallel(
-            model.cuda(),
-            device_ids=[torch.cuda.current_device()],
-            broadcast_buffers=False)
-        outputs = multi_gpu_test(model, data_loader, args["tmpdir"], args["gpu_collect"])     
-
+    DataLoader_filename = args["dataloader_filename"]
+    print(f"Saving DataLoader in {DataLoader_filename}...")
+    torch.save(list(data_loader), DataLoader_filename)
+    
 
 if __name__ == '__main__':
     main()

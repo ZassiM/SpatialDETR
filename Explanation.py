@@ -278,7 +278,7 @@ class Generator:
         
         return aggregated
     
-    def generate_rollout(self, dec_self_attn_weights, dec_cross_attn_weights, target_index, indexes, camidx, head_fusion = "min", discard_ratio = 0.9, raw = True):
+    def generate_rollout_app(self, dec_self_attn_weights, dec_cross_attn_weights, target_index, indexes, camidx, head_fusion = "min", discard_ratio = 0.9, raw = True):
         self.camidx = camidx
         self.head_fusion = head_fusion
         self.discard_ratio = discard_ratio

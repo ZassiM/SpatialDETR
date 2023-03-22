@@ -7,7 +7,7 @@ import trimesh
 
 from .image_vis import (draw_camera_bbox3d_on_img, draw_depth_bbox3d_on_img,
                         draw_lidar_bbox3d_on_img, project_pts_on_img)
-
+import cv2
 
 def _write_obj(points, out_filename):
     """Write points into ``obj`` format for meshlab visualization.
@@ -303,7 +303,9 @@ def show_multi_modality_result(img,
                                img_metas=None,
                                show=False,
                                gt_bbox_color=(61, 102, 255),
-                               pred_bbox_color=(241, 101, 72), multi=True):
+                               pred_bbox_color=(241, 101, 72),
+                               index = 0,
+                               multi=True):
     """Convert multi-modality detection results into 2D results.
 
     Project the predicted 3D bbox to 2D image plane and visualize them.
@@ -336,7 +338,8 @@ def show_multi_modality_result(img,
     else:
         raise NotImplementedError(f'unsupported box mode {box_mode}')
 
-    result_path = osp.join(out_dir, filename)
+    #result_path = osp.join(out_dir, filename)
+    result_path = out_dir
     mmcv.mkdir_or_exist(result_path)
 
     if show:
@@ -360,6 +363,7 @@ def show_multi_modality_result(img,
                     img_metas,
                     color=pred_bbox_color)
             show_img = mmcv.imresize(show_img, dim, return_scale=False)
+            show_img = cv2.cvtColor(show_img, cv2.COLOR_BGR2RGB)
             images.append(show_img)
 
         # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
@@ -368,6 +372,10 @@ def show_multi_modality_result(img,
         ver = np.concatenate((images[5], images[3], images[4]), axis = 1)  
         full = np.concatenate((hori,ver), axis = 0)
 
-        mmcv.imshow(full, win_name='project_bbox3d_img', wait_time=0)
+        #mmcv.imshow(full, win_name=f'img_{index}')
+        cv2.imshow('Image', full)
+        key = cv2.waitKey(1)
+        if key == ord('p'):
+            cv2.waitKey(-1) #wait until any key is pressed
         
-        mmcv.imwrite(full, osp.join(result_path, f'{filename}_full.png'))
+        #mmcv.imwrite(full, osp.join(result_path, f'img_{index}.png'))

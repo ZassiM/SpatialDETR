@@ -35,8 +35,6 @@ from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 from pathlib import Path
 from mmcv import Config, DictAction, mkdir_or_exist, track_iter_progress
 
-from widgetclass import AttentionVisualizer
-
 from matplotlib.widgets import Slider
 
 import matplotlib.gridspec as gridspec
@@ -234,6 +232,7 @@ def main():
                     img_metas['lidar2img'][camtarget],
                     img_metas,
                     color=(255,0,0))
+                img_show = cv2.cvtColor(img_show, cv2.COLOR_BGR2RGB)
                 aximg.imshow(img_show)
                 aximg.axis('off')
                 class_name = class_names[result[0]['pts_bbox']['labels_3d'][target]]
@@ -257,16 +256,19 @@ def main():
                 
                 ax_attn0.imshow(attn0.view(h, w).cpu())
                 ax_attn0.axis('off')
+                ax_attn0.set_title('Rollout with max fusion')
                 
                 ax_attn1.imshow(attn1.view(h, w).cpu())
                 ax_attn1.axis('off')
+                ax_attn1.set_title('Rollout with min fusion')
                 
                 ax_attn2.imshow(attn2.view(h, w).cpu())
                 ax_attn2.axis('off')
+                ax_attn2.set_title('Raw attention')
                 
                 ax_attn3.imshow(attn3.view(h, w).cpu())
                 ax_attn3.axis('off')
-                #ax.set_title(f'query id: {indexes[target].item()}')
+                ax_attn3.set_title('Grad-CAM')
 
                 k+=2
 

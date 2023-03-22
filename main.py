@@ -24,10 +24,8 @@ from mmdetection3d.tools.misc.browse_dataset import show_proj_bbox_img
 from PIL import Image
 import numpy as np
 import cv2
-from ExplanationGenerator import Generator
 import matplotlib.pyplot as plt
 
-from vit_rollout import *
 from mmdet3d.core.visualizer import (show_multi_modality_result,show_result,
                                      show_seg_result)
 from pathlib import Path
@@ -164,13 +162,12 @@ def main():
         
         for i, data in enumerate(data_loader):    
             
-            
             points = data.pop("points")
-
+            
             with torch.no_grad():
                 result = model(return_loss=False, rescale=True, **data)
 
-            data["points"] = points
+            #data["points"] = points
             
             # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
             camidx = 0
@@ -204,7 +201,7 @@ def main():
                 img_metas=None,
                 gt_bbox_color = (0,0,255),
                 pred_bbox_color = (0,255,0),
-                show=True, multi=True)
+                show=True, index = i, multi=True)
             
             # dataset.show(result, points[0]._data[0][0], gt_bboxes.tensor.numpy(), args["show_dir"], show=True, pipeline=None, score_thr = score_thr)
         

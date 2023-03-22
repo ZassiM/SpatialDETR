@@ -63,6 +63,7 @@ class CustomMultiheadAttention(nn.MultiheadAttention):
                 attn_func=attn_func,
                 **kwargs)
 
-        attn_output_weights.register_hook(self.save_attn_gradients) # FOR EXTRACTING GRADIENT DURING BACKWARD
+        if not torch.no_grad():
+            attn_output_weights.register_hook(self.save_attn_gradients) # FOR EXTRACTING GRADIENT DURING BACKWARD
         
         return attn_output, attn_output_weights
