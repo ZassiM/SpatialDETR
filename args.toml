@@ -10,7 +10,7 @@ checkpoint_sdetr1 = "work_dirs/model_train/epoch_23.pth"
 skip_type = "NormalizeMultiviewImage"
 
 eval = "mAP"
-gpu_id = 0
+gpu_id = 3
 launcher = "none"
 fuse_conv_bn = false
 tmpdir = "none"

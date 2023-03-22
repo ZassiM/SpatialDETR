@@ -172,28 +172,11 @@ def main():
         model = MMDataParallel(model, device_ids = gpu_ids)
         model.eval()
         
-        for i, data in enumerate(data_loader):  
-            
-            if i<16: continue
-            # # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
-            
-            data.pop("points")
-            result = model(return_loss=False, rescale=True, **data)
-                
-            nms_idxs = model.module.pts_bbox_head.bbox_coder.get_indexes()  
+        
+        # # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
 
-            imgs = data["img"][0]._data[0].numpy()[0]
-            imgs = imgs.transpose(0,2,3,1)
-            imgs = imgs.astype(np.uint8)
-            
-            thr_idxs = result[0]["pts_bbox"]['scores_3d'] > 0.6
-            pred_bboxes = result[0]["pts_bbox"]["boxes_3d"][thr_idxs]
-            img_metas = data["img_metas"][0]._data[0][0]
-            
-            pred_bboxes.tensor.detach()
-            
-            app = App(model, data, imgs, pred_bboxes, img_metas, thr_idxs, nms_idxs)
-            app.mainloop()
+        app = App(model, data_loader)
+        app.mainloop()
             
     else:
         model = MMDistributedDataParallel(

@@ -1,81 +1,29 @@
-from tkinter import *
-from math import  sin
-from matplotlib import pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import tkinter as tk
+from tkinter import ttk
 
-t = []
-for x in list(range(0,101)):
-	t.append(x/15.87)
+my_w = tk.Tk()
+my_w.geometry("400x150")  # Size of the window 
+my_w.title("www.plus2net.com")  # Adding a title
 
-def main():
-	root = Tk()
-	gui = Window(root)
-	gui.root.mainloop()
-	return None
+my_dict={1:'Jan',2:'Feb',3:'March',4:'April',5:'May'}
+months=list(my_dict.values())
 
-class Window:
-	def __init__(self, root):
-		self.root = root
-		self.root.title("Sin Wave")
-		self.root.geometry('600x550')
-		# A sin(wt + b) + c
-		self.amplitude = 1
-		self.frequency = 1
-		self.vertical_shift = 0
-		self.phase_shift = 0
-		
-		# Amplitude
-		Label(self.root, text = "Amplitude").grid(row=0, column=0)
-		self.amplitude_entry = Entry(self.root, width = 5)
-		self.amplitude_entry.grid(row=0, column = 1)
-		
-		# Frequency
-		Label(self.root, text = "Frequency").grid(row=1, column=0)
-		self.frequency_entry = Entry(self.root, width = 5)
-		self.frequency_entry.grid(row=1, column=1)
-		
-		# Vertical Shift
-		Label(self.root, text = "Vertical Shift").grid(row=2, column=0)
-		self.vertical_shift_entry = Entry(self.root, width = 5)
-		self.vertical_shift_entry.grid(row=2, column=1)
-		
-		# Horizontal Shift
-		Label(self.root, text = "Phase Shift").grid(row=3, column=0)
-		self.phase_shift_entry = Entry(self.root, width = 5)
-		self.phase_shift_entry.grid(row=3, column=1)
-		
-		# Update Button
-		button1 = Button(self.root, text="Calculate", command = self.update_values)
-		button1.grid(row=4, column=0)
-		self.root.bind("<Return>", self.update_values)
-		self.plot_values()
-		pass
-	
-	def update_values(self, event=None):
-		self.amplitude = float(self.amplitude_entry.get())
-		self.phase_shift = float(self.phase_shift_entry.get())
-		self.vertical_shift = float(self.vertical_shift_entry.get())
-		self.frequency = float(self.frequency_entry.get())
-		self.plot_values()
-		return None
-	
-	def plot_values(self):
-		y = []
-		for x in t:
-			y.append(self.amplitude * sin(self.frequency * x + self.phase_shift) + self.vertical_shift)
-		
-		figure = plt.figure(figsize = (5,4), dpi = 100)
-		figure.add_subplot(111).plot(t,y)
-		chart = FigureCanvasTkAgg(figure, self.root)
-		chart.get_tk_widget().grid(row = 5, column = 0)
-		
-		plt.grid()
-		axes = plt.axes()
-		axes.set_xlim([0, 6.3])
-		axes.set_ylim([-3, 3])
-		
-		return None
-	
-	pass
+font1=('Times',18,'normal')
 
-main()
+def my_upd(*args):
+    l1.config(text=sel.get()) # Month name as string
+    for i,j in my_dict.items():
+        if(j==sel.get()):
+            l2.config(text=i) # Month number
+
+sel=tk.StringVar() # string variable for the Combobox
+cb1=ttk.Combobox(my_w,values=months,width=7,
+    textvariable=sel,font=font1)
+cb1.grid(row=1,column=1,padx=10, pady=20)    
+l1=tk.Label(my_w,text='Month-Name',font=font1)
+l1.grid(row=1,column=2,padx=5)
+
+l2=tk.Label(my_w,text='Month-No',font=font1)
+l2.grid(row=1,column=3,padx=5)
+sel.trace('w',my_upd)
+my_w.mainloop()  # Keep the window open
