@@ -29,7 +29,7 @@ from mmdet.datasets import replace_ImageToTensor
 # from pathlib import Path
 # from mmcv import Config, DictAction, mkdir_or_exist, track_iter_progress
 
-from app_class import App
+from App import App
 import pickle
 
 def init(args):
@@ -143,19 +143,6 @@ def init(args):
         model.PALETTE = dataset.PALETTE
     
     return model, dataset, data_loader, gpu_ids, cfg, distributed
-
-class_names = [
-    "car",
-    "truck",
-    "construction_vehicle",
-    "bus",
-    "trailer",
-    "barrier",
-    "motorcycle",
-    "bicycle",
-    "pedestrian",
-    "traffic_cone",
-]
 
 
 def main():

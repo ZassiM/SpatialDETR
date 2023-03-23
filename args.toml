@@ -1,5 +1,5 @@
-model_filename = "model.pth"
-dataloader_filename = "data_loader.pth"
+model_filename = "work_dirs/model.pth"
+dataloader_filename = "work_dirs/data_loader.pth"
 
 model = "sdetr"
 mode = "test" 

@@ -24,10 +24,9 @@ from mmdetection3d.tools.misc.browse_dataset import show_proj_bbox_img
 from PIL import Image
 import numpy as np
 import cv2
-from ExplanationGenerator import Generator
+from Attention import Generator
 import matplotlib.pyplot as plt
 
-from vit_rollout import *
 from mmdet3d.core.visualizer import (show_multi_modality_result,show_result,
                                      show_seg_result)
 from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
@@ -35,6 +34,9 @@ from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 from pathlib import Path
 from mmcv import Config, DictAction, mkdir_or_exist, track_iter_progress
 
+from matplotlib.widgets import Slider
+
+import matplotlib.gridspec as gridspec
 
 
 
@@ -150,31 +152,6 @@ def init(args):
     
     return model, dataset, data_loader, gpu_ids, cfg, distributed
 
-def build_data_cfg(config_path, skip_type, cfg_options):
-    """Build data config for loading visualization data."""
-    cfg = Config.fromfile(config_path)
-    if cfg_options is not None:
-        cfg.merge_from_dict(cfg_options)
-    # import modules from string list.
-    if cfg.get('custom_imports', None):
-        from mmcv.utils import import_modules_from_strings
-        import_modules_from_strings(**cfg['custom_imports'])
-    # extract inner dataset of `RepeatDataset` as `cfg.data.train`
-    # so we don't need to worry about it later
-    if cfg.data.train['type'] == 'RepeatDataset':
-        cfg.data.train = cfg.data.train.dataset
-    # use only first dataset for `ConcatDataset`
-    if cfg.data.train['type'] == 'ConcatDataset':
-        cfg.data.train = cfg.data.train.datasets[0]
-    train_data_cfg = cfg.data.train
-    # eval_pipeline purely consists of loading functions
-    # use eval_pipeline for data loading
-    train_data_cfg['pipeline'] = [
-        x for x in cfg.eval_pipeline if x['type'] not in skip_type
-    ]
-
-    return cfg
-
       
 def show_mask_on_image(img, mask):
     img = np.float32(img) / 255
@@ -197,7 +174,9 @@ class_names = [
     "traffic_cone",
 ]
 
+
 def main():
+    
     
     with open("args.toml", mode = "rb") as argsF:
         args = tomli.load(argsF)
@@ -212,105 +191,92 @@ def main():
         outputs = []
         prog_bar = mmcv.ProgressBar(len(dataset))
         
-        gen = Generator(model)
         for i, data in enumerate(data_loader):  
-            if i<15: continue
-            dec_self_attn_weights, dec_cross_attn_weights = [], []
-            
-            hooks = []
-            for layer in model.module.pts_bbox_head.transformer.decoder.layers:
-                hooks.append(
-                layer.attentions[0].attn.register_forward_hook(
-                    lambda self, input, output: dec_self_attn_weights.append(output[1])
-                ))
-                hooks.append(
-                layer.attentions[1].attn.register_forward_hook(
-                    lambda self, input, output: dec_cross_attn_weights.append(output[1])
-                ))
-            
-
-            # propagate through the model
-            with torch.no_grad():
-                points = data.pop("points")
-                result = model(return_loss=False, rescale=True, **data)
-                #data["points"] = points
-                
-            for hook in hooks:
-                hook.remove()     
+            if i<29: continue
 
             # # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
-
-            indexes = model.module.pts_bbox_head.bbox_coder.get_indexes()  
-            camidx = 0
+            camtarget = 0
             
+            data.pop("points")
+            result = model(return_loss=False, rescale=True, **data)
+                
+            indexes = model.module.pts_bbox_head.bbox_coder.get_indexes()  
+
             img = data["img"][0]._data[0].numpy()[0]
             img = img.transpose(0,2,3,1)
-            img = img[camidx].astype(np.uint8)
-
-            h, w = (29, 50)
-            #dec_attn_weights = dec_cross_attn_weights[-1][camidx].min(axis=0)[0].cpu()
-            dec_attn_weights = dec_cross_attn_weights
+            img = img[camtarget].astype(np.uint8)
             
-            full_attn = torch.eye(dec_attn_weights[0].size(-2), dec_attn_weights[0].size(-1))            
-            
-            for attn in dec_attn_weights: #6x(6x8x900x1450)
-                attn = attn[camidx].cpu() #8x900x1450
-                attn = attn.min(axis=0)[0] #900x1450
-
-                # flat = attn.view(attn.size(0), -1)
-                # _, indices = flat.topk(int(flat.size(-1)*0.5), -1, False)
-                # indices = indices[indices != 0]
-                # flat[0, indices] = 0
-
-                I = torch.eye(attn.size(-2),attn.size(-1))
-                a = (attn + 1.0*I)/2
-                a = a / a.sum(dim=-2)
-
-                full_attn = attn
-                
-                
-            
-            #dec_attn_weights = dec_attn_weights[indexes]
-            dec_attn_weights = full_attn[indexes]
             inds = result[0]["pts_bbox"]['scores_3d'] > 0.6
             pred_bboxes = result[0]["pts_bbox"]["boxes_3d"][inds]
             img_metas = data["img_metas"][0]._data[0][0]
             
-            fig, axs = plt.subplots(ncols=5, nrows=2, figsize=(22, 7))
-            k=0
-            for idx, ax_i in zip(inds.nonzero(), axs.T):
-                
-                ax = ax_i[0]
-                mask = dec_attn_weights[idx].view(h, w)
-                ax.imshow(mask)
-                ax.axis('off')
-                ax.set_title(f'query id: {indexes[k]}')
-                
-                ax = ax_i[1]
-                
+            pred_bboxes.tensor.detach()
+            
+            h, w = (29, 50)
+            gen = Generator(model)
+            
+            fig = plt.figure(figsize=(22, 7), layout="constrained")
+            #nbboxes = len(inds.nonzero())
+            nbboxes = 4
+            spec = fig.add_gridspec(3, 2*nbboxes)
+
+            k = 0
+            for target in inds.nonzero():
+                if k == 2*nbboxes: break
+                #if result[0]['pts_bbox']['labels_3d'][target] in (0,8): continue
+                aximg = fig.add_subplot(spec[0, k:k+2])
                 img_show = draw_lidar_bbox3d_on_img(
-                    pred_bboxes[k],
+                    pred_bboxes[target],
                     img,
-                    img_metas['lidar2img'][camidx],
+                    img_metas['lidar2img'][camtarget],
                     img_metas,
                     color=(255,0,0))
-                ax.imshow(img_show)
-                ax.axis('off')
-                class_name = class_names[result[0]['pts_bbox']['labels_3d'][k]]
-                score = result[0]['pts_bbox']['scores_3d'][k].item()
-                score = round(score,2)
+                img_show = cv2.cvtColor(img_show, cv2.COLOR_BGR2RGB)
+                aximg.imshow(img_show)
+                aximg.axis('off')
+                class_name = class_names[result[0]['pts_bbox']['labels_3d'][target]]
+                score = result[0]['pts_bbox']['scores_3d'][target].item()
+                score = round(score,3)
                 
-                ax.set_title(f'{class_name}: {score}%')
-                k+=1
+                aximg.set_title(f'{class_name}: {score}%')
+                
 
-            fig.tight_layout()           
-            
+                #attn0 = gen.generate_ours(data, target, indexes, camtarget)
+                attn0 = gen.generate_rollout(data, target, indexes, camtarget, head_fusion = "max", discard_ratio = 0.9)
+                attn1 = gen.generate_rollout(data, target, indexes, camtarget, head_fusion = "min", discard_ratio = 0.9)
+                attn2 = gen.generate_rollout(data, target, indexes, camtarget, head_fusion = "min", discard_ratio = 0.9, raw = True)
+                attn3 = gen.generate_attn_gradcam(data, target, indexes, camtarget)
+                
+                ax_attn0 = fig.add_subplot(spec[1, k:k+1])
+                ax_attn1 = fig.add_subplot(spec[1, k+1:k+2])
+                ax_attn2 = fig.add_subplot(spec[2, k:k+1])
+                ax_attn3 = fig.add_subplot(spec[2, k+1:k+2])
+                #attn = (attn - attn.min()) / (attn.max() - attn.min())
+                
+                ax_attn0.imshow(attn0.view(h, w).cpu())
+                ax_attn0.axis('off')
+                ax_attn0.set_title('Rollout with max fusion')
+                
+                ax_attn1.imshow(attn1.view(h, w).cpu())
+                ax_attn1.axis('off')
+                ax_attn1.set_title('Rollout with min fusion')
+                
+                ax_attn2.imshow(attn2.view(h, w).cpu())
+                ax_attn2.axis('off')
+                ax_attn2.set_title('Raw attention')
+                
+                ax_attn3.imshow(attn3.view(h, w).cpu())
+                ax_attn3.axis('off')
+                ax_attn3.set_title('Grad-CAM')
+
+                k+=2
+
+            fig.tight_layout()    
+            plt.show()
             debug = 1
             plt.close(fig)
             
             
-            
-
     else:
         model = MMDistributedDataParallel(
             model.cuda(),
@@ -319,6 +285,8 @@ def main():
         outputs = multi_gpu_test(model, data_loader, args["tmpdir"], args["gpu_collect"])     
 
 
-
 if __name__ == '__main__':
     main()
+
+
+

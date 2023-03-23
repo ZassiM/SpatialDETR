@@ -1,21 +1,15 @@
-from tkinter import *
-
-root = Tk()
-
-list_items = ['item 1', 'item 2', 'item 3', 'item 4']
-row_var = IntVar() 
-column_vars=[]
-count = 0
-
-for item in list_items: 
-    Radiobutton(text=item, variable=row_var, 
-                value=item).grid(column=0,row=count) 
-    var=IntVar()  ##unique in each for loop
-    Radiobutton(text=item, variable=var, 
-                value=item).grid(column=1, row=count)
-    column_vars.append(var)
-    count += 1
-    
-
-
-root.mainloop()
+# importing tkinter for gui
+import tkinter as tk
+ 
+# creating window
+window = tk.Tk()
+ 
+# setting attribute
+window.state('zoomed')
+window.title("Geeks For Geeks")
+ 
+# creating text label to display on window screen
+label = tk.Label(window, text="Hello Tkinter!")
+label.pack()
+ 
+window.mainloop()
