@@ -144,7 +144,9 @@ def init(args):
         model.PALETTE = dataset.PALETTE
     
     return model, dataset, data_loader, gpu_ids, cfg, distributed
-
+    # DataLoader_filename = args["dataloader_filename"]
+    # print(f"Saving DataLoader in {DataLoader_filename}...")
+    # torch.save(list(data_loader), DataLoader_filename)
 def main():
     
     with open("args.toml", mode = "rb") as argsF:
@@ -201,7 +203,7 @@ def main():
                 img_metas=None,
                 gt_bbox_color = (0,0,255),
                 pred_bbox_color = (0,255,0),
-                show=True, index = i, multi=True)
+                show=True, index = i, save = False, multi=True)
             
             # dataset.show(result, points[0]._data[0][0], gt_bboxes.tensor.numpy(), args["show_dir"], show=True, pipeline=None, score_thr = score_thr)
         

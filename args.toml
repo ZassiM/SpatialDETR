@@ -1,6 +1,6 @@
 model_filename = "work_dirs/model.pth"
 dataloader_filename = "work_dirs/data_loader.pth"
-
+GTbboxes_filename = "work_dirs/GT_bboxes.pth"
 model = "sdetr"
 mode = "test" 
 

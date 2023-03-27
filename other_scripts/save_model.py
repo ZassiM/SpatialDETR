@@ -15,22 +15,6 @@ from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_model
 from mmdet.apis import multi_gpu_test, set_random_seed
 from mmdet.datasets import replace_ImageToTensor
-#from mmdetection3d.tools.misc.browse_dataset import show_proj_bbox_img
-
-#import numpy as np
-
-# from Explanation import Generator
-# import matplotlib.pyplot as plt
-
-# from mmdet3d.core.visualizer import (show_multi_modality_result,show_result,
-#                                      show_seg_result)
-# from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
-
-# from pathlib import Path
-# from mmcv import Config, DictAction, mkdir_or_exist, track_iter_progress
-
-from App import App
-import pickle
 
 def init(args):
     
@@ -152,8 +136,6 @@ def main():
     
     model, dataset, data_loader, gpu_ids, cfg, distributed = init(args)
 
-    # filename_model = 'model.sav'
-    # pickle.dump(model, open(filename_model, 'wb'))#
     model_filename = args["model_filename"]
     print(f"Saving Model in {model_filename}...")
     torch.save(model, model_filename)
@@ -161,6 +143,16 @@ def main():
     DataLoader_filename = args["dataloader_filename"]
     print(f"Saving DataLoader in {DataLoader_filename}...")
     torch.save(list(data_loader), DataLoader_filename)
+    
+    gt_bboxes = []
+    for i,data in enumerate(data_loader):
+        gt_bbox = dataset.get_ann_info(i)['gt_bboxes_3d']
+        gt_bboxes.append(gt_bbox)
+        
+    GT_filename = args["GTbboxes_filename"]
+    print(f"Saving GT Bounding Boxes in {GT_filename}...")
+    torch.save(gt_bboxes, GT_filename)
+
     
 
 if __name__ == '__main__':

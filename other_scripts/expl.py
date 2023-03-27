@@ -242,6 +242,7 @@ def main():
                 
 
                 #attn0 = gen.generate_ours(data, target, indexes, camtarget)
+
                 attn0 = gen.generate_rollout(data, target, indexes, camtarget, head_fusion = "max", discard_ratio = 0.9)
                 attn1 = gen.generate_rollout(data, target, indexes, camtarget, head_fusion = "min", discard_ratio = 0.9)
                 attn2 = gen.generate_rollout(data, target, indexes, camtarget, head_fusion = "min", discard_ratio = 0.9, raw = True)

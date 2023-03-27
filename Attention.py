@@ -100,7 +100,6 @@ class Generator:
         self.head_fusion = head_fusion
         self.discard_ratio = discard_ratio
         
-
         # initialize relevancy matrices
         image_bboxes = self.dec_cross_attn_weights[0].shape[-1]
         queries_num = self.dec_self_attn_weights[0].shape[-1]
@@ -117,11 +116,43 @@ class Generator:
         cam_q_i = avg_heads(cam_q_i, head_fusion = self.head_fusion, discard_ratio = self.discard_ratio)
 
         if raw: 
-            self.R_q_i = cam_q_i # RAW ATTN  
+            self.R_q_i = cam_q_i # Only last decoder attn 
               
         else: 
-            self.R_q_i = torch.matmul(self.R_q_q.t(), torch.matmul(cam_q_i, self.R_i_i))   
+            self.R_q_i = torch.matmul(self.R_q_q, torch.matmul(cam_q_i, self.R_i_i))[0]
               
         aggregated = self.R_q_i[indexes[target_index].item()].detach()
                 
+        return aggregated
+
+    def gradcam(self, cam, grad):
+        cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
+        grad = grad.reshape(-1, grad.shape[-2], grad.shape[-1])
+        grad = grad.mean(dim=[1, 2], keepdim=True)
+        cam = (cam * grad).mean(0).clamp(min=0)
+        return cam
+
+    def generate_attn_gradcam(self, img, target_index, index=None):
+        outputs = self.model(img)
+
+        if index == None:
+            index = outputs['pred_logits'][0, target_index, :-1].max(1)[1]
+
+        one_hot = torch.zeros_like(outputs['pred_logits']).to(outputs['pred_logits'].device)
+        one_hot[0, target_index, index] = 1
+        one_hot.requires_grad_(True)
+        one_hot = torch.sum(one_hot.cuda() * outputs['pred_logits'])
+
+        self.model.zero_grad()
+        one_hot.backward(retain_graph=True)
+
+
+        # get cross attn cam from last decoder layer
+        cam_q_i = self.model.transformer.decoder.layers[-1].multihead_attn.get_attn().detach()
+        grad_q_i = self.model.transformer.decoder.layers[-1].multihead_attn.get_attn_gradients().detach()
+        cam_q_i = self.gradcam(cam_q_i, grad_q_i)
+        self.R_q_i = cam_q_i
+        aggregated = self.R_q_i.unsqueeze_(0)
+
+        aggregated = aggregated[:, target_index, :].unsqueeze_(0)
         return aggregated

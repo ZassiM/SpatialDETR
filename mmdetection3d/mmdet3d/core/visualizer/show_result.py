@@ -305,6 +305,7 @@ def show_multi_modality_result(img,
                                gt_bbox_color=(61, 102, 255),
                                pred_bbox_color=(241, 101, 72),
                                index = 0,
+                               save = False,
                                multi=True):
     """Convert multi-modality detection results into 2D results.
 
@@ -352,6 +353,7 @@ def show_multi_modality_result(img,
         
         for i in range(len(img)):
             show_img = img[i].copy()
+            show_img = show_img[:900]
             if gt_bboxes is not None:
                 show_img = draw_bbox(
                     gt_bboxes, show_img, proj_mat[i], img_metas, color=gt_bbox_color)
@@ -378,4 +380,5 @@ def show_multi_modality_result(img,
         if key == ord('p'):
             cv2.waitKey(-1) #wait until any key is pressed
         
-        #mmcv.imwrite(full, osp.join(result_path, f'img_{index}.png'))
+        if save:
+            mmcv.imwrite(full, osp.join(result_path, f'img_{index}.png'))
