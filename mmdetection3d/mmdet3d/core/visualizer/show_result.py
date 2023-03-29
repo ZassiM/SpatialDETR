@@ -305,8 +305,7 @@ def show_multi_modality_result(img,
                                gt_bbox_color=(61, 102, 255),
                                pred_bbox_color=(241, 101, 72),
                                index = 0,
-                               save = False,
-                               multi=True):
+                               save = False):
     """Convert multi-modality detection results into 2D results.
 
     Project the predicted 3D bbox to 2D image plane and visualize them.
@@ -343,42 +342,42 @@ def show_multi_modality_result(img,
     result_path = out_dir
     mmcv.mkdir_or_exist(result_path)
 
+    scale_percent = 40 # percent of original size
+    width = int(img[0].shape[1] * scale_percent / 100)
+    height = int(img[0].shape[0] * scale_percent / 100)
+    dim = (width, height)
+    
+    images = []
+    
+    for i in range(len(img)):
+        show_img = img[i].copy()
+        show_img = show_img[:900]
+        if gt_bboxes is not None:
+            show_img = draw_bbox(
+                gt_bboxes, show_img, proj_mat[i], img_metas, color=gt_bbox_color)
+        if pred_bboxes is not None:
+            show_img = draw_bbox(
+                pred_bboxes,
+                show_img,
+                proj_mat[i],
+                img_metas,
+                color=pred_bbox_color)
+        show_img = mmcv.imresize(show_img, dim, return_scale=False)
+        show_img = cv2.cvtColor(show_img, cv2.COLOR_BGR2RGB)
+        images.append(show_img)
+
+    # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
+
+    hori = np.concatenate((images[2], images[0], images[1]), axis = 1)
+    ver = np.concatenate((images[5], images[3], images[4]), axis = 1)  
+    full = np.concatenate((hori,ver), axis = 0)
+
     if show:
-        scale_percent = 40 # percent of original size
-        width = int(img[0].shape[1] * scale_percent / 100)
-        height = int(img[0].shape[0] * scale_percent / 100)
-        dim = (width, height)
-        
-        images = []
-        
-        for i in range(len(img)):
-            show_img = img[i].copy()
-            show_img = show_img[:900]
-            if gt_bboxes is not None:
-                show_img = draw_bbox(
-                    gt_bboxes, show_img, proj_mat[i], img_metas, color=gt_bbox_color)
-            if pred_bboxes is not None:
-                show_img = draw_bbox(
-                    pred_bboxes,
-                    show_img,
-                    proj_mat[i],
-                    img_metas,
-                    color=pred_bbox_color)
-            show_img = mmcv.imresize(show_img, dim, return_scale=False)
-            show_img = cv2.cvtColor(show_img, cv2.COLOR_BGR2RGB)
-            images.append(show_img)
-
-        # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
-
-        hori = np.concatenate((images[2], images[0], images[1]), axis = 1)
-        ver = np.concatenate((images[5], images[3], images[4]), axis = 1)  
-        full = np.concatenate((hori,ver), axis = 0)
-
         #mmcv.imshow(full, win_name=f'img_{index}')
         cv2.imshow('Image', full)
         key = cv2.waitKey(1)
         if key == ord('p'):
             cv2.waitKey(-1) #wait until any key is pressed
-        
-        if save:
-            mmcv.imwrite(full, osp.join(result_path, f'img_{index}.png'))
+    
+    if save:
+        mmcv.imwrite(full, osp.join(result_path, f'img_{index}.png'))

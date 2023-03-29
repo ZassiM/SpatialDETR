@@ -438,7 +438,11 @@ class Detr3DHead(DETRHead):
         for i in range(num_samples):
             preds = preds_dicts[i]
             bboxes = preds['bboxes']
+            #[cx, cy, cz, l, w, h, rot]
+            # bboxes[:, 0] = bboxes[:, 0] - bboxes[:, 3] * 0.5
+            # bboxes[:, 1] = bboxes[:, 1] - bboxes[:, 4] * 0.5
             bboxes[:, 2] = bboxes[:, 2] - bboxes[:, 5] * 0.5
+
             bboxes = img_metas[i]['box_type_3d'](bboxes, 9)
             scores = preds['scores']
             labels = preds['labels']

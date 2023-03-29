@@ -31,9 +31,9 @@ def avg_heads(attn, head_fusion = "min", discard_ratio = 0.9):
     elif head_fusion == "min":
         attn = attn.min(dim=0)[0]
 
-    flat = attn.view(attn.size(0), -1)
-    _, indices = flat.topk(int(flat.size(-1)*discard_ratio), -1, False)
-    flat[0, indices] = 0
+    attn = attn.view(attn.size(0), -1)
+    _, indices = attn.topk(int(attn.size(-1)*discard_ratio), -1, False)
+    attn[0, indices] = 0
     return attn
 
 # rules 6 + 7 from paper
@@ -71,7 +71,44 @@ class Generator:
         self.model = model
         self.model.eval()
         self.camidx = None
-        self.dec_cross_attn_weights, self.dec_cross_attn_grad, self.dec_self_attn_weights, self.dec_self_attn_grad = [], [], [], []    
+        self.dec_cross_attn_weights, self.dec_cross_attn_grads, self.dec_self_attn_weights, self.dec_self_attn_grads = [], [], [], []    
+    
+    def get_all_attentions(self, data, target_index = None):
+        
+        hooks = []
+        for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
+            hooks.append(
+            layer.attentions[0].attn.register_forward_hook(
+                lambda _, input, output: self.dec_self_attn_weights.append(output[1])
+            ))
+            hooks.append(
+            layer.attentions[1].attn.register_forward_hook(
+                lambda _, input, output: self.dec_cross_attn_weights.append(output[1])
+            ))
+        
+        if "points" in data.keys():
+            data.pop("points")
+        
+        if target_index is None:
+            with torch.no_grad():
+                outputs = self.model(return_loss=False, rescale=True, **data)
+        
+        else:
+            outputs = self.model(return_loss=False, rescale=True, **data)
+            
+            output_scores = outputs[0]["pts_bbox"]["scores_3d"]
+            one_hot = torch.zeros_like(output_scores).to(output_scores.device)
+            one_hot[target_index] = 1
+            one_hot.requires_grad_(True)
+            one_hot = torch.sum(one_hot * output_scores)
+
+            self.model.zero_grad()
+            one_hot.backward(retain_graph=True)
+            
+            for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
+                self.dec_cross_attn_grads.append(layer.attentions[1].attn.get_attn_gradients())
+            
+        return outputs
         
     def forward(self, input_ids, attention_mask):
         return self.model(input_ids, attention_mask)
@@ -132,27 +169,14 @@ class Generator:
         cam = (cam * grad).mean(0).clamp(min=0)
         return cam
 
-    def generate_attn_gradcam(self, img, target_index, index=None):
-        outputs = self.model(img)
-
-        if index == None:
-            index = outputs['pred_logits'][0, target_index, :-1].max(1)[1]
-
-        one_hot = torch.zeros_like(outputs['pred_logits']).to(outputs['pred_logits'].device)
-        one_hot[0, target_index, index] = 1
-        one_hot.requires_grad_(True)
-        one_hot = torch.sum(one_hot.cuda() * outputs['pred_logits'])
-
-        self.model.zero_grad()
-        one_hot.backward(retain_graph=True)
-
+    def generate_attn_gradcam(self, target_index, indexes, camidx):
+        self.camidx = camidx
 
         # get cross attn cam from last decoder layer
-        cam_q_i = self.model.transformer.decoder.layers[-1].multihead_attn.get_attn().detach()
-        grad_q_i = self.model.transformer.decoder.layers[-1].multihead_attn.get_attn_gradients().detach()
+        cam_q_i = self.dec_cross_attn_weights[-1][self.camidx]
+        grad_q_i = self.dec_cross_attn_grads[-1][self.camidx]
         cam_q_i = self.gradcam(cam_q_i, grad_q_i)
         self.R_q_i = cam_q_i
-        aggregated = self.R_q_i.unsqueeze_(0)
 
-        aggregated = aggregated[:, target_index, :].unsqueeze_(0)
+        aggregated = self.R_q_i[indexes[target_index].item()].detach()
         return aggregated

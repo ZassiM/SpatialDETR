@@ -82,7 +82,7 @@ class App(Tk):
         label5 = Label(textvariable = self.thr_text , anchor = CENTER)
         label5.pack(fill=X, padx=5, pady=5)
         self.selected_threshold = Scale(self, from_=0, to=1, showvalue = 0, resolution = 0.1, orient=HORIZONTAL, command = self.update_thr)
-        self.selected_threshold.set(0.3)
+        self.selected_threshold.set(0.2)
         self.selected_threshold.pack()
             
         self.text_label = StringVar()
@@ -136,7 +136,7 @@ class App(Tk):
 
     def get_all_attentions(self):
          
-        dec_self_attn_weights, dec_cross_attn_weights = [], []
+        dec_self_attn_weights, dec_cross_attn_weights, dec_cross_attn_grads = [], [], []
         
         hooks = []
         for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
@@ -150,8 +150,9 @@ class App(Tk):
             ))
         
         self.data = self.data_loader[self.data_idx.get()]
-        if self.data["points"]: self.data.pop("points")
-            
+        if "points" in self.data.keys():
+            self.data.pop("points")
+        
         imgs = self.data["img"][0]._data[0].numpy()[0]
         imgs = imgs.transpose(0,2,3,1)[:,:900,:,:]
         self.imgs = imgs.astype(np.uint8)
@@ -161,7 +162,8 @@ class App(Tk):
         for hook in hooks:
             hook.remove()
             
-        self.gen.dec_self_attn_weights, self.gen.dec_cross_attn_weights = dec_self_attn_weights, dec_cross_attn_weights
+        self.gen.dec_self_attn_weights, self.gen.dec_cross_attn_weights, self.gen.dec_cross_attn_grads = \
+                dec_self_attn_weights, dec_cross_attn_weights, dec_cross_attn_grads
         
         self.nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes()  
         

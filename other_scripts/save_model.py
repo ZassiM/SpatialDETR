@@ -134,6 +134,7 @@ def main():
     with open("args.toml", mode = "rb") as argsF:
         args = tomli.load(argsF)
     
+    print("Loading data from configurations...")
     model, dataset, data_loader, gpu_ids, cfg, distributed = init(args)
 
     model_filename = args["model_filename"]
@@ -145,7 +146,7 @@ def main():
     torch.save(list(data_loader), DataLoader_filename)
     
     gt_bboxes = []
-    for i,data in enumerate(data_loader):
+    for i,_ in enumerate(data_loader):
         gt_bbox = dataset.get_ann_info(i)['gt_bboxes_3d']
         gt_bboxes.append(gt_bbox)
         

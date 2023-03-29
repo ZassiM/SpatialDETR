@@ -131,7 +131,7 @@ def draw_depth_bbox3d_on_img(bboxes3d,
                              calibs,
                              img_metas,
                              color=(0, 255, 0),
-                             thickness=1):
+                             thickness=2):
     """Project the 3D bbox on 2D plane and draw on input image.
 
     Args:
@@ -171,7 +171,7 @@ def draw_camera_bbox3d_on_img(bboxes3d,
                               cam2img,
                               img_metas,
                               color=(0, 255, 0),
-                              thickness=1):
+                              thickness=2):
     """Project the 3D bbox on 2D plane and draw on input image.
 
     Args:

@@ -162,23 +162,28 @@ def main():
         outputs = []
         prog_bar = mmcv.ProgressBar(len(dataset))
         
-        for i, data in enumerate(data_loader):    
-            
-            points = data.pop("points")
+        for i, data in enumerate(data_loader):  
+              
+            if "points" in data.keys():
+                points = data.pop("points")
             
             with torch.no_grad():
                 result = model(return_loss=False, rescale=True, **data)
-
+            
             #data["points"] = points
             
             # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
             camidx = 0
-            score_thr = 0.3
+            score_thr = 0.5
             
             inds = result[0]["pts_bbox"]['scores_3d'] > score_thr      
             
             gt_bboxes = dataset.get_ann_info(i)['gt_bboxes_3d']
             pred_bboxes = result[0]["pts_bbox"]["boxes_3d"][inds]
+            #[cx, cy, cz, l, w, h, rot, vx, vy]
+            bbox_test = [50,50,50,0.5,0.5,0.5,1.5,0,0]
+            bbox_test = torch.Tensor(bbox_test).unsqueeze(0)
+            pred_bboxes.tensor = torch.cat((pred_bboxes.tensor, bbox_test))
             
             img_metas = data["img_metas"][0]._data[0][0]
 
@@ -192,20 +197,20 @@ def main():
             filename = Path(img_metas['filename'][camidx]).name
             filename = filename.split('.')[0]
 
-            show_multi_modality_result(
-                img,
-                gt_bboxes,
-                pred_bboxes,
-                img_metas['lidar2img'],
-                args["show_dir"],
-                filename,
-                box_mode='lidar',
-                img_metas=None,
-                gt_bbox_color = (0,0,255),
-                pred_bbox_color = (0,255,0),
-                show=True, index = i, save = False, multi=True)
-            
-            # dataset.show(result, points[0]._data[0][0], gt_bboxes.tensor.numpy(), args["show_dir"], show=True, pipeline=None, score_thr = score_thr)
+            #show_multi_modality_result(
+                # img,
+                # None,
+                # pred_bboxes,
+                # img_metas['lidar2img'],
+                # args["show_dir"],
+                # filename,
+                # box_mode='lidar',
+                # img_metas=None,
+                # gt_bbox_color = (0,0,255),
+                # pred_bbox_color = (0,255,0),
+                # show = False, index = i, save = True)
+
+            dataset.show(result, points[0]._data[0][0], gt_bboxes.tensor.numpy(), args["show_dir"], show=True, pipeline=None, score_thr = score_thr)
         
             outputs.extend(result)
             batch_size = len(result)

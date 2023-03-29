@@ -10,7 +10,7 @@ from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 
 from mmdet.apis import multi_gpu_test
 
-from App import App
+from App_new import App
 
 def main():
     
@@ -38,7 +38,6 @@ def main():
     
     if not distributed:
         model = MMDataParallel(model, device_ids = gpu_ids)
-        model.eval()
         app = App(model, data_loader, gt_bboxes)
         app.mainloop()
         
