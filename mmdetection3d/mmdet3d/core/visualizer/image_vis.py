@@ -62,7 +62,8 @@ def plot_rect3d_on_img(img,
                        num_rects,
                        rect_corners,
                        color=(0, 255, 0),
-                       thickness=1):
+                       thickness=1,
+                       with_label = False):
     """Plot the boundary lines of 3D rectangular on 2D images.
 
     Args:
@@ -80,9 +81,19 @@ def plot_rect3d_on_img(img,
         corners = rect_corners[i].astype(np.int)
         if corners.min() < 0 or corners.max() > 10000: continue
         for start, end in line_indices:
-                cv2.line(img, (corners[start, 0], corners[start, 1]),
+            cv2.line(img, (corners[start, 0], corners[start, 1]),
                         (corners[end, 0], corners[end, 1]), color, thickness,
                         cv2.LINE_AA)
+            # cv2.putText(img, f"{start}", (corners[start, 0], corners[start, 1]), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness, cv2.LINE_AA)
+            # cv2.putText(img, f"{end}", (corners[end, 0], corners[end, 1]), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness, cv2.LINE_AA)
+
+        if with_label:
+            topleft = (corners[1,0], corners[1,1])
+            topright = (corners[5,0], corners[5,1])
+            x = int((topleft[0]+topright[0])/2)
+            y = topleft[1]-15
+            cv2.putText(img, str(i), (x,y), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), thickness, cv2.LINE_AA)
+
     return img.astype(np.uint8)
 
 
@@ -91,7 +102,8 @@ def draw_lidar_bbox3d_on_img(bboxes3d,
                              lidar2img_rt,
                              img_metas,
                              color=(0, 255, 0),
-                             thickness=2):
+                             thickness=2,
+                             with_label = False):
     """Project the 3D bbox on 2D plane and draw on input image.
 
     Args:
@@ -122,7 +134,8 @@ def draw_lidar_bbox3d_on_img(bboxes3d,
     pts_2d[:, 1] /= pts_2d[:, 2]
     imgfov_pts_2d = pts_2d[..., :2].reshape(num_bbox, 8, 2)
 
-    return plot_rect3d_on_img(img, num_bbox, imgfov_pts_2d, color, thickness)
+    return plot_rect3d_on_img(img, num_bbox, imgfov_pts_2d, color, thickness, with_label)
+    
 
 
 # TODO: remove third parameter in all functions here in favour of img_metas

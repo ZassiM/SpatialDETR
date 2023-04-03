@@ -31,9 +31,11 @@ def avg_heads(attn, head_fusion = "min", discard_ratio = 0.9):
     elif head_fusion == "min":
         attn = attn.min(dim=0)[0]
 
-    attn = attn.view(attn.size(0), -1)
-    _, indices = attn.topk(int(attn.size(-1)*discard_ratio), -1, False)
-    attn[0, indices] = 0
+    flat = attn.view(attn.size(0), -1)
+    #1450*discard_ratio smallest elements 
+    _, indices = flat.topk(int(attn.size(-1)*discard_ratio), -1, False)
+    for i in range(len(indices)):
+        flat[i, indices[i]] = 0
     return attn
 
 # rules 6 + 7 from paper
@@ -157,7 +159,6 @@ class Generator:
               
         else: 
             self.R_q_i = torch.matmul(self.R_q_q, torch.matmul(cam_q_i, self.R_i_i))[0]
-              
         aggregated = self.R_q_i[indexes[target_index].item()].detach()
                 
         return aggregated

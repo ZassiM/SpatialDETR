@@ -3,10 +3,13 @@ from tkinter import ttk
 from tkinter import font
 
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 
+import torch
 import numpy as np
 import cv2
 
@@ -41,6 +44,8 @@ class App(Tk):
         
         self.title('Attention Visualization')
         self.geometry('1500x1500')
+        self.font = cv2.FONT_HERSHEY_SIMPLEX
+        self.font_scale = 1
 
         self.model = model
         self.data_loader = data_loader
@@ -78,7 +83,7 @@ class App(Tk):
             i+=1
 
         self.thr_text = StringVar()
-        self.thr_text .set("Select prediction threshold:")
+        self.thr_text.set("Select prediction threshold:")
         label5 = Label(textvariable = self.thr_text , anchor = CENTER)
         label5.pack(fill=X, padx=5, pady=5)
         self.selected_threshold = Scale(self, from_=0, to=1, showvalue = 0, resolution = 0.1, orient=HORIZONTAL, command = self.update_thr)
@@ -103,73 +108,63 @@ class App(Tk):
         for i in range(len(self.head_types)):
             Radiobutton(frame1, text = self.head_types[i].capitalize(), variable = self.selected_head_fusion, value = self.head_types[i]).grid(row=0,column=i)
         Radiobutton(frame1, text = "All", variable = self.selected_head_fusion, value = "all").grid(row=0,column=i+1)
+        Radiobutton(frame1, text = "Grad-CAM", variable = self.selected_head_fusion, value = "gradcam").grid(row=0,column=i+2)
+
         self.raw_attn = IntVar()
-        Checkbutton(frame1, text='Raw attention',variable=self.raw_attn, onvalue=1, offvalue=0).grid(row=0,column=i+2)
+        self.raw_attn.set(1)
+        Checkbutton(frame1, text='Raw attention',variable=self.raw_attn, onvalue=1, offvalue=0).grid(row=0,column=i+3)
 
         
         self.dr_text = StringVar()
         self.dr_text.set("Select discard ratio:")
         label4 = Label(textvariable = self.dr_text, anchor = CENTER)
         label4.pack(fill=X, padx=5, pady=5)
-        self.selected_discard_ratio = Scale(self, from_=0, to=1, showvalue = 0, resolution = 0.1, orient=HORIZONTAL, command = self.update_dr)
+        self.selected_discard_ratio = Scale(self, from_=0, to=0.9, showvalue = 0, resolution = 0.1, orient=HORIZONTAL, command = self.update_dr)
         self.selected_discard_ratio.set(0)
         self.selected_discard_ratio.pack()
         
         frame2 = Frame(self)
         frame2.pack()
-        self.GT_bool, self.BB_bool = IntVar(), IntVar()
+        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.overlay, self.show_labels = IntVar(), IntVar(), IntVar(), IntVar(), IntVar(), IntVar()
         Checkbutton(frame2, text='Show GT Bounding Boxes',variable=self.GT_bool, onvalue=1, offvalue=0).grid(row=0,column=0)
         Checkbutton(frame2, text='Show all Bounding Boxes',variable=self.BB_bool, onvalue=1, offvalue=0).grid(row=0,column=1)
-        
+        Checkbutton(frame2, text='Show LiDAR point cloud',variable=self.points_bool, onvalue=1, offvalue=0).grid(row=0,column=2)
+        Checkbutton(frame2, text='Show attention scale',variable=self.scale, onvalue=1, offvalue=0).grid(row=0,column=3)
+        Checkbutton(frame2, text='Overlay attention on image',variable=self.overlay, onvalue=1, offvalue=0).grid(row=0,column=4)
+        Checkbutton(frame2, text='Show predicted labels',variable=self.show_labels, onvalue=1, offvalue=0).grid(row=0,column=5)
         plot_button = Button(self, command = self.visualize, text = "Visualize")
         
         plot_button.pack()
         
     def update_class(self, idx):
        self.text_label.set(f"Select bbox index: {class_names[self.labels[int(idx)].item()]} ({int(idx)})")
+       self.BB_bool.set(0)
     
     def update_dr(self, idx):
         self.dr_text.set(f"Select discard ratio: {idx}")
         
     def update_thr(self, idx):
         self.thr_text.set(f"Select prediction threshold: {idx}")
-
-    def get_all_attentions(self):
-         
-        dec_self_attn_weights, dec_cross_attn_weights, dec_cross_attn_grads = [], [], []
+        self.BB_bool.set(1)
         
-        hooks = []
-        for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
-            hooks.append(
-            layer.attentions[0].attn.register_forward_hook(
-                lambda self, input, output: dec_self_attn_weights.append(output[1])
-            ))
-            hooks.append(
-            layer.attentions[1].attn.register_forward_hook(
-                lambda self, input, output: dec_cross_attn_weights.append(output[1])
-            ))
+    def update_values(self):
         
         self.data = self.data_loader[self.data_idx.get()]
-        if "points" in self.data.keys():
-            self.data.pop("points")
+        if self.selected_head_fusion.get() != "gradcam":
+            outputs = self.gen.get_all_attentions(self.data)
+        else:
+            outputs = self.gen.get_all_attentions(self.data, self.selected_bbox.get())
+
+        self.nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes() 
+        self.outputs = outputs[0]["pts_bbox"]
         
         imgs = self.data["img"][0]._data[0].numpy()[0]
         imgs = imgs.transpose(0,2,3,1)[:,:900,:,:]
         self.imgs = imgs.astype(np.uint8)
-        
-        outputs = self.model(return_loss=False, rescale=True, **self.data)
-        
-        for hook in hooks:
-            hook.remove()
-            
-        self.gen.dec_self_attn_weights, self.gen.dec_cross_attn_weights, self.gen.dec_cross_attn_grads = \
-                dec_self_attn_weights, dec_cross_attn_weights, dec_cross_attn_grads
-        
-        self.nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes()  
-        
+ 
         self.img_metas = self.data["img_metas"][0]._data[0][0]
         
-        self.outputs = outputs[0]["pts_bbox"]
+
 
     def visualize(self):
         
@@ -179,7 +174,7 @@ class App(Tk):
         if self.old_data_idx != self.data_idx.get():
             self.old_data_idx = self.data_idx.get()
             self.selected_bbox.set(0)
-            self.get_all_attentions()
+            self.update_values()
             self.imgs_bbox = []
             
         if self.old_thr != self.selected_threshold.get():
@@ -192,7 +187,6 @@ class App(Tk):
             self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
             self.pred_bboxes.tensor.detach()
 
-            
         if self.GT_bool.get():
             self.gt_bbox = self.gt_bboxes[self.data_idx.get()]
         else:
@@ -205,11 +199,13 @@ class App(Tk):
         self.imgs_bbox = []
         for camidx in range(6):
             img = draw_lidar_bbox3d_on_img(
-                    self.pred_bboxes if self.BB_bool.get() else self.pred_bboxes[self.selected_bbox.get()] ,
+                    self.pred_bboxes if self.BB_bool.get() else self.pred_bboxes[self.selected_bbox.get()],
                     self.imgs[camidx],
                     self.img_metas['lidar2img'][camidx],
                     self.img_metas,
-                    color=(0,0,255))
+                    color=(0,255,0),
+                    with_label = self.show_labels.get())  # BGR
+            
             if self.gt_bbox:
                 img = draw_lidar_bbox3d_on_img(
                         self.gt_bbox,
@@ -231,27 +227,52 @@ class App(Tk):
             ax.axis('off')
             ax.set_title(f'{list(self.cameras.keys())[cams[i]]}')
 
-        if self.head_fusion != "all":
+        if self.head_fusion not in ("all", "gradcam"):
             attn = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
-        
+            attn = attn.view(29, 50).cpu()
+            
             ax_attn = fig.add_subplot(spec[1,1])
-            ax_attn.imshow(attn.view(29, 50).cpu())
+            attmap = ax_attn.imshow(attn)
             ax_attn.axis('off')
             ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}')
+            
+            if self.scale.get():  
+                im_ratio = attn.shape[1]/attn.shape[0]
+                fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
+
+            if self.overlay.get():
+                dst = cv2.addWeighted(self.imgs_bbox[self.selected_camera.get()], 0.5, attn.numpy(), 0.7, 0)
+                ax_attn.imshow(dst)
+                
+            
+        elif self.head_fusion == "gradcam":
+            
+            self.gen.get_all_attentions(self.data, self.selected_bbox.get())
+            attn = self.gen.generate_attn_gradcam(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get())
+            attn = attn.view(29, 50).cpu()
+            ax_attn = fig.add_subplot(spec[1,1])
+            ax_attn.imshow(attn)
+            ax_attn.axis('off')
+            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}')  
         
-        else:
+        
+        elif self.head_fusion == "all":
             for i in range(len(self.head_types)):
                 attn = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get(), self.head_types[i], self.discard_ratio, self.raw_attn.get())
+                attn = attn.view(29, 50).cpu()
                 ax_attn = fig.add_subplot(spec[1,i])
-                ax_attn.imshow(attn.view(29, 50).cpu())
+                attmap = ax_attn.imshow(attn)
                 ax_attn.axis('off')
-                ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]} ({self.head_types[i]})')   
-
+                ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]} ({self.head_types[i]})')      
+                
+                if self.scale.get():  
+                    im_ratio = attn.shape[1]/attn.shape[0]
+                    fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
         
+            
         if self.canvas: self.canvas.get_tk_widget().pack_forget()
         
-        self.canvas = FigureCanvasTkAgg(fig,
-                                master = self)  
+        self.canvas = FigureCanvasTkAgg(fig, self)  
         self.canvas.draw()
     
         # placing the self.canvas on the Tkinter window

@@ -10,7 +10,7 @@ from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 
 from mmdet.apis import multi_gpu_test
 
-from App_new import App
+from App import App
 
 def main():
     
@@ -44,10 +44,6 @@ def main():
     else:
         model = MMDistributedDataParallel(model.cuda(), device_ids=[torch.cuda.current_device()],broadcast_buffers=False)
         
-
-
-    
-
 
 if __name__ == '__main__':
     main()
