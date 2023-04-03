@@ -177,7 +177,7 @@ class App(Tk):
             self.update_values()
             self.imgs_bbox = []
             
-        if self.old_thr != self.selected_threshold.get():
+        if self.old_thr != self.selected_threshold.get() or self.old_data_idx != self.data_idx.get():
             self.old_thr = self.selected_threshold.get()
             
             self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
