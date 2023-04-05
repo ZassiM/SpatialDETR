@@ -73,6 +73,7 @@ class Generator:
         self.model = model
         self.model.eval()
         self.camidx = None
+        self.layer = 5
         self.dec_cross_attn_weights, self.dec_cross_attn_grads, self.dec_self_attn_weights, self.dec_self_attn_grads = [], [], [], []    
     
     def get_all_attentions(self, data, target_index = None):
@@ -150,14 +151,18 @@ class Generator:
         # queries self attention matrix
         self.R_q_q = torch.eye(queries_num, queries_num).to(device)
 
-        cam_q_i = self.dec_cross_attn_weights[-1][self.camidx]
+        cam_q_i = self.dec_cross_attn_weights[self.layer][self.camidx]
+        
         cam_q_i = avg_heads(cam_q_i, head_fusion = self.head_fusion, discard_ratio = self.discard_ratio)
-
+        
+        self.max_values, self.max_idxs = cam_q_i.topk(5, dim=0)
+        
         if raw: 
             self.R_q_i = cam_q_i # Only last decoder attn 
         else: 
             self.R_q_q = compute_rollout_attention(self.dec_self_attn_weights)
-            self.R_q_i = torch.matmul(self.R_q_q, torch.matmul(cam_q_i, self.R_i_i))[0]
+            #self.R_q_i = torch.matmul(self.R_q_q, torch.matmul(cam_q_i, self.R_i_i))[0]
+            self.R_q_i = torch.matmul(self.R_q_q, cam_q_i)
             
         aggregated = self.R_q_i[indexes[target_index].item()].detach()
                 

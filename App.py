@@ -4,7 +4,7 @@ from tkinter import font
 
 import matplotlib.pyplot as plt
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
@@ -12,6 +12,7 @@ from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 import torch
 import numpy as np
 import cv2
+import random
 
 
 from Attention import Generator
@@ -28,6 +29,14 @@ class_names = [
     "pedestrian",
     "traffic_cone",
 ]
+
+def show_attn_on_img(img, mask):
+    img = np.float32(img) / 255
+    heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
+    heatmap = np.float32(heatmap) / 255
+    cam = heatmap + np.float32(img)
+    cam = cam / np.max(cam)
+    return np.uint8(255 * cam)
 
 class App(Tk):
         
@@ -59,12 +68,14 @@ class App(Tk):
         self.imgs_bbox = []
         self.old_data_idx = None
         self.old_bbox_idx = None
+        self.old_layer_idx = None
         self.old_thr = -1
 
         label0 = Label(text="Select data index:", anchor = CENTER)
         label0.pack(fill=X, padx=5, pady=5)
         self.data_idx = Scale(self, from_=0, to=len(self.data_loader)-1, orient=HORIZONTAL)
-        self.data_idx.set(0)
+        idx = random.randint(0, len(self.data_loader)-1)
+        self.data_idx.set(idx)
         self.data_idx.pack()
         
         self.head_fusion = "min"
@@ -87,7 +98,7 @@ class App(Tk):
         label5 = Label(textvariable = self.thr_text , anchor = CENTER)
         label5.pack(fill=X, padx=5, pady=5)
         self.selected_threshold = Scale(self, from_=0, to=1, showvalue = 0, resolution = 0.1, orient=HORIZONTAL, command = self.update_thr)
-        self.selected_threshold.set(0.2)
+        self.selected_threshold.set(0.5)
         self.selected_threshold.pack()
             
         self.text_label = StringVar()
@@ -97,6 +108,14 @@ class App(Tk):
         self.selected_bbox = Scale(self, from_=0, to=len(self.thr_idxs), showvalue = 0, orient=HORIZONTAL, command = self.update_class)
         self.selected_bbox.set(0)
         self.selected_bbox.pack()
+        
+        self.layer_text = StringVar()
+        self.layer_text.set("Select layer to visualize:")
+        label10 = Label(textvariable=self.layer_text, anchor = CENTER)
+        label10.pack(fill=X, padx=5, pady=5)
+        self.attn_layer = Scale(self, from_=0, to=5, orient=HORIZONTAL, showvalue = False, command = self.update_layer)
+        self.attn_layer.set(5)
+        self.attn_layer.pack()
         
         label3 = Label(text = "Select head fusion mode:")
         label3.pack(fill=X, padx=5, pady=5)
@@ -128,7 +147,7 @@ class App(Tk):
         self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.overlay, self.show_labels = IntVar(), IntVar(), IntVar(), IntVar(), IntVar(), IntVar()
         Checkbutton(frame2, text='Show GT Bounding Boxes',variable=self.GT_bool, onvalue=1, offvalue=0).grid(row=0,column=0)
         Checkbutton(frame2, text='Show all Bounding Boxes',variable=self.BB_bool, onvalue=1, offvalue=0).grid(row=0,column=1)
-        Checkbutton(frame2, text='Show LiDAR point cloud',variable=self.points_bool, onvalue=1, offvalue=0).grid(row=0,column=2)
+        #Checkbutton(frame2, text='Show LiDAR point cloud',variable=self.points_bool, onvalue=1, offvalue=0).grid(row=0,column=2)
         Checkbutton(frame2, text='Show attention scale',variable=self.scale, onvalue=1, offvalue=0).grid(row=0,column=3)
         Checkbutton(frame2, text='Overlay attention on image',variable=self.overlay, onvalue=1, offvalue=0).grid(row=0,column=4)
         Checkbutton(frame2, text='Show predicted labels',variable=self.show_labels, onvalue=1, offvalue=0).grid(row=0,column=5)
@@ -142,6 +161,9 @@ class App(Tk):
     
     def update_dr(self, idx):
         self.dr_text.set(f"Select discard ratio: {idx}")
+
+    def update_layer(self, idx):
+        self.layer_text.set(f"Select layer to visualize: {idx}")
         
     def update_thr(self, idx):
         self.thr_text.set(f"Select prediction threshold: {idx}")
@@ -179,7 +201,6 @@ class App(Tk):
                      
         if self.old_thr != self.selected_threshold.get() or self.old_data_idx != self.data_idx.get():
             self.old_thr = self.selected_threshold.get()
-            
             self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
             self.selected_bbox.configure(to = len(self.thr_idxs.nonzero())-1)
             self.selected_bbox.set(0)
@@ -187,7 +208,10 @@ class App(Tk):
             self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
             self.pred_bboxes.tensor.detach()
             
-
+        if self.old_layer_idx != self.attn_layer.get():
+            self.old_layer_idx = self.attn_layer.get()
+            self.gen.layer = self.attn_layer.get()
+            
 
         if self.GT_bool.get():
             self.gt_bbox = self.gt_bboxes[self.data_idx.get()]
@@ -231,41 +255,49 @@ class App(Tk):
 
         if self.head_fusion not in ("all", "gradcam"):
             attn = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
-            attn = attn.view(29, 50).cpu()
-            
+            attn = attn.view(29, 50).cpu().numpy()
             ax_attn = fig.add_subplot(spec[1,1])
-            attmap = ax_attn.imshow(attn)
+            
+            if self.overlay.get():
+                attn = cv2.resize(attn, (self.imgs_bbox[0].shape[1], self.imgs_bbox[0].shape[0]))
+                img = show_attn_on_img(self.imgs_bbox[self.selected_camera.get()], attn)
+                attmap = ax_attn.imshow(img)
+            
+            else:
+                attmap = ax_attn.imshow(attn)
+            
             ax_attn.axis('off')
-            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}')
+            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}')
             
             if self.scale.get():  
                 im_ratio = attn.shape[1]/attn.shape[0]
                 fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
 
-            if self.overlay.get():
-                dst = cv2.addWeighted(self.imgs_bbox[self.selected_camera.get()], 0.5, attn.numpy(), 0.7, 0)
-                ax_attn.imshow(dst)
+
                 
             
         elif self.head_fusion == "gradcam":
             
             self.gen.get_all_attentions(self.data, self.selected_bbox.get())
             attn = self.gen.generate_attn_gradcam(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get())
-            attn = attn.view(29, 50).cpu()
+            attn = attn.view(29, 50).cpu().numpy()
             ax_attn = fig.add_subplot(spec[1,1])
-            ax_attn.imshow(attn)
+            attmap = ax_attn.imshow(attn)
             ax_attn.axis('off')
             ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}')  
-        
+
+            if self.scale.get():  
+                im_ratio = attn.shape[1]/attn.shape[0]
+                fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
         
         elif self.head_fusion == "all":
             for i in range(len(self.head_types)):
                 attn = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get(), self.head_types[i], self.discard_ratio, self.raw_attn.get())
-                attn = attn.view(29, 50).cpu()
+                attn = attn.view(29, 50).cpu().numpy()
                 ax_attn = fig.add_subplot(spec[1,i])
                 attmap = ax_attn.imshow(attn)
                 ax_attn.axis('off')
-                ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]} ({self.head_types[i]})')      
+                ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]} ({self.head_types[i]}), layer {self.gen.layer}')      
                 
                 if self.scale.get():  
                     im_ratio = attn.shape[1]/attn.shape[0]
