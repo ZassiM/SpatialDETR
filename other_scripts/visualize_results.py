@@ -149,7 +149,7 @@ def init(args):
     # torch.save(list(data_loader), DataLoader_filename)
 def main():
     
-    with open("args.toml", mode = "rb") as argsF:
+    with open("../args.toml", mode = "rb") as argsF:
         args = tomli.load(argsF)
     
     model, dataset, data_loader, gpu_ids, cfg, distributed = init(args)

@@ -146,6 +146,7 @@ class App(Tk):
     def update_thr(self, idx):
         self.thr_text.set(f"Select prediction threshold: {idx}")
         self.BB_bool.set(1)
+        self.show_labels.set(1)
         
     def update_values(self):
         
@@ -175,8 +176,7 @@ class App(Tk):
             self.old_data_idx = self.data_idx.get()
             self.selected_bbox.set(0)
             self.update_values()
-            self.imgs_bbox = []
-            
+                     
         if self.old_thr != self.selected_threshold.get() or self.old_data_idx != self.data_idx.get():
             self.old_thr = self.selected_threshold.get()
             
@@ -186,6 +186,8 @@ class App(Tk):
             self.labels = self.outputs['labels_3d'][self.thr_idxs]
             self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
             self.pred_bboxes.tensor.detach()
+            
+
 
         if self.GT_bool.get():
             self.gt_bbox = self.gt_bboxes[self.data_idx.get()]

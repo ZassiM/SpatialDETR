@@ -77,17 +77,18 @@ class Generator:
     
     def get_all_attentions(self, data, target_index = None):
         
+        self.dec_self_attn_weights, self.dec_cross_attn_weights = [], []
         hooks = []
         for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
             hooks.append(
             layer.attentions[0].attn.register_forward_hook(
-                lambda _, input, output: self.dec_self_attn_weights.append(output[1])
+                lambda _, input, output: self.dec_self_attn_weights.append(output[1][0])
             ))
             hooks.append(
             layer.attentions[1].attn.register_forward_hook(
                 lambda _, input, output: self.dec_cross_attn_weights.append(output[1])
             ))
-        
+
         if "points" in data.keys():
             data.pop("points")
         
@@ -109,11 +110,11 @@ class Generator:
             
             for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
                 self.dec_cross_attn_grads.append(layer.attentions[1].attn.get_attn_gradients())
+        
+        for hook in hooks:
+            hook.remove()
             
         return outputs
-        
-    def forward(self, input_ids, attention_mask):
-        return self.model(input_ids, attention_mask)
 
             
     def handle_co_attn_self_query(self, layer):
@@ -149,16 +150,15 @@ class Generator:
         # queries self attention matrix
         self.R_q_q = torch.eye(queries_num, queries_num).to(device)
 
-        self.R_q_q = compute_rollout_attention(self.dec_self_attn_weights)
-
         cam_q_i = self.dec_cross_attn_weights[-1][self.camidx]
         cam_q_i = avg_heads(cam_q_i, head_fusion = self.head_fusion, discard_ratio = self.discard_ratio)
 
         if raw: 
             self.R_q_i = cam_q_i # Only last decoder attn 
-              
         else: 
+            self.R_q_q = compute_rollout_attention(self.dec_self_attn_weights)
             self.R_q_i = torch.matmul(self.R_q_q, torch.matmul(cam_q_i, self.R_i_i))[0]
+            
         aggregated = self.R_q_i[indexes[target_index].item()].detach()
                 
         return aggregated
