@@ -169,9 +169,10 @@ class Generator:
         return aggregated
 
     def gradcam(self, cam, grad):
+        # FIX
         cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
         grad = grad.reshape(-1, grad.shape[-2], grad.shape[-1])
-        grad = grad.mean(dim=[1, 2], keepdim=True)
+        grad = grad.mean(dim=0, keepdim=True)
         cam = (cam * grad).mean(0).clamp(min=0)
         return cam
 

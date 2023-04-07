@@ -92,7 +92,7 @@ def plot_rect3d_on_img(img,
             topright = (corners[5,0], corners[5,1])
             x = int((topleft[0]+topright[0])/2)
             y = topleft[1]-25
-            cv2.putText(img, str(i), (x,y), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), thickness, cv2.LINE_AA)
+            cv2.putText(img, str(i), (x,y), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), thickness, cv2.LINE_AA)
 
     return img.astype(np.uint8)
 

@@ -55,7 +55,7 @@ class QueryValueProjectCrossAttention(BaseModule):
             Configuration of dropout layer, by default dict(type='Dropout', drop_prob=0.)
         init_cfg : dict, optional
             Initialization configuration, by default None
-        batch_first : bool, optional
+        batch_first : bool, cam_q_ioptional
             Batch mode, currently only batch_first=False is fully supported, by default False
 
         Returns

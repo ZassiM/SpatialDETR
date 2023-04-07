@@ -4,6 +4,8 @@ from tkinter import font
 
 import matplotlib.pyplot as plt
 import matplotlib
+import matplotlib as mpl
+
 #matplotlib.use('Agg')
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
@@ -271,7 +273,8 @@ class App(Tk):
             
             if self.scale.get():  
                 im_ratio = attn.shape[1]/attn.shape[0]
-                fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
+                norm = mpl.colors.Normalize(vmin=0, vmax=1)
+                fig.colorbar(attmap, norm=norm, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
 
 
                 
@@ -285,10 +288,11 @@ class App(Tk):
             attmap = ax_attn.imshow(attn)
             ax_attn.axis('off')
             ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}')  
-
+            
             if self.scale.get():  
                 im_ratio = attn.shape[1]/attn.shape[0]
-                fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
+                norm = mpl.colors.Normalize(vmin=0, vmax=1)
+                fig.colorbar(attmap, norm=norm, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
         
         elif self.head_fusion == "all":
             for i in range(len(self.head_types)):
@@ -301,7 +305,8 @@ class App(Tk):
                 
                 if self.scale.get():  
                     im_ratio = attn.shape[1]/attn.shape[0]
-                    fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
+                    norm = mpl.colors.Normalize(vmin=0, vmax=1)
+                    fig.colorbar(attmap, norm=norm, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
         
             
         if self.canvas: self.canvas.get_tk_widget().pack_forget()
