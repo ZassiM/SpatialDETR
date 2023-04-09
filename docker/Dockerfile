@@ -21,8 +21,7 @@ RUN apt-get update && apt-get install -y ffmpeg libsm6 libxext6 git ninja-build 
     && rm -rf /var/lib/apt/lists/*
 
 
-ENV  PATH="/root/.local/bin:${PATH}"
-
+ENV PATH="/root/.local/bin:${PATH}"
 
 # Install MMCV, MMDetection and MMSegmentation
 # we do this by cloning all repos to /deps/ -> can install in editable mode
@@ -47,6 +46,3 @@ RUN conda clean --all
 ENV FORCE_CUDA="1"
 
 WORKDIR /workspace
-
-
-

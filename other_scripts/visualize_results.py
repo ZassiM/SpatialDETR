@@ -197,20 +197,20 @@ def main():
             filename = Path(img_metas['filename'][camidx]).name
             filename = filename.split('.')[0]
 
-            #show_multi_modality_result(
-                # img,
-                # None,
-                # pred_bboxes,
-                # img_metas['lidar2img'],
-                # args["show_dir"],
-                # filename,
-                # box_mode='lidar',
-                # img_metas=None,
-                # gt_bbox_color = (0,0,255),
-                # pred_bbox_color = (0,255,0),
-                # show = False, index = i, save = True)
+            show_multi_modality_result(
+                img,
+                None,
+                pred_bboxes,
+                img_metas['lidar2img'],
+                args["show_dir"],
+                filename,
+                box_mode='lidar',
+                img_metas=None,
+                gt_bbox_color = (0,0,255),
+                pred_bbox_color = (0,255,0),
+                show = True, index = i, save = False)
 
-            dataset.show(result, points[0]._data[0][0], gt_bboxes.tensor.numpy(), args["show_dir"], show=True, pipeline=None, score_thr = score_thr)
+            #dataset.show(result, points[0]._data[0][0], gt_bboxes.tensor.numpy(), args["show_dir"], show=True, pipeline=None, score_thr = score_thr)
         
             outputs.extend(result)
             batch_size = len(result)

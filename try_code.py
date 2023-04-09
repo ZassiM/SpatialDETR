@@ -1,25 +1,17 @@
-import tkinter as tk
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
+#Import the tkinter library
+from tkinter import *
 
-window = tk.Tk()
+#Create an instance of tkinter frame
+win = Tk()
 
-btn = tk.Label(window, text='A simple plot')
-btn.grid(row=0, column=0, padx=20, pady=10)
+#Set the geometry
+win.geometry("650x250")
 
-x = ['Col A', 'Col B', 'Col C']
+#Add a text label and add the font property to it
+label= Label(win, text= "Hello World!", font=('Times New Roman bold',20))
+label.pack(padx=10, pady=10)
 
-y = [50, 20, 80]
+#Create a fullscreen window
+win.attributes('-fullscreen', True)
 
-fig = plt.figure(figsize=(4, 5))
-plt.bar(x=x, height=y)
-
-# You can make your x axis labels vertical using the rotation
-plt.xticks(x, rotation=90)
-
-# specify the window as master
-canvas = FigureCanvasTkAgg(fig, master=window)
-canvas.draw()
-canvas.get_tk_widget().grid(row=1, column=0)
-
-window.mainloop()
+win.mainloop()

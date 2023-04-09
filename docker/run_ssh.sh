@@ -10,16 +10,14 @@ repo_dir="/work/zahr/Project/SpatialDETR"
 exp_dir="/work/zahr/Project/SpatialDETR/work_dirs"
 
 XSOCK=/tmp/.X11-unix
-XAUTH=/tmp/.docker.xauth
 
 docker run \
 --rm \
---publish 6006 \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
---env DISPLAY=${DISPLAY} \
---env XAUTHORITY=${XAUTH} \
---volume ${XAUTH}:${XAUTH} \
---volume ${XSOCK}:${XSOCK} \
+-e DISPLAY \
+--net=host \
+--volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
+--volume $HOME/.Xauthority:/root/.Xauthority:rw \
 --shm-size=16g \
 --mount source=$repo_dir,target=/workspace,type=bind,consistency=cached \
 --mount source=$nusc_data_dir,target=/workspace/data/nuscenes,type=bind,consistency=cached \
