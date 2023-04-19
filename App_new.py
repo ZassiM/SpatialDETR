@@ -74,70 +74,50 @@ class App(Tk):
         self.old_bbox_idx = None
         self.old_layer_idx = None
         self.old_thr = -1
-
-        # label0 = Label(text="Select data index:", anchor = CENTER)
-        # label0.pack(fill=X, padx=5, pady=5)
-        # self.data_idx = Scale(self, from_=0, to=len(self.data_loader)-1, orient=HORIZONTAL)
-        # idx = random.randint(0, len(self.data_loader)-1)
-        # self.data_idx.set(idx)
-        # self.data_idx.pack()
-        
         self.head_fusion = "min"
-        self.discard_ratio = 0.9        
+        self.discard_ratio = 0.9      
 
+        frame = Frame(self)
+        frame.pack()
 
-        self.thr_text = StringVar()
-        self.thr_text.set("Select prediction threshold:")
-        label5 = Label(textvariable = self.thr_text , anchor = CENTER)
-        label5.pack(fill=X, padx=5, pady=5)
-        self.selected_threshold = Scale(self, from_=0, to=1, showvalue = 0, resolution = 0.1, orient=HORIZONTAL, command = self.update_thr)
-        self.selected_threshold.set(0.5)
-        self.selected_threshold.pack()
-            
+        padx = 30
+
+        self.data_idx = IntVar()
+        idx = random.randint(0, len(self.data_loader)-1)
+        self.data_idx.set(idx)
+        Scale(frame, label="Data index", from_=0, to=len(self.data_loader)-1, variable = self.data_idx, orient=HORIZONTAL).grid(row=0,column=0, padx=padx)
+
         self.text_label = StringVar()
         self.text_label.set("Select bbox index:")
-        label2 = Label(textvariable = self.text_label)
-        label2.pack(fill=X, padx=5, pady=5)
-        self.selected_bbox = Scale(self, from_=0, to=len(self.thr_idxs), showvalue = 0, orient=HORIZONTAL, command = self.update_class)
-        self.selected_bbox.set(0)
-        self.selected_bbox.pack()
-        
-        # self.layer_text = StringVar()
-        # self.layer_text.set("Select layer to visualize:")
-        # label10 = Label(textvariable=self.layer_text, anchor = CENTER)
-        # label10.pack(fill=X, padx=5, pady=5)
-        # self.attn_layer = Scale(self, from_=0, to=5, orient=HORIZONTAL, showvalue = False, command = self.update_layer)
-        # self.attn_layer.set(5)
-        # self.attn_layer.pack()
-        
-        # label3 = Label(text = "Select head fusion mode:")
-        # label3.pack(fill=X, padx=5, pady=5)
-        # frame1 = Frame(self)
-        # frame1.pack()
-        # self.head_types = ["mean", "min", "max"]
-        # self.selected_head_fusion = StringVar()
-        # self.selected_head_fusion.set(self.head_types[0])
-        # for i in range(len(self.head_types)):
-        #     Radiobutton(frame1, text = self.head_types[i].capitalize(), variable = self.selected_head_fusion, value = self.head_types[i]).grid(row=0,column=i)
-        # Radiobutton(frame1, text = "All", variable = self.selected_head_fusion, value = "all").grid(row=0,column=i+1)
-        # Radiobutton(frame1, text = "Grad-CAM", variable = self.selected_head_fusion, value = "gradcam").grid(row=0,column=i+2)
 
-        # self.raw_attn = IntVar()
-        # self.raw_attn.set(1)
-        # Checkbutton(frame1, text='Raw attention',variable=self.raw_attn, onvalue=1, offvalue=0).grid(row=0,column=i+3)
 
-        
-        # self.dr_text = StringVar()
-        # self.dr_text.set("Select discard ratio:")
-        # label4 = Label(textvariable = self.dr_text, anchor = CENTER)
-        # label4.pack(fill=X, padx=5, pady=5)
-        # self.selected_discard_ratio = Scale(self, from_=0, to=0.9, showvalue = 0, resolution = 0.1, orient=HORIZONTAL, command = self.update_dr)
-        # self.selected_discard_ratio.set(0)
-        # self.selected_discard_ratio.pack()
+        self.selected_bbox = Scale(frame, label="Select bbox index:", from_=0, to=len(self.thr_idxs), orient=HORIZONTAL, command = self.update_bbox)
+        self.selected_bbox.grid(row=0, column=2, padx=padx)
+
+
+        # self.selected_threshold = DoubleVar()
+        # self.selected_threshold.set(0.5)
+        # Scale(frame, label="Prediction thr",from_=0, to=1, resolution = 0.1, variable = self.selected_threshold, orient=HORIZONTAL).grid(row=0,column=2, padx=padx)
+
+        # self.selected_discard_ratio = DoubleVar()
+        # Scale(frame, label = "Discard ratio", from_=0, to=0.9, resolution = 0.1, variable = self.selected_discard_ratio, orient=HORIZONTAL).grid(row=0,column=4, padx=padx)
+
         
         menubar = Menu(self)
         self.config(menu=menubar)
 
+        thr_opt = Menu(menubar)
+        self.selected_threshold = DoubleVar()
+        a = np.arange(0.1,1,0.1).round(1)
+        for i in a:
+            thr_opt.add_radiobutton(label=i, variable=self.selected_threshold)
+
+        dr_opt = Menu(menubar)
+        self.selected_discard_ratio = DoubleVar()
+        for i in a:
+            dr_opt.add_radiobutton(label=i, variable=self.selected_discard_ratio)
+        # self.selected_discard_ratio = DoubleVar()
+        # Scale(frame, label = "Discard ratio", from_=0, to=0.9, resolution = 0.1, variable = self.selected_discard_ratio, orient=HORIZONTAL).grid(row=0,column=4, padx=padx)
         camera_opt = Menu(menubar)
         
         self.cameras = {'FRONT': 0, 'FRONT-RIGHT': 1, 'FRONT-LEFT': 2, 'BACK': 3, 'BACK-LEFT': 4, 'BACK-RIGHT': 5}
@@ -183,38 +163,19 @@ class App(Tk):
         add_opt.add_checkbutton(label="Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
         add_opt.add_checkbutton(label="Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
 
-        menubar.add_cascade(
-            label="Camera options",
-            menu=camera_opt
-        )
+        # for i in range(len(self.thr_idxs)):
+        #     bbox_opt.add_radiobutton(label = i, variable = self.selected_bbox)
+    
 
-        menubar.add_cascade(
-            label="Additional options",
-            menu=add_opt
-        )
+        menubar.add_cascade(label="Prediction threshold", menu=thr_opt)
 
-        menubar.add_cascade(
-            label="Attention options",
-            menu=attn_opt
-        )
+        menubar.add_cascade(label="Discard ratio", menu=dr_opt)
 
+        menubar.add_cascade(label="Camera", menu=camera_opt)
 
-        # self.head_fusion = "min"
-        # self.discard_ratio = 0.9        
-        # label1 = Label(self,text="Select a camera:")
-        # label1.pack(fill=X, padx=5, pady=5)
-        # frame = Frame(self)
-        # frame.pack()
-        
-        # self.cameras = {'FRONT': 0, 'FRONT-RIGHT': 1, 'FRONT-LEFT': 2, 'BACK': 3, 'BACK-LEFT': 4, 'BACK-RIGHT': 5}
-        # self.selected_camera = IntVar()
-        
-        # i = 0
-        # for value,key in enumerate(self.cameras):
-        #     Radiobutton(frame, text = key, variable = self.selected_camera, value = value).grid(row=0,column=i)
-        #     i+=1
-
-
+        menubar.add_cascade(label="Attention", menu=attn_opt)
+ 
+        menubar.add_cascade(label="View", menu=add_opt)
 
 
         plot_button = Button(self, command = self.visualize, text = "Visualize")
@@ -222,19 +183,11 @@ class App(Tk):
         plot_button.pack()
 
 
-        
-    def update_class(self, idx):
+
+    def update_bbox(self, idx):
        self.text_label.set(f"Select bbox index: {class_names[self.labels[int(idx)].item()]} ({int(idx)})")
        self.BB_bool.set(0)
-    
-    def update_dr(self, idx):
-        self.dr_text.set(f"Select discard ratio: {idx}")
- 
-    def update_thr(self, idx):
-        self.thr_text.set(f"Select prediction threshold: {idx}")
-        self.BB_bool.set(1)
-        self.show_labels.set(1)
-        
+
     def update_values(self):
         
         self.data = self.data_loader[self.data_idx.get()]
@@ -273,9 +226,9 @@ class App(Tk):
             self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
             self.pred_bboxes.tensor.detach()
             
-        if self.old_layer_idx != self.attn_layer.get():
-            self.old_layer_idx = self.attn_layer.get()
-            self.gen.layer = self.attn_layer.get()
+        if self.old_layer_idx != self.selected_layer.get():
+            self.old_layer_idx = self.selected_layer.get()
+            self.gen.layer = self.selected_layer.get()
             
 
         if self.GT_bool.get():

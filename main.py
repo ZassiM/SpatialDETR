@@ -21,13 +21,13 @@ def main():
     print(f"\nLoading Model from {model_filename}...\n")
     model = torch.load(open(model_filename, 'rb'))
     
-    # data_loader_filename = args["dataloader_filename"]
-    # print(f"Loading DataLoader from {data_loader_filename}...\n")
-    # data_loader = torch.load(open(data_loader_filename, 'rb'))
+    data_loader_filename = args["dataloader_filename"]
+    print(f"Loading DataLoader from {data_loader_filename}...\n")
+    data_loader = torch.load(open(data_loader_filename, 'rb'))
     
-    # GT_filename = args["GTbboxes_filename"]
-    # print(f"Loading GT Bounding Boxes from {GT_filename}...\n")
-    # gt_bboxes = torch.load(open(GT_filename, 'rb'))
+    GT_filename = args["GTbboxes_filename"]
+    print(f"Loading GT Bounding Boxes from {GT_filename}...\n")
+    gt_bboxes = torch.load(open(GT_filename, 'rb'))
     
     if args["launcher"] == 'none':
         distributed = False
@@ -38,8 +38,7 @@ def main():
     
     if not distributed:
         model = MMDataParallel(model, device_ids = gpu_ids)
-        #app = App(model, data_loader, gt_bboxes)
-        app = App(model, 10, 5)
+        app = App(model, data_loader, gt_bboxes)
         app.mainloop()
         
     else:
