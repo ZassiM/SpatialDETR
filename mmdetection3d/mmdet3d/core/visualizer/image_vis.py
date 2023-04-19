@@ -63,7 +63,8 @@ def plot_rect3d_on_img(img,
                        rect_corners,
                        color=(0, 255, 0),
                        thickness=1,
-                       with_label = False):
+                       with_label = False,
+                       bbox_idx = -1):
     """Plot the boundary lines of 3D rectangular on 2D images.
 
     Args:
@@ -81,6 +82,8 @@ def plot_rect3d_on_img(img,
         corners = rect_corners[i].astype(np.int)
         if corners.min() < 0 or corners.max() > 10000: continue
         for start, end in line_indices:
+            if i != bbox_idx: color = (0,255,0)
+            else: color = (0,0,255)
             cv2.line(img, (corners[start, 0], corners[start, 1]),
                         (corners[end, 0], corners[end, 1]), color, thickness,
                         cv2.LINE_AA)
@@ -103,7 +106,9 @@ def draw_lidar_bbox3d_on_img(bboxes3d,
                              img_metas,
                              color=(0, 255, 0),
                              thickness=2,
-                             with_label = False):
+                             with_label = False,
+                             all_bbx = True,
+                             bbx_idx = -1):
     """Project the 3D bbox on 2D plane and draw on input image.
 
     Args:
@@ -118,6 +123,8 @@ def draw_lidar_bbox3d_on_img(bboxes3d,
         thickness (int, optional): The thickness of bboxes. Default: 1.
     """
     img = raw_img.copy()
+    if not all_bbx:
+        bboxes3d = bboxes3d[bbx_idx]
     corners_3d = bboxes3d.corners.detach()
     num_bbox = corners_3d.shape[0]
     pts_4d = np.concatenate(
@@ -134,7 +141,10 @@ def draw_lidar_bbox3d_on_img(bboxes3d,
     pts_2d[:, 1] /= pts_2d[:, 2]
     imgfov_pts_2d = pts_2d[..., :2].reshape(num_bbox, 8, 2)
 
-    return plot_rect3d_on_img(img, num_bbox, imgfov_pts_2d, color, thickness, with_label)
+
+    return plot_rect3d_on_img(img, num_bbox, imgfov_pts_2d, color, thickness, with_label, bbx_idx)
+
+        
     
 
 

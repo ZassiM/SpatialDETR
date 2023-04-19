@@ -155,10 +155,8 @@ class Generator:
         
         cam_q_i = avg_heads(cam_q_i, head_fusion = self.head_fusion, discard_ratio = self.discard_ratio)
         
-        self.max_values, self.max_idxs = cam_q_i.topk(5, dim=0)
-        
         if raw: 
-            self.R_q_i = cam_q_i # Only last decoder attn 
+            self.R_q_i = cam_q_i # Only one layer 
         else: 
             self.R_q_q = compute_rollout_attention(self.dec_self_attn_weights)
             #self.R_q_i = torch.matmul(self.R_q_q, torch.matmul(cam_q_i, self.R_i_i))[0]

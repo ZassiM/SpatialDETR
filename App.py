@@ -113,8 +113,9 @@ class App(Tk):
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_ratio)
         camera_opt = Menu(self.menubar)
         
-        self.cameras = {'FRONT': 0, 'FRONT-RIGHT': 1, 'FRONT-LEFT': 2, 'BACK': 3, 'BACK-LEFT': 4, 'BACK-RIGHT': 5}
+        self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5, 'All': 6}
         self.selected_camera = IntVar()
+        self.selected_camera.set(0)
         for value,key in enumerate(self.cameras):
             camera_opt.add_radiobutton(label = key, variable = self.selected_camera, value = value)
 
@@ -186,8 +187,6 @@ class App(Tk):
 
     def update_bbox_label(self, idx):
        self.text_label.set(f"Select bbox index: {class_names[self.labels[int(idx)].item()]} ({int(idx)})")
-       self.BB_bool.set(False)
-       self.show_labels.set(False)
 
     def update_values(self):
         
@@ -207,10 +206,11 @@ class App(Tk):
         self.img_metas = self.data["img_metas"][0]._data[0][0]
         
     def show_attn_maps(self, grid_clm = 1):
-        if self.selected_layer.get() == 6:
+        if self.selected_layer.get() == 6 or self.selected_camera.get() == 6:
             layer_grid = self.spec[1,grid_clm].subgridspec(2,3)
             for i in range(6):
-                self.gen.layer = i
+                if self.selected_layer.get() == 6: self.gen.layer = i
+                else: self.selected_camera.set(self.cams[i])
                 attn = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
                 attn = attn.view(29, 50).cpu().numpy()
                 ax_attn = self.fig.add_subplot(layer_grid[i>2,i if i<3 else i-3])
@@ -221,6 +221,8 @@ class App(Tk):
                     im_ratio = attn.shape[1]/attn.shape[0]
                     norm = mpl.colors.Normalize(vmin=0, vmax=1)
                     self.fig.colorbar(attmap, norm=norm, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
+            if self.selected_layer.get() != 6:
+                self.selected_camera.set(6)
         else:
             attn = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
             attn = attn.view(29, 50).cpu().numpy()
@@ -244,15 +246,16 @@ class App(Tk):
             self.old_data_idx = self.data_idx.get()
             self.selected_bbox.set(0)
             self.update_values()
-                     
-        if self.old_thr != self.selected_threshold.get() or self.old_data_idx != self.data_idx.get():
-            self.old_thr = self.selected_threshold.get()
             self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
             self.selected_bbox.configure(to = len(self.thr_idxs.nonzero())-1)
             self.selected_bbox.set(0)
-            self.labels = self.outputs['labels_3d'][self.thr_idxs]
-            self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
-            self.pred_bboxes.tensor.detach()
+                     
+        if self.old_thr != self.selected_threshold.get():
+            self.old_thr = self.selected_threshold.get()
+
+        self.labels = self.outputs['labels_3d'][self.thr_idxs]
+        self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
+        self.pred_bboxes.tensor.detach()
             
         if self.old_layer_idx != self.selected_layer.get():
             self.old_layer_idx = self.selected_layer.get()
@@ -271,13 +274,23 @@ class App(Tk):
         
         self.imgs_bbox = []
         for camidx in range(6):
+            # img = draw_lidar_bbox3d_on_img(
+            #         self.pred_bboxes if self.BB_bool.get() else self.pred_bboxes[self.selected_bbox.get()],
+            #         self.imgs[camidx],
+            #         self.img_metas['lidar2img'][camidx],
+            #         self.img_metas,
+            #         color=(0,255,0),
+            #         with_label = self.show_labels.get())  # BGR
+
             img = draw_lidar_bbox3d_on_img(
-                    self.pred_bboxes if self.BB_bool.get() else self.pred_bboxes[self.selected_bbox.get()],
+                    self.pred_bboxes ,
                     self.imgs[camidx],
                     self.img_metas['lidar2img'][camidx],
                     self.img_metas,
                     color=(0,255,0),
-                    with_label = self.show_labels.get())  # BGR
+                    with_label = self.show_labels.get(),
+                    all_bbx = self.BB_bool.get(),
+                    bbx_idx = self.selected_bbox.get())  # BGR
             
             if self.gt_bbox:
                 img = draw_lidar_bbox3d_on_img(
@@ -290,15 +303,22 @@ class App(Tk):
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.imgs_bbox.append(img)
                 
-        cams = [2, 0, 1, 5, 3, 4]
+        self.cams = [2, 0, 1, 5, 3, 4]
         for i in range(6):
             if i < 3:
                 ax = self.fig.add_subplot(self.spec[0, i]) 
             else:
                 ax = self.fig.add_subplot(self.spec[2,i-3])
-            ax.imshow(self.imgs_bbox[cams[i]])
+            ax.imshow(self.imgs_bbox[self.cams[i]])
             ax.axis('off')
-            ax.set_title(f'{list(self.cameras.keys())[cams[i]]}')
+            ax.set_title(f'{list(self.cameras.keys())[self.cams[i]]}')
+            
+        
+        if self.selected_camera.get() == 6:
+            self.selected_layer.set(5)
+        
+        if self.selected_layer == 6:
+            self.selected_camera.set(0)
             
 
         if self.head_fusion not in ("all", "gradcam"):
