@@ -48,66 +48,139 @@ class App(Tk):
         super().__init__()
         
         
+        style = ttk.Style(self)
+        style.theme_use("clam")
+        
+        app_font = font.nametofont("TkDefaultFont")  # Get default font value into Font object
+        
+        app_font.actual()
+        
+        self.title('Attention Visualization')
+        self.geometry('1500x1500')
+        self.font = cv2.FONT_HERSHEY_SIMPLEX
+        self.font_scale = 1
+
+        self.model = model
+        self.data_loader = data_loader
+        self.gt_bboxes = gt_bboxes
+        self.gt_bbox = None
+        
+        self.gen = Generator(self.model)
+        
+        self.canvas = None
+        self.thr_idxs = []
+        self.imgs_bbox = []
+        self.old_data_idx = None
+        self.old_bbox_idx = None
+        self.old_layer_idx = None
+        self.old_thr = -1
+        self.head_fusion = "min"
+        self.discard_ratio = 0.9      
+        
+        frame = Frame(self)
+        frame.pack(fill=Y)
+        
+        label0 = Label(frame,text="Select data index:", anchor = CENTER)
+        label0.pack(side=TOP)
+        self.data_idx = Scale(frame, from_=0, to=len(self.data_loader)-1, orient=HORIZONTAL)
+        idx = random.randint(0, len(self.data_loader)-1)
+        self.data_idx.set(idx)
+        self.data_idx.pack()
+        
+        
+        frame1 = Frame(self)
+        frame1.pack(fill=Y)
+        
+        self.text_label = StringVar()
+        self.text_label.set("Select bbox index:")
+        label2 = Label(frame1,textvariable = self.text_label)
+        label2.pack(side=TOP)
+        self.selected_bbox = Scale(frame1, from_=0, to=len(self.thr_idxs), orient=HORIZONTAL, showvalue=0, command = self.update_bbox)
+        self.selected_bbox.set(0)
+        self.selected_bbox.pack()
+        
+
+        self.menubar = Menu(self)
+        self.config(menu=self.menubar)
+
+        thr_opt, dr_opt = Menu(self.menubar), Menu(self.menubar)
+        
+        self.selected_threshold, self.selected_discard_ratio = DoubleVar(), DoubleVar()
+        values = np.arange(0.1,1,0.1).round(1)
+        for i in values:
+            thr_opt.add_radiobutton(label=i, variable=self.selected_threshold, command = self.update_thr)
+            dr_opt.add_radiobutton(label=i, variable=self.selected_discard_ratio)
+        camera_opt = Menu(self.menubar)
+        
+        self.cameras = {'FRONT': 0, 'FRONT-RIGHT': 1, 'FRONT-LEFT': 2, 'BACK': 3, 'BACK-LEFT': 4, 'BACK-RIGHT': 5}
+        self.selected_camera = IntVar()
+        for value,key in enumerate(self.cameras):
+            camera_opt.add_radiobutton(label = key, variable = self.selected_camera, value = value)
+
+        attn_opt = Menu(self.menubar)
+
+        attn_rollout = Menu(self.menubar)
+        self.head_types = ["mean", "min", "max"]
+        self.selected_head_fusion = StringVar()
+        self.selected_head_fusion.set(self.head_types[0])
+        attn_opt.add_cascade(label="Attention Rollout", menu=attn_rollout)
+        for i in range(len(self.head_types)):
+            attn_rollout.add_radiobutton(label = self.head_types[i].capitalize(), variable = self.selected_head_fusion, value = self.head_types[i])
+        attn_rollout.add_radiobutton(label = "All", variable = self.selected_head_fusion, value = "all")
+
+        attn_opt.add_radiobutton(label = "Grad-CAM", variable = self.selected_head_fusion, value = "gradcam")
+        self.raw_attn = BooleanVar()
+        self.raw_attn.set(True)
+
+        attn_opt.add_separator()
+
+        attn_opt.add_checkbutton(label = "Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
+
+    
+        attn_layer = Menu(self.menubar)
+        self.selected_layer = IntVar()
+        self.selected_layer.set(5)
+        for i in range(len(self.model.module.pts_bbox_head.transformer.decoder.layers)):
+            attn_layer.add_radiobutton(label = i, variable = self.selected_layer)
+        attn_layer.add_radiobutton(label = "All", variable = self.selected_layer)
+        attn_opt.add_cascade(label="Layer", menu=attn_layer)
+
+
         self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.overlay, self.show_labels = BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar()
 
-        menubar = Menu(self)
-        self.config(menu=menubar)
-
-        # create the file_menu
-        file_menu = Menu(
-            menubar,
-            tearoff=0
-        )
-
-        # add menu items to the File menu
-        file_menu.add_command(label='New')
-        file_menu.add_command(label='Open...')
-        file_menu.add_command(label='Close')
-        file_menu.add_separator()
-
-        # add Exit menu item
-        file_menu.add_command(
-            label='Exit',
-            command=self.destroy
-        )
-
-        # add the File menu to the menubar
-        menubar.add_cascade(
-            label="File",
-            menu=file_menu
-        )
-        # create the Help menu
-        help_menu = Menu(
-            menubar,
-            tearoff=0
-        )
-
-        help_menu.add_command(label='Welcome')
-        help_menu.add_command(label='About...')
-
-        # add the Help menu to the menubar
-        menubar.add_cascade(
-            label="Help",
-            menu=help_menu
-        )
-
-
-        
-    def update_class(self, idx):
-       self.text_label.set(f"Select bbox index: {class_names[self.labels[int(idx)].item()]} ({int(idx)})")
-       self.BB_bool.set(0)
+        add_opt = Menu(self.menubar)
+        add_opt.add_checkbutton(label="Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
+        add_opt.add_checkbutton(label="Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
+        add_opt.add_checkbutton(label="Show attention scale", onvalue=1, offvalue=0, variable=self.scale)
+        add_opt.add_checkbutton(label="Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
+        add_opt.add_checkbutton(label="Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
     
-    def update_dr(self, idx):
-        self.dr_text.set(f"Select discard ratio: {idx}")
 
-    def update_layer(self, idx):
-        self.layer_text.set(f"Select layer to visualize: {idx}")
+        self.menubar.add_cascade(label="Prediction threshold", menu=thr_opt)
+        self.add_separator()
+        self.menubar.add_cascade(label="Discard ratio", menu=dr_opt)
+        self.add_separator()
+        self.menubar.add_cascade(label="Camera", menu=camera_opt)
+        self.add_separator()
+        self.menubar.add_cascade(label="Attention", menu=attn_opt)
+        self.add_separator()
+        self.menubar.add_cascade(label="View", menu=add_opt)
+
+        plot_button = Button(self, command = self.visualize, text = "Visualize")
         
-    def update_thr(self, idx):
-        self.thr_text.set(f"Select prediction threshold: {idx}")
-        self.BB_bool.set(1)
-        self.show_labels.set(1)
-        
+        plot_button.pack()
+    
+    def add_separator(self):
+        self.menubar.add_command(label="\u22EE", activebackground=self.menubar.cget("background"))
+
+    def update_thr(self):
+        self.BB_bool.set(True)
+        self.show_labels.set(True)
+
+    def update_bbox(self, idx):
+       self.text_label.set(f"Select bbox index: {class_names[self.labels[int(idx)].item()]} ({int(idx)})")
+       self.BB_bool.set(False)
+
     def update_values(self):
         
         self.data = self.data_loader[self.data_idx.get()]
@@ -146,9 +219,10 @@ class App(Tk):
             self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
             self.pred_bboxes.tensor.detach()
             
-        if self.old_layer_idx != self.attn_layer.get():
-            self.old_layer_idx = self.attn_layer.get()
-            self.gen.layer = self.attn_layer.get()
+        if self.old_layer_idx != self.selected_layer.get():
+            self.old_layer_idx = self.selected_layer.get()
+            if self.selected_layer != "All":
+                self.gen.layer = self.selected_layer.get()
             
 
         if self.GT_bool.get():

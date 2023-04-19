@@ -47,9 +47,6 @@ def denormalize_bbox(normalized_bboxes, pc_range):
     w = normalized_bboxes[..., 4:5]
     h = normalized_bboxes[..., 5:6]
     
-    # l = normalized_bboxes[..., 3:4]
-    # h = normalized_bboxes[..., 4:5]
-    # w = normalized_bboxes[..., 5:6]
 
     w = w.exp() 
     l = l.exp() 
