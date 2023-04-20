@@ -14,6 +14,8 @@ import numpy as np
 import cv2
 import random
 import pathlib
+import tomli
+
 
 from Attention import Generator
 from other_scripts.save_model import init_app
@@ -44,7 +46,7 @@ def show_attn_on_img(img, mask):
 
 class App(Tk):
         
-    def __init__(self, model, data_loader, gt_bboxes):
+    def __init__(self):
         super().__init__()
         
         style = ttk.Style(self)
@@ -53,13 +55,9 @@ class App(Tk):
         self.geometry('1500x1500')
         self.font = cv2.FONT_HERSHEY_SIMPLEX
         self.font_scale = 1
-
-        # self.model = model
-        # self.data_loader = data_loader
-        # self.gt_bboxes = gt_bboxes
-        # self.gen = Generator(self.model)
         
         self.model, self.data_loader, self.gt_bboxes = None, None, None
+        self.load_args()
         
         self.thr_idxs, self.imgs_bbox  = [], []
         self.old_data_idx, self.old_bbox_idx, self.old_layer_idx, self.new_model, self.canvas, self.gt_bbox= None, None, None, None, None, None
@@ -178,6 +176,35 @@ class App(Tk):
         
     def load_args(self):
         
+        with open("args.toml", mode = "rb") as argsF:
+            args = tomli.load(argsF)
+            
+        model_filename = args["model_filename"]
+        print(f"\nLoading Model from {model_filename}...\n")
+        model = torch.load(open(model_filename, 'rb'))
+        
+        data_loader_filename = args["dataloader_filename"]
+        print(f"Loading DataLoader from {data_loader_filename}...\n")
+        data_loader = torch.load(open(data_loader_filename, 'rb'))
+        
+        GT_filename = args["GTbboxes_filename"]
+        print(f"Loading GT Bounding Boxes from {GT_filename}...\n")
+        gt_bboxes = torch.load(open(GT_filename, 'rb'))
+        
+        if args["launcher"] == 'none':
+            distributed = False
+        else:
+            distributed = True
+            
+        gpu_ids = [args["gpu_id"]]
+        
+        if not distributed:
+            self.model = MMDataParallel(model, device_ids = gpu_ids)
+            self.data_loader = data_loader
+            self.gt_bboxes = gt_bboxes
+            self.gen = Generator(self.model)
+
+        
     def load_model(self):
         filetypes = (
             ('Pickle', '*.pth'),
@@ -218,7 +245,7 @@ class App(Tk):
     
     def load_dataset(self):
         filetypes = (
-            ('Pickle files', '*.pth')
+            ('Pickle files', '*.pth'),
         )
 
         filename = fd.askopenfilename(
