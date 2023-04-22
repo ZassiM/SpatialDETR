@@ -10,7 +10,7 @@ from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 
 from mmdet.apis import multi_gpu_test
 
-from App import App
+from other_scripts.App_og import App
 
 def main():
     

@@ -332,7 +332,7 @@ class QueryValueProjectCrossAttention(BaseModule):
             values_global[cam_idx] = value[cam_idx] + value_3d_ref
 
         # the keys and queries are camera specific now, values are in global coordinates
-        weighted_values, attn_full = self.attn(
+        weighted_values, _ = self.attn(
             query=query_per_cam,
             key=feats_with_dir,
             value=values_global,
@@ -415,6 +415,7 @@ class QueryCenterValueProjectCrossAttention(QueryValueProjectCrossAttention):
 
             attn_full[cam_idx] = attn
 
+        attn_full_orig = attn_full
         # cams x b x patches x dims -> b x cams x patches x dims
         v = v.permute(1, 0, 2, 3)
         v = v.reshape(B, -1, E)
@@ -425,7 +426,7 @@ class QueryCenterValueProjectCrossAttention(QueryValueProjectCrossAttention):
 
         # (B, Nt, Ns) x (B, Ns, E) -> (B, Nt, E)
         output = torch.bmm(attn_full, v)
-        return output, attn_full
+        return output, attn_full_orig
 
     def forward(self,
                 query,
@@ -595,7 +596,7 @@ class QueryCenterValueProjectCrossAttention(QueryValueProjectCrossAttention):
             query_masks=query_masks,
             attn_mask=None,
             key_padding_mask=None,
-            need_weights=False,
+            need_weights=True,
             attn_func=self._attn_weights_query_center_only_dot_prod_attn
         )
 
@@ -784,7 +785,7 @@ class QueryOnlyProjectCrossAttention(QueryValueProjectCrossAttention):
             query_pos=None,
             attn_mask=None,
             key_padding_mask=None,
-            need_weights=False,
+            need_weights=True,
             attn_func=self._attn_weights_only_dot_prod_attn
         )
 
@@ -919,7 +920,7 @@ class NoProjectCrossAttention(QueryValueProjectCrossAttention):
             query_pos=None,
             attn_mask=None,
             key_padding_mask=None,
-            need_weights=False,
+            need_weights=True,
             attn_func=self._attn_weights_only_dot_prod_attn
         )
 
@@ -1122,7 +1123,7 @@ class QueryCenterOnlyProjectCrossAttention(QueryCenterValueProjectCrossAttention
             query_masks=query_masks,
             attn_mask=None,
             key_padding_mask=None,
-            need_weights=False,
+            need_weights=True,
             attn_func=self._attn_weights_query_center_only_dot_prod_attn
         )
 

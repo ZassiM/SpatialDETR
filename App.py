@@ -176,8 +176,6 @@ class App(Tk):
         
         plot_button.pack()
         
-    def load_args(self):
-        
     def load_model(self):
         filetypes = (
             ('Pickle', '*.pth'),
