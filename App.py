@@ -1,8 +1,7 @@
 from tkinter import *
 from tkinter import ttk
-from tkinter import messagebox
+from tkinter.messagebox import showinfo
 from tkinter import filedialog as fd
-
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -14,6 +13,8 @@ import numpy as np
 import cv2
 import random
 import pathlib
+import tomli
+
 
 from Attention import Generator
 from other_scripts.save_model import init_app
@@ -44,7 +45,7 @@ def show_attn_on_img(img, mask):
 
 class App(Tk):
         
-    def __init__(self, model, data_loader, gt_bboxes):
+    def __init__(self):
         super().__init__()
         
         style = ttk.Style(self)
@@ -53,13 +54,30 @@ class App(Tk):
         self.geometry('1500x1500')
         self.font = cv2.FONT_HERSHEY_SIMPLEX
         self.font_scale = 1
-
-        # self.model = model
-        # self.data_loader = data_loader
-        # self.gt_bboxes = gt_bboxes
-        # self.gen = Generator(self.model)
         
         self.model, self.data_loader, self.gt_bboxes = None, None, None
+        self.started_app = False
+        self.menubar = Menu(self)
+        self.config(menu=self.menubar)
+        
+        file_opt, gpu_opt = Menu(self.menubar), Menu(self.menubar)
+        self.gpu_id = IntVar()
+        self.gpu_id.set(3)
+        file_opt.add_command(label="Load model", command = self.load_model)
+        #file_opt.add_command(label="Load weights", command = self.load_weights)
+        file_opt.add_command(label="Load dataset", command = self.load_dataset)
+        file_opt.add_command(label="Load gt bboxes", command = self.load_gtbboxes)
+        file_opt.add_command(label="Load from arg file", command = self.load_from_args)
+        file_opt.add_separator()
+        file_opt.add_cascade(label="Gpu", menu=gpu_opt)
+        for i in range(4):
+            gpu_opt.add_radiobutton(label = f"GPU {i}", variable = self.gpu_id, value = i)
+        
+        self.menubar.add_cascade(label="File", menu=file_opt)
+        self.add_separator()
+        
+        
+    def start_app(self):  
         
         self.thr_idxs, self.imgs_bbox  = [], []
         self.old_data_idx, self.old_bbox_idx, self.old_layer_idx, self.new_model, self.canvas, self.gt_bbox= None, None, None, None, None, None
@@ -90,22 +108,6 @@ class App(Tk):
         self.selected_bbox.set(0)
         self.selected_bbox.pack()
         
-        self.menubar = Menu(self)
-        self.config(menu=self.menubar)
-        
-        file_opt, gpu_opt = Menu(self.menubar), Menu(self.menubar)
-        self.gpu_id = IntVar()
-        self.gpu_id.set(3)
-        file_opt.add_command(label="Load model", command = self.load_model)
-        #file_opt.add_command(label="Load weights", command = self.load_weights)
-        file_opt.add_command(label="Load dataset", command = self.load_dataset)
-        file_opt.add_command(label="Load gt bboxes", command = self.load_gtbboxes)
-        file_opt.add_command(label="Load from args file", command = self.load_args)
-        file_opt.add_separator()
-        file_opt.add_cascade(label="Gpu", menu=gpu_opt)
-        for i in range(4):
-            gpu_opt.add_radiobutton(label = f"GPU {i}", variable = self.gpu_id, value = i)
-        
         
         # Prediction threshold + Discard ratio  
         thr_opt, dr_opt = Menu(self.menubar), Menu(self.menubar)
@@ -130,16 +132,16 @@ class App(Tk):
         self.head_types = ["mean", "min", "max"]
         self.selected_head_fusion = StringVar()
         self.selected_head_fusion.set(self.head_types[0])
+        self.raw_attn = BooleanVar()
+        self.raw_attn.set(True)
         attn_opt.add_cascade(label="Attention Rollout", menu=attn_rollout)
         for i in range(len(self.head_types)):
             attn_rollout.add_radiobutton(label = self.head_types[i].capitalize(), variable = self.selected_head_fusion, value = self.head_types[i])
         attn_rollout.add_radiobutton(label = "All", variable = self.selected_head_fusion, value = "all")
+        attn_rollout.add_checkbutton(label = "Raw attention", variable = self.raw_attn, onvalue=1, offvalue=0)
         attn_opt.add_radiobutton(label = "Grad-CAM", variable = self.selected_head_fusion, value = "gradcam")
-        self.raw_attn = BooleanVar()
-        self.raw_attn.set(True)
         attn_opt.add_separator()
-        attn_opt.add_checkbutton(label = "Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
-        
+                
         attn_layer = Menu(self.menubar)
         self.selected_layer = IntVar()
         self.selected_layer.set(5)
@@ -150,18 +152,18 @@ class App(Tk):
         
         # View options
         add_opt = Menu(self.menubar)
-        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.overlay, self.show_labels = BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar()
+        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.att_contr, self.overlay, self.show_labels = BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar()
         self.BB_bool.set(True)
         self.scale.set(True)
         self.show_labels.set(True)
+        self.att_contr.set(True)
         add_opt.add_checkbutton(label="Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label="Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
         add_opt.add_checkbutton(label="Show attention scale", onvalue=1, offvalue=0, variable=self.scale)
+        add_opt.add_checkbutton(label="Show attention camera contributions", onvalue=1, offvalue=0, variable=self.att_contr)
         add_opt.add_checkbutton(label="Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
         add_opt.add_checkbutton(label="Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
     
-        self.menubar.add_cascade(label="File", menu=file_opt)
-        self.add_separator()
         self.menubar.add_cascade(label="Prediction threshold", menu=thr_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Discard ratio", menu=dr_opt)
@@ -176,15 +178,53 @@ class App(Tk):
         
         plot_button.pack()
         
+        
+    def load_from_args(self):
+
+        with open("args.toml", mode = "rb") as argsF:
+            args = tomli.load(argsF)
+            
+        model_filename = args["model_filename"]
+        print(f"\nLoading Model from {model_filename}...\n")
+        model = torch.load(open(model_filename, 'rb'))
+
+        data_loader_filename = args["dataloader_filename"]
+        print(f"Loading DataLoader from {data_loader_filename}...\n")
+        data_loader = torch.load(open(data_loader_filename, 'rb'))
+
+        
+        GT_filename = args["GTbboxes_filename"]
+        print(f"Loading GT Bounding Boxes from {GT_filename}...\n")
+        gt_bboxes = torch.load(open(GT_filename, 'rb'))
+
+        
+        if args["launcher"] == 'none':
+            distributed = False
+        else:
+            distributed = True
+            
+        gpu_ids = [args["gpu_id"]]
+        
+        if not distributed:
+            self.model = MMDataParallel(model, device_ids = gpu_ids)
+            self.data_loader = data_loader
+            self.gt_bboxes = gt_bboxes
+            self.gen = Generator(self.model)
+        
+        if not self.started_app:
+            self.start_app()
+            self.started_app = True
+
+        
     def load_model(self):
         filetypes = (
-            ('Pickle', '*.pth'),
             ('Config', '*.py'),
+            ('Pickle', '*.pth'),
         )
         
         filename = fd.askopenfilename(
             title='Load model file',
-            initialdir='/workspace/work_dirs/',
+            initialdir='/workspace/configs/submission/frozen_4/',
             filetypes=filetypes)
         
         if pathlib.Path(filename).suffix == '.pth':
@@ -198,9 +238,15 @@ class App(Tk):
             model, _, _ = init_app(args)
             
         self.model = MMDataParallel(model, device_ids = [self.gpu_id.get()])
+        #self.data_loader = list(dataloader)
         self.gen = Generator(self.model)
         self.new_model = True
-        messagebox.showinfo(title="Info", message=f"Model loaded on GPU {self.gpu_id.get()}")
+        
+        if not self.started_app:
+            self.load_dataset()
+            self.load_gtbboxes()
+            self.start_app()
+            self.started_app = True
             
     def load_weights(self):
         filetypes = (
@@ -216,9 +262,8 @@ class App(Tk):
     
     def load_dataset(self):
         filetypes = (
-            ('Pickle files', '*.pth')
+            ('Pickle', '*.pth'),
         )
-
         filename = fd.askopenfilename(
             title='Load dataset',
             initialdir='/workspace/work_dirs/',
@@ -228,7 +273,7 @@ class App(Tk):
         
     def load_gtbboxes(self):
         filetypes = (
-            ('Pickle files', '*.pth')
+            ('Pickle', '*.pth'),
         )
 
         filename = fd.askopenfilename(
@@ -293,7 +338,7 @@ class App(Tk):
             attmap = ax_attn.imshow(attn)
             
             ax_attn.axis('off')
-            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}')
+            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, ({self.head_fusion})')
             if self.scale.get():  
                 im_ratio = attn.shape[1]/attn.shape[0]
                 norm = mpl.colors.Normalize(vmin=0, vmax=1)
@@ -336,7 +381,6 @@ class App(Tk):
         
         self.imgs_bbox = []
         for camidx in range(6):
-
             img = draw_lidar_bbox3d_on_img(
                     self.pred_bboxes ,
                     self.imgs[camidx],
@@ -358,16 +402,6 @@ class App(Tk):
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.imgs_bbox.append(img)
                 
-        self.cams = [2, 0, 1, 5, 3, 4]
-        for i in range(6):
-            if i < 3:
-                ax = self.fig.add_subplot(self.spec[0, i]) 
-            else:
-                ax = self.fig.add_subplot(self.spec[2,i-3])
-            ax.imshow(self.imgs_bbox[self.cams[i]])
-            ax.axis('off')
-            ax.set_title(f'{list(self.cameras.keys())[self.cams[i]]}')
-            
         # Avoiding to visualize all layers and all cameras at the same time
         if self.selected_camera.get() == 6:
             self.selected_layer.set(5)
@@ -402,6 +436,24 @@ class App(Tk):
             for k in range(len(self.head_types)):
                 self.head_fusion = self.head_types[k]
                 self.show_attn_maps(grid_clm = k)
+                
+        self.cams = [2, 0, 1, 5, 3, 4]
+        
+        all_attn = self.gen.get_all_attn(self.selected_bbox.get(), self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
+        for i in range(6):
+            if i < 3:
+                ax = self.fig.add_subplot(self.spec[0, i]) 
+            else:
+                ax = self.fig.add_subplot(self.spec[2,i-3])
+                
+            cam_img = ax.imshow(self.imgs_bbox[self.cams[i]])
+            ax.axis('off')
+            ax.set_title(f'{list(self.cameras.keys())[self.cams[i]]}')
+            if self.att_contr.get():
+                attn = all_attn[i].view(29, 50).cpu().numpy()
+                im_ratio = attn.shape[1]/attn.shape[0]
+                norm = mpl.colors.Normalize(vmin=0, vmax=1)
+                self.fig.colorbar(cam_img, norm=norm, ax=ax, orientation='horizontal', fraction=0.047*im_ratio)
         
             
         if self.canvas: self.canvas.get_tk_widget().pack_forget()

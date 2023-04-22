@@ -1,31 +1,7 @@
-import tkinter as tk
-from tkinter import ttk
-from time import sleep
+import matplotlib.pyplot as plt
+ind = (1,2,3)
+width = 0.8
+fig,a = plt.subplots()
+p1 = a.bar(ind,ind)
 
-teams = range(50)
-
-def button_command():
-    #start progress bar
-    popup = tk.Toplevel()
-    tk.Label(popup, text="Files being downloaded").grid(row=0,column=0)
-
-    progress = 0
-    progress_var = tk.DoubleVar()
-    progress_bar = ttk.Progressbar(popup,orient='horizontal', variable=progress_var, maximum=100)
-    progress_bar.grid(row=1, column=0)#.pack(fill=tk.X, expand=1, side=tk.BOTTOM)
-    popup.pack_slaves()
-
-    progress_step = float(100.0/len(teams))
-    for team in teams:
-        popup.update()
-        sleep(5) # lauch task
-        progress += progress_step
-        progress_var.set(progress)
-
-    return 0
-
-root = tk.Tk()
-
-tk.Button(root, text="Launch", command=button_command).pack()
-
-root.mainloop()
+plt.show()

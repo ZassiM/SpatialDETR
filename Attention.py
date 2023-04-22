@@ -135,6 +135,15 @@ class Generator:
                                                apply_self_in_rule_10=self.apply_self_in_rule_10)
 
     
+    def get_all_attn(self, target_index, indexes, head_fusion = "min", discard_ratio = 0.9, raw = True):
+        
+        all_attn = []
+        
+        for attn in self.dec_cross_attn_weights[self.layer]:
+            attn_avg = avg_heads(attn, head_fusion = head_fusion, discard_ratio = discard_ratio)
+            all_attn.append(attn_avg[indexes[target_index].item()].detach())
+                
+        return all_attn
     
     def generate_rollout(self, target_index, indexes, camidx, head_fusion = "min", discard_ratio = 0.9, raw = True):
         self.camidx = camidx
