@@ -29,7 +29,7 @@ To ease the setup of this project we provide a docker container and some conveni
 
 
 ### Train
-1. Use the configs in the **configs/**folder to train SpatialDETR.  
+1. Use the configs in the **configs** folder to train SpatialDETR.  
 For a baseline on a single gpu use:
 
 `python ./mmdetection3d/tools/train.py configs/submission/frozen_4/query_proj_value_proj.py`  
