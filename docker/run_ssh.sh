@@ -8,7 +8,7 @@ nusc_train_val_data_dir="/work/data01/beemelmanns/nuscenes"
 # path to this repository root
 repo_dir=$PWD
 # path to directory where models / logs shall be stored in
-work_dirs="/home/zahr/Documents/SpatialDETR/work_dirs"
+work_dirs="/work/zahr/SpatialDETR/work_dirs"
 
 XSOCK=/tmp/.X11-unix
 
