@@ -19,7 +19,10 @@ import tomli
 from Attention import Generator
 from other_scripts.save_model import init_app
 from mmcv.parallel import MMDataParallel
+from matplotlib import gridspec
+import matplotlib.pyplot as plt
 
+            
 class_names = [
     "car",
     "truck",
@@ -75,6 +78,9 @@ class App(Tk):
         
         self.menubar.add_cascade(label="File", menu=file_opt)
         self.add_separator()
+        
+        # Speeding up the testing
+        self.load_from_config()
         
         
     def start_app(self):  
@@ -152,15 +158,15 @@ class App(Tk):
         
         # View options
         add_opt = Menu(self.menubar)
-        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.att_contr, self.overlay, self.show_labels = BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar()
+        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.attn_contr, self.overlay, self.show_labels = BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar()
         self.BB_bool.set(True)
         self.scale.set(True)
         self.show_labels.set(True)
-        self.att_contr.set(True)
+        self.attn_contr.set(True)
         add_opt.add_checkbutton(label="Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label="Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
         add_opt.add_checkbutton(label="Show attention scale", onvalue=1, offvalue=0, variable=self.scale)
-        add_opt.add_checkbutton(label="Show attention camera contributions", onvalue=1, offvalue=0, variable=self.att_contr)
+        add_opt.add_checkbutton(label="Show attention camera contributions", onvalue=1, offvalue=0, variable=self.attn_contr)
         add_opt.add_checkbutton(label="Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
         add_opt.add_checkbutton(label="Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
     
@@ -206,7 +212,7 @@ class App(Tk):
             self.start_app()
             self.started_app = True
         
-        print("Loading completed")
+        print("Loading completed.")
 
         
     def load_model(self):
@@ -241,7 +247,7 @@ class App(Tk):
             self.start_app()
             self.started_app = True
         
-        print("Loading completed")
+        print("Loading completed.")
             
     def load_weights(self):
         filetypes = (
@@ -266,7 +272,7 @@ class App(Tk):
             filetypes=filetypes)
         
         self.data_loader = torch.load(open(filename, 'rb'))
-        print("Loading completed")
+        print("Loading completed.")
         
     def load_gtbboxes(self):
         filetypes = (
@@ -279,7 +285,7 @@ class App(Tk):
             filetypes=filetypes)
 
         self.gt_bboxes = torch.load(open(filename, 'rb'))
-        print("Loading completed")
+        print("Loading completed.")
         
     def add_separator(self):
         self.menubar.add_command(label="\u22EE", activebackground=self.menubar.cget("background"))
@@ -326,6 +332,7 @@ class App(Tk):
                     im_ratio = attn.shape[1]/attn.shape[0]
                     norm = mpl.colors.Normalize(vmin=0, vmax=1)
                     self.fig.colorbar(attmap, norm=norm, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
+            
             if self.selected_layer.get() != 6:
                 self.selected_camera.set(6)
         else:
@@ -435,23 +442,42 @@ class App(Tk):
                 self.show_attn_maps(grid_clm = k)
                 
         self.cams = [2, 0, 1, 5, 3, 4]
-        
+       
         all_attn = self.gen.get_all_attn(self.selected_bbox.get(), self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
         for i in range(6):
+            # self.spec = self.fig.add_gridspec(3, 3)
             if i < 3:
-                ax = self.fig.add_subplot(self.spec[0, i]) 
-            else:
-                ax = self.fig.add_subplot(self.spec[2,i-3])
+                #ax = self.fig.add_subplot(self.spec[0, i])
+                gs = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=self.spec[0, i])
                 
-            cam_img = ax.imshow(self.imgs_bbox[self.cams[i]])
+            else:
+                #ax = self.fig.add_subplot(self.spec[2,i-3])
+                gs = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=self.spec[2, i-3])
+                
+            ax = self.fig.add_subplot(gs[0,0])
+            ax.imshow(self.imgs_bbox[self.cams[i]])
             ax.axis('off')
             ax.set_title(f'{list(self.cameras.keys())[self.cams[i]]}')
-            if self.att_contr.get():
-                attn = all_attn[i].view(29, 50).cpu().numpy()
-                im_ratio = attn.shape[1]/attn.shape[0]
-                norm = mpl.colors.Normalize(vmin=0, vmax=1)
-                self.fig.colorbar(cam_img, norm=norm, ax=ax, orientation='horizontal', fraction=0.047*im_ratio)
-        
+            if self.attn_contr.get():
+                
+                ax2 = self.fig.add_subplot(gs[0,1])
+                score = [0.6]
+                #ax2.xaxis.set_visible(False)
+                #ax2.yaxis.set_visible(False)
+                
+                ax2.bar(score,height=score, width = 0.1).set_figwidth(15)
+
+                ax2.set_ylim([0,1])
+                # attn = all_attn[i].view(29, 50).cpu().numpy()
+                # im_ratio = attn.shape[1]/attn.shape[0]
+                # norm = mpl.colors.Normalize(vmin=0, vmax=1)
+                # self.fig.colorbar(cam_img, norm=norm, ax=ax, orientation='horizontal', fraction=0.047*im_ratio)
+                # score = (0.6)
+                # p1 = ax.bar(score,score)
+                # ax.xaxis.set_visible(False)
+                # ax.yaxis.set_visible(False)
+                #plt.show()
+   
             
         if self.canvas: self.canvas.get_tk_widget().pack_forget()
         

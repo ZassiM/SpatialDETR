@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-from torch.nn.functional import softmax
 
 def compute_rollout_attention(all_layer_matrices, start_layer=0):
     # adding residual consideration
@@ -92,7 +91,7 @@ class Generator:
 
         if "points" in data.keys():
             data.pop("points")
-        
+            
         if target_index is None:
             with torch.no_grad():
                 outputs = self.model(return_loss=False, rescale=True, **data)
