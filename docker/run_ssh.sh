@@ -6,9 +6,9 @@ DOCKER_NAME=spatial_detr
 nusc_data_dir="/work/data01/zahr/datasets/nuscenes"
 nusc_train_val_data_dir="/work/data01/beemelmanns/nuscenes"
 # path to this repository root
-repo_dir="/work/zahr/Project/SpatialDETR"
+repo_dir=$PWD
 # path to directory where models / logs shall be stored in
-exp_dir="/work/zahr/Project/SpatialDETR/work_dirs"
+work_dirs="/home/zahr/Documents/SpatialDETR/work_dirs"
 
 XSOCK=/tmp/.X11-unix
 
@@ -23,6 +23,6 @@ docker run \
 --mount source=$repo_dir,target=/workspace,type=bind,consistency=cached \
 --mount source=$nusc_data_dir,target=/workspace/data/nuscenes,type=bind,consistency=cached \
 --mount source=$nusc_train_val_data_dir,target=/workspace/data/nuscenes_trainval,type=bind,consistency=cached \
---mount source=$exp_dir,target=/workspace/work_dirs,type=bind,consistency=cached \
+--mount source=$work_dirs,target=/workspace/work_dirs,type=bind,consistency=cached \
 -it \
 $DOCKER_NAME

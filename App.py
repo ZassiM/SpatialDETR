@@ -67,10 +67,10 @@ class App(Tk):
         #file_opt.add_command(label="Load weights", command = self.load_weights)
         file_opt.add_command(label="Load dataset", command = self.load_dataset)
         file_opt.add_command(label="Load gt bboxes", command = self.load_gtbboxes)
-        file_opt.add_command(label="Load from arg file", command = self.load_from_args)
+        file_opt.add_command(label="Load from config file", command = self.load_from_config)
         file_opt.add_separator()
         file_opt.add_cascade(label="Gpu", menu=gpu_opt)
-        for i in range(4):
+        for i in range(torch.cuda.device_count()):
             gpu_opt.add_radiobutton(label = f"GPU {i}", variable = self.gpu_id, value = i)
         
         self.menubar.add_cascade(label="File", menu=file_opt)
@@ -179,9 +179,9 @@ class App(Tk):
         plot_button.pack()
         
         
-    def load_from_args(self):
+    def load_from_config(self):
 
-        with open("args.toml", mode = "rb") as argsF:
+        with open("config.toml", mode = "rb") as argsF:
             args = tomli.load(argsF)
             
         model_filename = args["model_filename"]
@@ -196,24 +196,17 @@ class App(Tk):
         GT_filename = args["GTbboxes_filename"]
         print(f"Loading GT Bounding Boxes from {GT_filename}...\n")
         gt_bboxes = torch.load(open(GT_filename, 'rb'))
-
         
-        if args["launcher"] == 'none':
-            distributed = False
-        else:
-            distributed = True
-            
-        gpu_ids = [args["gpu_id"]]
-        
-        if not distributed:
-            self.model = MMDataParallel(model, device_ids = gpu_ids)
-            self.data_loader = data_loader
-            self.gt_bboxes = gt_bboxes
-            self.gen = Generator(self.model)
+        self.model = MMDataParallel(model, device_ids = [self.gpu_id.get()])
+        self.data_loader = data_loader
+        self.gt_bboxes = gt_bboxes
+        self.gen = Generator(self.model)
         
         if not self.started_app:
             self.start_app()
             self.started_app = True
+        
+        print("Loading completed")
 
         
     def load_model(self):
@@ -247,6 +240,8 @@ class App(Tk):
             self.load_gtbboxes()
             self.start_app()
             self.started_app = True
+        
+        print("Loading completed")
             
     def load_weights(self):
         filetypes = (
@@ -259,6 +254,7 @@ class App(Tk):
             filetypes=filetypes)     
                 
         return filename
+
     
     def load_dataset(self):
         filetypes = (
@@ -270,6 +266,7 @@ class App(Tk):
             filetypes=filetypes)
         
         self.data_loader = torch.load(open(filename, 'rb'))
+        print("Loading completed")
         
     def load_gtbboxes(self):
         filetypes = (
@@ -282,7 +279,8 @@ class App(Tk):
             filetypes=filetypes)
 
         self.gt_bboxes = torch.load(open(filename, 'rb'))
-    
+        print("Loading completed")
+        
     def add_separator(self):
         self.menubar.add_command(label="\u22EE", activebackground=self.menubar.cget("background"))
 
