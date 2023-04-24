@@ -29,9 +29,8 @@ To ease the setup of this project we provide a docker container and some conveni
 
 
 ### Train
-1. As for DETR3D download the [pretrained weights](https://drive.google.com/drive/folders/1h5bDg7Oh9hKvkFL-dRhu5-ahrEp2lRNN?usp=sharing) of FCOS3D to `pretrained/` or retrain FCOS3D with the new coordinate conventions using mmdetection3d.
-2. Use the configs in the `configs/`folder to train SpatialDETR.  
-For a basline on a single gpu use:
+1. Use the configs in the **configs/**folder to train SpatialDETR.  
+For a baseline on a single gpu use:
 
 `python ./mmdetection3d/tools/train.py configs/submission/frozen_4/query_proj_value_proj.py`  
   or for multi-gpu e.g. 4 gpus:  
