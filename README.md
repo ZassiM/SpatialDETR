@@ -12,9 +12,8 @@
 
 ### Docker Setup
 To ease the setup of this project we provide a docker container and some convenience scripts (see `docker`). To setup use:
-- (if not done alread) setup [Docker](https://docs.docker.com/engine/install/ubuntu/) and [Nvidia-Docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker)
 - Run `./docker/build.sh` to build the container
-- If on a local machine, open `/docker/run_loc.sh`, otherwise run `/docker/run_ssh.sh` if on a remote server.
+- If on a local machine, open `/docker/run_loc.sh`, otherwise open `/docker/run_ssh.sh` if on a remote server.
 - Adapt the `nusc_data_dir` to the nuscenes directory and `work_dirs` to the direcory where model weights and pretrained weights directories are saved.
 
 ### Container Run and Setup
