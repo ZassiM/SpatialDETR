@@ -1,14 +1,14 @@
-model_filename = "work_dirs/model.pth"
-dataloader_filename = "work_dirs/data_loader.pth"
-GTbboxes_filename = "work_dirs/GT_bboxes.pth"
+model_filename = "work_dirs/saved/model.pth"
+dataloader_filename = "work_dirs/saved/data_loader.pth"
+GTbboxes_filename = "work_dirs/saved/GT_bboxes.pth"
 model = "sdetr"
 mode = "test" 
 
 config_detr3d = "detr3d/configs/detr3d/detr3d_res101_gridmask.py"
-checkpoint_detr3d = "checkpoints/detr3d.pth"
+checkpoint_detr3d = "work_dirs/checkpoints/detr3d.pth"
 config_sdetr = "configs/model.py"
-checkpoint_sdetr = "checkpoints/trained_sdetr.pth"
-checkpoint_sdetr1 = "checkpoints/sdetr.pth"
+checkpoint_sdetr = "work_dirs/checkpoints/trained_sdetr.pth"
+checkpoint_sdetr1 = "work_dirs/checkpoints/sdetr.pth"
 
 skip_type = "NormalizeMultiviewImage"
 
