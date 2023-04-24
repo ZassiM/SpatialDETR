@@ -226,6 +226,9 @@ def main():
     
     print("Loading data from configurations...")
     model, dataset, data_loader, gpu_ids, cfg, distributed = init(args)
+    
+    if not os.path.exists("work_dirs/saved/"):
+        os.makedirs("work_dirs/saved/")
 
     model_filename = args["model_filename"]
     print(f"Saving Model in {model_filename}...")

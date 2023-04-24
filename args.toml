@@ -1,19 +1,15 @@
 model_filename = "work_dirs/saved/model.pth"
 dataloader_filename = "work_dirs/saved/data_loader.pth"
 GTbboxes_filename = "work_dirs/saved/GT_bboxes.pth"
+
 model = "sdetr"
 mode = "test" 
-
-config_detr3d = "detr3d/configs/detr3d/detr3d_res101_gridmask.py"
-checkpoint_detr3d = "work_dirs/checkpoints/detr3d.pth"
-config_sdetr = "configs/model.py"
-checkpoint_sdetr = "work_dirs/checkpoints/trained_sdetr.pth"
-
+config_sdetr = "configs/submission/frozen_4/query_proj_value_proj.py"
+checkpoint_sdetr = "work_dirs/checkpoints/query_proj_value_proj.pth"
 
 skip_type = "NormalizeMultiviewImage"
-
 eval = "mAP"
-gpu_id = 3
+gpu_id = 0
 launcher = "none"
 fuse_conv_bn = false
 tmpdir = "none"

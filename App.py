@@ -62,7 +62,7 @@ class App(Tk):
         
         file_opt, gpu_opt = Menu(self.menubar), Menu(self.menubar)
         self.gpu_id = IntVar()
-        self.gpu_id.set(3)
+        self.gpu_id.set(0)
         file_opt.add_command(label="Load model", command = self.load_model)
         #file_opt.add_command(label="Load weights", command = self.load_weights)
         file_opt.add_command(label="Load dataset", command = self.load_dataset)
@@ -255,7 +255,7 @@ class App(Tk):
 
         filename = fd.askopenfilename(
             title='Load weights',
-            initialdir='/workspace/checkpoints/',
+            initialdir='/workspace/work_dirs/checkpoints/',
             filetypes=filetypes)     
                 
         return filename
@@ -266,7 +266,7 @@ class App(Tk):
         )
         filename = fd.askopenfilename(
             title='Load dataset',
-            initialdir='/workspace/work_dirs/',
+            initialdir='/workspace/work_dirs/saved/',
             filetypes=filetypes)
         
         self.data_loader = torch.load(open(filename, 'rb'))
@@ -278,7 +278,7 @@ class App(Tk):
 
         filename = fd.askopenfilename(
             title='Load GT bboxes',
-            initialdir='/workspace/work_dirs/',
+            initialdir='/workspace/work_dirs/saved/',
             filetypes=filetypes)
 
         self.gt_bboxes = torch.load(open(filename, 'rb'))
@@ -323,7 +323,7 @@ class App(Tk):
                 ax_attn = self.fig.add_subplot(layer_grid[i>2,i if i<3 else i-3])
                 attmap = ax_attn.imshow(attn)
                 ax_attn.axis('off')
-                ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}', fontsize=10)
+                ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}', fontsize=10)
                 if self.scale.get():  
                     im_ratio = attn.shape[1]/attn.shape[0]
                     norm = mpl.colors.Normalize(vmin=0, vmax=1)
@@ -337,7 +337,7 @@ class App(Tk):
             attmap = ax_attn.imshow(attn)
             
             ax_attn.axis('off')
-            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, ({self.head_fusion})')
+            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}')
             if self.scale.get():  
                 im_ratio = attn.shape[1]/attn.shape[0]
                 norm = mpl.colors.Normalize(vmin=0, vmax=1)
