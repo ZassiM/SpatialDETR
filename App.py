@@ -297,7 +297,6 @@ class App(Tk):
        self.text_label.set(f"Select bbox index: {class_names[self.labels[int(idx)].item()]} ({int(idx)})")
 
     def update_values(self):
-        
         self.data = self.data_loader[self.data_idx.get()]
         if self.selected_head_fusion.get() != "gradcam":
             outputs = self.gen.get_all_attentions(self.data)
