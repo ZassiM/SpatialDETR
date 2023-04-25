@@ -124,10 +124,10 @@ class Generator:
 
         all_attn_layers = []
         # loop through layers
-        for self.layer in range(self.layers):
+        for i in range(self.layers):
             all_attn = []
             # loop through cameras
-            for attn in self.dec_cross_attn_weights[self.layer]:
+            for attn in self.dec_cross_attn_weights[i]:
                 attn_avg = avg_heads(attn, head_fusion = head_fusion, discard_ratio = discard_ratio)
                 all_attn.append(attn_avg[indexes[target_index].item()].detach())
             all_attn_layers.append(all_attn)    
