@@ -72,10 +72,13 @@ class Generator:
         self.model = model
         self.model.eval()
         self.camidx = None
-        self.layer = 5
+        self.layers = 0
+        for _ in self.model.module.pts_bbox_head.transformer.decoder.layers:
+            self.layers += 1
+        self.layer = self.layers - 1
         self.dec_cross_attn_weights, self.dec_cross_attn_grads, self.dec_self_attn_weights, self.dec_self_attn_grads = [], [], [], []    
     
-    def get_all_attentions(self, data, target_index = None):
+    def extract_attentions(self, data, target_index = None):
         
         self.dec_self_attn_weights, self.dec_cross_attn_weights = [], []
         hooks = []
@@ -116,7 +119,21 @@ class Generator:
             
         return outputs
 
+    def get_all_attn(self, target_index, indexes, head_fusion = "min", discard_ratio = 0.9, raw = True):
+        #self.dec_cross_attn_weights = 6x[6x8x900x1450] = layers x (cams x heads x queries x keys)
+
+        all_attn_layers = []
+        # loop through layers
+        for self.layer in range(self.layers):
+            all_attn = []
+            # loop through cameras
+            for attn in self.dec_cross_attn_weights[self.layer]:
+                attn_avg = avg_heads(attn, head_fusion = head_fusion, discard_ratio = discard_ratio)
+                all_attn.append(attn_avg[indexes[target_index].item()].detach())
+            all_attn_layers.append(all_attn)    
             
+        return all_attn_layers
+        
     def handle_co_attn_self_query(self, layer):
         attn = self.dec_self_attn_weights[layer]
         grad = self.dec_self_attn_grad[layer]
@@ -133,16 +150,6 @@ class Generator:
                                                apply_normalization=self.normalize_self_attention,
                                                apply_self_in_rule_10=self.apply_self_in_rule_10)
 
-    
-    def get_all_attn(self, target_index, indexes, head_fusion = "min", discard_ratio = 0.9, raw = True):
-        
-        all_attn = []
-        
-        for attn in self.dec_cross_attn_weights[self.layer]:
-            attn_avg = avg_heads(attn, head_fusion = head_fusion, discard_ratio = discard_ratio)
-            all_attn.append(attn_avg[indexes[target_index].item()].detach())
-                
-        return all_attn
     
     def generate_rollout(self, target_index, indexes, camidx, head_fusion = "min", discard_ratio = 0.9, raw = True):
         self.camidx = camidx

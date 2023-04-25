@@ -4,6 +4,7 @@ DOCKER_NAME=spatial_detr
 
 # path to directory where nusenes data is stored
 nusc_data_dir="/work/data01/zahr/datasets/nuscenes"
+# nuscenes trainval, circa 400 GB
 nusc_train_val_data_dir="/work/data01/beemelmanns/nuscenes"
 # path to this repository root
 repo_dir=$PWD

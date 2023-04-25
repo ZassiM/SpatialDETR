@@ -90,6 +90,7 @@ class App(Tk):
         self.old_thr = -1
         self.head_fusion = "min"
         self.discard_ratio = 0.9      
+        self.scores = []
         
         frame = Frame(self)
         frame.pack(fill=Y)
@@ -119,8 +120,8 @@ class App(Tk):
         thr_opt, dr_opt = Menu(self.menubar), Menu(self.menubar)
         self.selected_threshold, self.selected_discard_ratio = DoubleVar(), DoubleVar()
         self.selected_threshold.set(0.5)
-        self.selected_discard_ratio.set(0.9)
-        values = np.arange(0.1,1,0.1).round(1)
+        self.selected_discard_ratio.set(0.5)
+        values = np.arange(0.0,1,0.1).round(1)
         for i in values:
             thr_opt.add_radiobutton(label=i, variable=self.selected_threshold, command = self.update_thr)
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_ratio)
@@ -137,7 +138,7 @@ class App(Tk):
         attn_opt, attn_rollout = Menu(self.menubar), Menu(self.menubar)
         self.head_types = ["mean", "min", "max"]
         self.selected_head_fusion = StringVar()
-        self.selected_head_fusion.set(self.head_types[0])
+        self.selected_head_fusion.set(self.head_types[2])
         self.raw_attn = BooleanVar()
         self.raw_attn.set(True)
         attn_opt.add_cascade(label="Attention Rollout", menu=attn_rollout)
@@ -303,9 +304,9 @@ class App(Tk):
     def update_values(self):
         self.data = self.data_loader[self.data_idx.get()]
         if self.selected_head_fusion.get() != "gradcam":
-            outputs = self.gen.get_all_attentions(self.data)
+            outputs = self.gen.extract_attentions(self.data)
         else:
-            outputs = self.gen.get_all_attentions(self.data, self.selected_bbox.get())
+            outputs = self.gen.extract_attentions(self.data, self.selected_bbox.get())
 
         self.nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes() 
         self.outputs = outputs[0]["pts_bbox"]
@@ -318,7 +319,9 @@ class App(Tk):
         
     def show_attn_maps(self, grid_clm = 1):
         if self.selected_layer.get() == 6 or self.selected_camera.get() == 6:
+            self.all_attn = self.gen.get_all_attn(self.selected_bbox.get(), self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
             layer_grid = self.spec[1,grid_clm].subgridspec(2,3)
+            self.scores = []
             for i in range(6):
                 if self.selected_layer.get() == 6: self.gen.layer = i
                 else: self.selected_camera.set(self.cams[i])
@@ -332,17 +335,31 @@ class App(Tk):
                     im_ratio = attn.shape[1]/attn.shape[0]
                     norm = mpl.colors.Normalize(vmin=0, vmax=1)
                     self.fig.colorbar(attmap, norm=norm, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
-            
+                if self.attn_contr.get():
+                    if self.selected_layer.get() == 6: attn = self.all_attn[i][self.selected_camera.get()]
+                    else: attn = self.all_attn[self.selected_layer.get()][i]
+                    score = round(attn.sum().item(), 2)
+                    self.scores.append(score)
+                    ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores[self.cams[i]]}', fontsize=10)
+                else:
+                    ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}', fontsize=10)
+
             if self.selected_layer.get() != 6:
                 self.selected_camera.set(6)
         else:
+            self.scores = []
+            self.all_attn = self.gen.get_all_attn(self.selected_bbox.get(), self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
+            for i in range(6):
+                attn = self.all_attn[self.selected_layer.get()][i]
+                score = round(attn.sum().item(), 2)
+                self.scores.append(score)
             attn = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
             attn = attn.view(29, 50).cpu().numpy()
             ax_attn = self.fig.add_subplot(self.spec[1,grid_clm])
             attmap = ax_attn.imshow(attn)
             
             ax_attn.axis('off')
-            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}')
+            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores[self.selected_camera.get()]}')
             if self.scale.get():  
                 im_ratio = attn.shape[1]/attn.shape[0]
                 norm = mpl.colors.Normalize(vmin=0, vmax=1)
@@ -423,7 +440,7 @@ class App(Tk):
 
 
         elif self.head_fusion == "gradcam":   
-            self.gen.get_all_attentions(self.data, self.selected_bbox.get())
+            self.gen.extract_attentions(self.data, self.selected_bbox.get())
             attn = self.gen.generate_attn_gradcam(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get())
             attn = attn.view(29, 50).cpu().numpy()
             ax_attn = self.fig.add_subplot(self.spec[1,1])
@@ -443,40 +460,19 @@ class App(Tk):
                 
         self.cams = [2, 0, 1, 5, 3, 4]
        
-        all_attn = self.gen.get_all_attn(self.selected_bbox.get(), self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
         for i in range(6):
-            # self.spec = self.fig.add_gridspec(3, 3)
             if i < 3:
-                #ax = self.fig.add_subplot(self.spec[0, i])
-                gs = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=self.spec[0, i])
-                
+                ax = self.fig.add_subplot(self.spec[0, i])
             else:
-                #ax = self.fig.add_subplot(self.spec[2,i-3])
-                gs = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=self.spec[2, i-3])
-                
-            ax = self.fig.add_subplot(gs[0,0])
+                ax = self.fig.add_subplot(self.spec[2,i-3])
+
             ax.imshow(self.imgs_bbox[self.cams[i]])
             ax.axis('off')
-            ax.set_title(f'{list(self.cameras.keys())[self.cams[i]]}')
+            
             if self.attn_contr.get():
-                
-                ax2 = self.fig.add_subplot(gs[0,1])
-                score = [0.6]
-                #ax2.xaxis.set_visible(False)
-                #ax2.yaxis.set_visible(False)
-                
-                ax2.bar(score,height=score, width = 0.1).set_figwidth(15)
-
-                ax2.set_ylim([0,1])
-                # attn = all_attn[i].view(29, 50).cpu().numpy()
-                # im_ratio = attn.shape[1]/attn.shape[0]
-                # norm = mpl.colors.Normalize(vmin=0, vmax=1)
-                # self.fig.colorbar(cam_img, norm=norm, ax=ax, orientation='horizontal', fraction=0.047*im_ratio)
-                # score = (0.6)
-                # p1 = ax.bar(score,score)
-                # ax.xaxis.set_visible(False)
-                # ax.yaxis.set_visible(False)
-                #plt.show()
+                ax.set_title(f'{list(self.cameras.keys())[self.cams[i]]}, {self.scores[self.cams[i]]}')
+            else:
+                ax.set_title(f'{list(self.cameras.keys())[self.cams[i]]}')
    
             
         if self.canvas: self.canvas.get_tk_widget().pack_forget()
