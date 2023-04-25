@@ -74,7 +74,7 @@ class App(Tk):
         file_opt.add_separator()
         file_opt.add_cascade(label="Gpu", menu=gpu_opt)
         for i in range(torch.cuda.device_count()):
-            gpu_opt.add_radiobutton(label = f"GPU {i}", variable = self.gpu_id, value = i)
+            gpu_opt.add_radiobutton(label = f"GPU {i}", variable = self.gpu_id, value = i, command = self.show_info)
         
         self.menubar.add_cascade(label="File", menu=file_opt)
         self.add_separator()
@@ -82,6 +82,8 @@ class App(Tk):
         # Speeding up the testing
         self.load_from_config()
         
+    def show_info(self):
+        showinfo(title=None, message="Reload model to apply the GPU change.")
         
     def start_app(self):  
         
@@ -318,10 +320,10 @@ class App(Tk):
  
         self.img_metas = self.data["img_metas"][0]._data[0][0]
         
-    def show_attn_maps(self, grid_clm = 1):
+    def update_scores(self):
         self.all_attn = self.gen.get_all_attn(self.selected_bbox.get(), self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
         self.scores = []
-        fontsize = 8
+        self.scores_perc = []
         if self.selected_layer.get() == 6:
             for layer in range(6):
                 attn = self.all_attn[layer][self.selected_camera.get()]
@@ -332,24 +334,47 @@ class App(Tk):
                 attn = self.all_attn[self.selected_layer.get()][cam]
                 score = round(attn.sum().item(), 2)
                 self.scores.append(score)
+        
+        sum_scores = sum(self.scores)
+        for i in range(len(self.scores)):
+            score_perc = round(((self.scores[i]/sum_scores)*100))
+            self.scores_perc.append(score_perc)
                 
+    def show_attn_maps(self, grid_clm = 1):
+        if self.attn_contr.get():
+            self.update_scores()
+            
+        fontsize = 8
+        attn_cameras = []
+        if self.selected_camera.get() == 6:
+            for i in range(6):
+                attn_cam = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, i, self.head_fusion, self.discard_ratio, self.raw_attn.get())       
+                attn_cameras.append(attn_cam)
+            attn_max = torch.max(torch.cat(attn_cameras))
+            self.gen.camidx = self.selected_camera.get()
+            
         if self.selected_layer.get() == 6 or self.selected_camera.get() == 6:
             layer_grid = self.spec[1,grid_clm].subgridspec(2,3)
             for i in range(6):
                 if self.selected_layer.get() == 6: self.gen.layer = i
                 else: self.selected_camera.set(self.cam_idx[i])
                 attn = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
+                # Normalization
+                if attn_cameras:
+                    attn /= attn_max
                 attn = attn.view(29, 50).cpu().numpy()
                 ax_attn = self.fig.add_subplot(layer_grid[i>2,i if i<3 else i-3])
-                attmap = ax_attn.imshow(attn)
+                if attn_cameras:
+                    attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
+                else:
+                    attmap = ax_attn.imshow(attn)
                 ax_attn.axis('off')
                 if self.scale.get():  
                     im_ratio = attn.shape[1]/attn.shape[0]
-                    norm = mpl.colors.Normalize(vmin=0, vmax=1)
-                    self.fig.colorbar(attmap, norm=norm, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
+                    self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
                 if self.attn_contr.get():
-                    if self.selected_layer.get() == 6: ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores[i]}', fontsize=fontsize)
-                    else: ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores[self.cam_idx[i]]}', fontsize=fontsize)
+                    if self.selected_layer.get() == 6: ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[i]}%', fontsize=fontsize)
+                    else: ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[self.cam_idx[i]]}%', fontsize=fontsize)
                 else:
                     ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}', fontsize=fontsize)
 
@@ -359,21 +384,21 @@ class App(Tk):
         else:
             attn = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
             attn = attn.view(29, 50).cpu().numpy()
+            attn /= attn.max()
             ax_attn = self.fig.add_subplot(self.spec[1,grid_clm])
-            attmap = ax_attn.imshow(attn)
+            attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
             
             ax_attn.axis('off')
-            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores[self.selected_camera.get()]}')
+            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[self.selected_camera.get()]}%')
             if self.scale.get():  
                 im_ratio = attn.shape[1]/attn.shape[0]
-                norm = mpl.colors.Normalize(vmin=0, vmax=1)
-                self.fig.colorbar(attmap, norm=norm, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
+                self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
         
     
     
     def visualize(self):
         
-        self.fig = plt.figure(figsize=(40,20), layout="constrained")
+        self.fig = plt.figure(figsize=(80,60), layout="constrained")
         self.spec = self.fig.add_gridspec(3, 3)
         
         # Avoiding to visualize all layers and all cameras at the same time
@@ -381,16 +406,14 @@ class App(Tk):
             if self.selected_camera.get() == 6: self.selected_layer.set(5)
             if self.selected_layer.get() == 6: self.selected_camera.set(0)
         
-        if self.old_data_idx != self.data_idx.get() or self.new_model:
+        if self.old_data_idx != self.data_idx.get() or self.old_thr != self.selected_threshold.get() or self.new_model:
             self.old_data_idx = self.data_idx.get()
             self.update_values()
             self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
             self.selected_bbox.configure(to = len(self.thr_idxs.nonzero())-1)
             self.selected_bbox.set(0)
-            if self.new_model: self.new_model = False
-                     
-        if self.old_thr != self.selected_threshold.get():
-            self.old_thr = self.selected_threshold.get()
+            if self.new_model: self.new_model = False 
+            if self.old_thr != self.selected_threshold.get(): self.old_thr = self.selected_threshold.get()
 
         self.labels = self.outputs['labels_3d'][self.thr_idxs]
         self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
@@ -473,7 +496,7 @@ class App(Tk):
             
             if self.attn_contr.get():
                 if self.selected_layer.get() == 6: ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}') 
-                else: ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}, {self.scores[self.cam_idx[i]]}') 
+                else: ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}, {self.scores_perc[self.cam_idx[i]]}%') 
             else: 
                 ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
    
