@@ -6,7 +6,6 @@ repo_dir="C:\Users\wasso\Desktop\Project\SpatialDETR"
 exp_dir="C:\Users\wasso\Desktop\Project\SpatialDETR\work_dirs"
 
 docker run \
---rm \
 --publish 6006 \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
 --shm-size=16g \

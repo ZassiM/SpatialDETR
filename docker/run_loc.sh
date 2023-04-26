@@ -9,6 +9,7 @@ repo_dir=$PWD
 # path to directory where models / logs shall be stored in
 work_dirs="/home/zahr/Documents/SpatialDETR/work_dirs"
 
+xhost +
 
 docker run \
 --gpus 'all,"capabilities=compute,utility,graphics"' \

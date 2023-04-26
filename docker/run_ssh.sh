@@ -4,19 +4,18 @@ DOCKER_NAME=spatial_detr
 
 # path to directory where nusenes data is stored
 nusc_data_dir="/work/data01/zahr/datasets/nuscenes"
-# nuscenes trainval, circa 400 GB
+# nuscenes trainval
 nusc_train_val_data_dir="/work/data01/beemelmanns/nuscenes"
 # path to this repository root
 repo_dir=$PWD
 # path to directory where models / logs shall be stored in
 work_dirs="/work/data01/zahr/work_dirs"
 
-XSOCK=/tmp/.X11-unix
+xhost +
 
 docker run \
---rm \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
--e DISPLAY \
+--env DISPLAY=${DISPLAY} \
 --net=host \
 --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
 --volume $HOME/.Xauthority:/root/.Xauthority:rw \
