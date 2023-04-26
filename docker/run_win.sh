@@ -8,7 +8,6 @@ exp_dir="C:\Users\wasso\Desktop\Project\SpatialDETR\work_dirs"
 docker run \
 --publish 6006 \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
---shm-size=16g \
 --mount source=$repo_dir,target=/workspace,type=bind,consistency=cached \
 --mount source=$exp_dir,target=/workspace/work_dirs,type=bind,consistency=cached \
 -it \

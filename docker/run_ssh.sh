@@ -19,7 +19,6 @@ docker run \
 --net=host \
 --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
 --volume $HOME/.Xauthority:/root/.Xauthority:rw \
---shm-size=16g \
 --mount source=$repo_dir,target=/workspace,type=bind,consistency=cached \
 --mount source=$nusc_data_dir,target=/workspace/data/nuscenes,type=bind,consistency=cached \
 --mount source=$nusc_train_val_data_dir,target=/workspace/data/nuscenes_trainval,type=bind,consistency=cached \

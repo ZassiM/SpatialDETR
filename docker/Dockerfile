@@ -40,6 +40,7 @@ RUN pip install mmsegmentation==0.20.0 \
     && pip uninstall -y pycocotools \
     && pip install mmpycocotools
 
+
 RUN pip install mlflow open3d
 
 RUN conda clean --all
@@ -47,7 +48,4 @@ ENV FORCE_CUDA="1"
 
 WORKDIR /workspace
 
-RUN MMCV_WITH_OPS=1 pip install -e /deps/mmcv/ \
-    && pip install -e /mmdetection3d \
-    && pip install -e /detr3d \
-    && pip install -e .
+RUN MMCV_WITH_OPS=1 pip install -e /deps/mmcv/ 
