@@ -1,6 +1,7 @@
 ## Setup
 ## Repository
-1. Clone the repository `git clone https://github.com/ZassiM/SpatialDETR.git`
+1. Clone the repository together with its submodules: `git clone --recurse-submodules https://gitlab.ika.rwth-aachen.de/ma-zahr/spatialdetr.git SpatialDETR`
+2. If you have already cloned the repository without the --recurse-submodules flag, initialize all submodules manually: `git submodule update --init --recursive`
 
 ### Nuscenes Dataset
 1. Follow the [mmdetection3d instructions](https://mmdetection3d.readthedocs.io/en/v1.0.0rc1/datasets/nuscenes_det.html) to preprocess the data of the nuScenes dataset.
