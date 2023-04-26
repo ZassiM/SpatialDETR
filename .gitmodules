@@ -1,0 +1,6 @@
+[submodule "detr3d"]
+	path = detr3d
+	url = https://gitlab.ika.rwth-aachen.de/ma-zahr/detr3d.git
+[submodule "mmdetection3d"]
+	path = mmdetection3d
+	url = https://gitlab.ika.rwth-aachen.de/ma-zahr/mmdetection3d.git
