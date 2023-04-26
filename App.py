@@ -242,7 +242,8 @@ class App(Tk):
             model, _, data_loader = init_app(args)
             
         for i, data in enumerate(data_loader):
-            print(**data)
+            debug=0
+        
             
         self.model = MMDataParallel(model, device_ids = [self.gpu_id.get()])
         #self.data_loader = list(dataloader)
