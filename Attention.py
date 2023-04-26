@@ -87,10 +87,18 @@ class Generator:
             layer.attentions[0].attn.register_forward_hook(
                 lambda _, input, output: self.dec_self_attn_weights.append(output[1][0])
             ))
-            hooks.append(
-            layer.attentions[1].attn.register_forward_hook(
-                lambda _, input, output: self.dec_cross_attn_weights.append(output[1])
-            ))
+            # SpatialDETR
+            if hasattr(layer.attentions[1], "attn"):
+                hooks.append(
+                layer.attentions[1].attn.register_forward_hook(
+                    lambda _, input, output: self.dec_cross_attn_weights.append(output[1])
+                ))
+            # DETR3D
+            else:
+                hooks.append(
+                layer.attentions[1].attention_weights.register_forward_hook(
+                    lambda _, input, output: self.dec_cross_attn_weights.append(output)
+                ))
 
         if "points" in data.keys():
             data.pop("points")

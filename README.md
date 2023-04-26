@@ -38,8 +38,9 @@ For a baseline on a single gpu use:
 3. To test, use  
 `./mmdetection3d/tools/dist_test.sh configs/submission/frozen_4/query_proj_value_proj.py /path/to/.pth 4 --eval=bbox`
 
-### Issues
+### Issues and To-Do
 - The shell for running the docker container makes sure that the display environment is correctly forwarded to the docker and ssh server. However, some display errors still can be faced reported while trying to run the GUI application. For testing the GUI inside the Docker container, run `xclock` and see if a window opens. The following guides are useful: https://www.baeldung.com/linux/forward-x-over-ssh, https://x410.dev/cookbook/enabling-ssh-x11-forwarding-in-visual-studio-code-for-remote-development/
 - The application works both on Windows and Linux, but for now this README description is adapted only for Linux. I will describe how to configure the application for Windows too.
+- The application works only with SpatialDETR for now. Other models will be supported.
 
  

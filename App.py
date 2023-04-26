@@ -80,7 +80,7 @@ class App(Tk):
         self.add_separator()
         
         # Speeding up the testing
-        self.load_from_config()
+        #self.load_from_config()
         
     def show_info(self):
         showinfo(title=None, message="Reload model to apply the GPU change.")
@@ -239,7 +239,10 @@ class App(Tk):
             args={}
             args["config"] = filename
             args["checkpoint"] = self.load_weights()
-            model, _, _ = init_app(args)
+            model, _, data_loader = init_app(args)
+            
+        for i, data in enumerate(data_loader):
+            print(**data)
             
         self.model = MMDataParallel(model, device_ids = [self.gpu_id.get()])
         #self.data_loader = list(dataloader)
