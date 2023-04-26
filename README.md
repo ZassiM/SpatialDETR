@@ -10,7 +10,6 @@
 1. Download the [weights for FCOS3D](https://rwth-aachen.sciebo.de/s/asoSC5oMD1TNEsy) (which are used by SpatialDETR) and put them inside a directory called **pretrained**.
 2. Download the [weights for SpatialDETR](https://rwth-aachen.sciebo.de/s/fgmMdPEQKQu9hz) (query_proj_value_proj) and put them inside a directory called **checkpoints**.
 
-
 ### Docker Setup
 To ease the setup of this project we provide a docker container and some convenience scripts (see `docker`). To setup use:
 - (if not done alread) setup [Docker](https://docs.docker.com/engine/install/ubuntu/) and [Nvidia-Docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker)
@@ -27,7 +26,6 @@ To ease the setup of this project we provide a docker container and some conveni
 2. A GUI will appear. Select **File-Load model** to load the model configuration, the checkpoints and the dataset. Otherwise, if the same configurations are used each time, modify the **config.toml** file accordinly and select **File-Load from config file**.
 3. Select the **data index** and the **bounding box** to visualize. 
 4. Change the visualization settings with the drop-down menus. Then, click **Visualize**. 
-
 
 ### Train
 1. Use the configs in the **configs** folder to train SpatialDETR.  
