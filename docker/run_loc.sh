@@ -1,3 +1,5 @@
+#!/bin/bash
+
 DOCKER_NAME=spatial_detr
 
 # path to directory where nusenes data is stored
@@ -9,9 +11,7 @@ work_dirs="/home/zahr/Documents/SpatialDETR/work_dirs"
 
 
 docker run \
---rm \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
---env QT_X11_NO_MITSHM=1 \
 --env DISPLAY=${DISPLAY} \
 --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
 --volume $HOME/.Xauthority:/root/.Xauthority:rw \
