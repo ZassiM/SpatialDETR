@@ -17,6 +17,7 @@ xhost +
 docker run \
 --rm \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
+--user $(id -u):$(id -g) \
 --env DISPLAY=${DISPLAY} \
 --shm-size=16gb \
 --net=host \

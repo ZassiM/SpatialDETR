@@ -221,7 +221,7 @@ def init_app(args):
 
 def main():
     
-    with open("args.toml", mode = "rb") as argsF:
+    with open("/workspace/other_scripts/args.toml", mode = "rb") as argsF:
         args = tomli.load(argsF)
     
     print("Loading data from configurations...")
@@ -230,18 +230,24 @@ def main():
     if not os.path.exists("work_dirs/saved/"):
         os.makedirs("work_dirs/saved/")
 
-    model_filename = args["model_filename"]
-    print(f"Saving Model in {model_filename}...")
-    torch.save(model, model_filename)
+    # model_filename = args["model_filename"]
+    # print(f"Saving Model in {model_filename}...")
+    # torch.save(model, model_filename)
     
-    DataLoader_filename = args["dataloader_filename"]
-    print(f"Saving DataLoader in {DataLoader_filename}...")
-    torch.save(list(data_loader), DataLoader_filename)
-    
+    dataset_filename = args["dataset_filename"]
+    print(f"Loading Dataset...")
+    dataset_list = []
     gt_bboxes = []
-    for i,_ in enumerate(data_loader):
+    for i, data in enumerate(data_loader):
+        if i>150: break
+        data_loader_list.append(data)
         gt_bbox = dataset.get_ann_info(i)['gt_bboxes_3d']
         gt_bboxes.append(gt_bbox)
+    print(f"{i} files processed.")
+    if i>81: dataset_filename = dataset_filename + "_trainval"
+    print(f"Saving Dataset in {dataset_filename}...")
+    torch.save(data_loader_list, dataset_filename)
+    
         
     GT_filename = args["GTbboxes_filename"]
     print(f"Saving GT Bounding Boxes in {GT_filename}...")
