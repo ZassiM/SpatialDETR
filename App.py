@@ -162,7 +162,7 @@ class App(Tk):
         
         # View options
         add_opt = Menu(self.menubar)
-        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.attn_contr, self.overlay, self.show_labels = BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar()
+        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.attn_contr, self.attn_norm, self.overlay, self.show_labels = BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar()
         self.BB_bool.set(True)
         self.scale.set(True)
         self.show_labels.set(True)
@@ -171,6 +171,7 @@ class App(Tk):
         add_opt.add_checkbutton(label="Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
         add_opt.add_checkbutton(label="Show attention scale", onvalue=1, offvalue=0, variable=self.scale)
         add_opt.add_checkbutton(label="Show attention camera contributions", onvalue=1, offvalue=0, variable=self.attn_contr)
+        add_opt.add_checkbutton(label="Normalize attention", onvalue=1, offvalue=0, variable=self.attn_norm)
         add_opt.add_checkbutton(label="Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
         add_opt.add_checkbutton(label="Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
     
@@ -341,6 +342,7 @@ class App(Tk):
             self.scores_perc.append(score_perc)
                 
     def show_attn_maps(self, grid_clm = 1):
+        
         if self.attn_contr.get():
             self.update_scores()
             
@@ -360,11 +362,11 @@ class App(Tk):
                 else: self.selected_camera.set(self.cam_idx[i])
                 attn = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
                 # Normalization
-                if attn_cameras:
+                if attn_cameras and self.attn_norm.get():
                     attn /= attn_max
                 attn = attn.view(29, 50).cpu().numpy()
                 ax_attn = self.fig.add_subplot(layer_grid[i>2,i if i<3 else i-3])
-                if attn_cameras:
+                if attn_cameras and self.attn_norm.get():
                     attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
                 else:
                     attmap = ax_attn.imshow(attn)
@@ -384,10 +386,12 @@ class App(Tk):
         else:
             attn = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
             attn = attn.view(29, 50).cpu().numpy()
-            attn /= attn.max()
             ax_attn = self.fig.add_subplot(self.spec[1,grid_clm])
-            attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
-            
+            if self.attn_norm.get():
+                attn /= attn.max()
+                attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
+            else:
+                attmap = ax_attn.imshow(attn)
             ax_attn.axis('off')
             ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[self.selected_camera.get()]}%')
             if self.scale.get():  
