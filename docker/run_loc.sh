@@ -4,10 +4,10 @@ DOCKER_NAME=spatial_detr
 
 # path to directory where nusenes data is stored
 nusc_data_dir="/home/zahr/Documents/datasets/nuscenes"
+# path to directory where models / logs shall be stored in
+work_dirs="/home/zahr/Documents/work_dirs"
 # path to this repository root
 repo_dir=$PWD
-# path to directory where models / logs shall be stored in
-work_dirs="/home/zahr/Documents/SpatialDETR/work_dirs"
 
 xhost +
 
