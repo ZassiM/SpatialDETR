@@ -58,7 +58,7 @@ class App(Tk):
         self.font = cv2.FONT_HERSHEY_SIMPLEX
         self.font_scale = 1
         
-        self.model, self.dataset, self.gt_bboxes = None, None, None
+        self.model, self.data_loader, self.gt_bboxes = None, None, None
         self.started_app = False
         self.menubar = Menu(self)
         self.config(menu=self.menubar)
@@ -102,8 +102,8 @@ class App(Tk):
         self.data_label.set("Select data index:")
         label0 = Label(frame,textvariable=self.data_label, anchor = CENTER)
         label0.pack(side=TOP)
-        self.data_idx = Scale(frame, from_=0, to=len(self.dataset)-1, showvalue=0, orient=HORIZONTAL, command = self.update_data_label)
-        idx = random.randint(0, len(self.dataset)-1)
+        self.data_idx = Scale(frame, from_=0, to=len(self.data_loader)-1, showvalue=0, orient=HORIZONTAL, command = self.update_data_label)
+        idx = random.randint(0, len(self.data_loader)-1)
         self.data_idx.set(idx)
         self.data_idx.pack()
         
@@ -209,7 +209,7 @@ class App(Tk):
         gt_bboxes = torch.load(open(GT_filename, 'rb'))
         
         self.model = MMDataParallel(model, device_ids = [self.gpu_id.get()])
-        self.dataset = dataset
+        self.data_loader = dataset
         self.gt_bboxes = gt_bboxes
         self.gen = Generator(self.model)
         
@@ -242,13 +242,14 @@ class App(Tk):
             model, _, dataloader = init_app(args)
                 
         self.model = MMDataParallel(model, device_ids = [self.gpu_id.get()])
-        #self.dataset = list(dataloader)
+        self.data_loader = dataloader
         self.gen = Generator(self.model)
         self.new_model = True
         
+        
         if not self.started_app:
-            self.load_dataset()
-            self.load_gtbboxes()
+            #self.load_dataset()
+            #self.load_gtbboxes()
             self.start_app()
             self.started_app = True
         
@@ -276,7 +277,7 @@ class App(Tk):
             initialdir='/workspace/work_dirs/saved/',
             filetypes=filetypes)
         
-        self.dataset = torch.load(open(filename, 'rb'))
+        self.data_loader = torch.load(open(filename, 'rb'))
         print("Loading completed.")
         
     def load_gtbboxes(self):
@@ -306,7 +307,11 @@ class App(Tk):
        self.text_label.set(f"Select bbox index: {class_names[self.labels[int(idx)].item()]} ({int(idx)})")
 
     def update_values(self):
-        self.data = self.dataset[self.data_idx.get()]
+        if isinstance(self.data_loader, list):
+            self.data = self.data_loader[self.data_idx.get()]
+        else:
+            self.data = self.data_loader.dataset[self.data_idx.get()]
+            
         if self.selected_head_fusion.get() != "gradcam":
             outputs = self.gen.extract_attentions(self.data)
         else:
@@ -428,7 +433,9 @@ class App(Tk):
             
 
         if self.GT_bool.get():
-            self.gt_bbox = self.gt_bboxes[self.data_idx.get()]
+            #self.gt_bbox = self.gt_bboxes[self.data_idx.get()]
+            self.gt_bbox = self.data_loader.dataset.get_ann_info(self.data_idx.get())['gt_bboxes_3d']
+            
         else:
             self.gt_bbox = None
 

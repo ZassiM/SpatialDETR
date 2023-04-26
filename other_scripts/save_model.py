@@ -240,13 +240,13 @@ def main():
     gt_bboxes = []
     for i, data in enumerate(data_loader):
         if i>150: break
-        data_loader_list.append(data)
+        dataset_list.append(data)
         gt_bbox = dataset.get_ann_info(i)['gt_bboxes_3d']
         gt_bboxes.append(gt_bbox)
     print(f"{i} files processed.")
     if i>81: dataset_filename = dataset_filename + "_trainval"
     print(f"Saving Dataset in {dataset_filename}...")
-    torch.save(data_loader_list, dataset_filename)
+    torch.save(dataset_list, dataset_filename)
     
         
     GT_filename = args["GTbboxes_filename"]

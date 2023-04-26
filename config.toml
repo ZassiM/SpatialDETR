@@ -1,5 +1,5 @@
 model_filename = "work_dirs/saved/model.pth"
-dataset_filename = "work_dirs/saved/data_loader.pth"
+dataset_filename = "work_dirs/saved/dataset.pth"
 GTbboxes_filename = "work_dirs/saved/GT_bboxes.pth"
 
 config_sdetr = "configs/submission/frozen_4/query_proj_value_proj.py"

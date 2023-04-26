@@ -11,13 +11,13 @@ work_dirs="/work/data01/zahr/work_dirs"
 # path to this repository root
 repo_dir=$PWD
 
+#--user $(id -u):$(id -g) \
 
 xhost +
 
 docker run \
 --rm \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
---user $(id -u):$(id -g) \
 --env DISPLAY=${DISPLAY} \
 --shm-size=16gb \
 --net=host \
