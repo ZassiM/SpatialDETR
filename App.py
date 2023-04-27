@@ -309,8 +309,20 @@ class App(Tk):
     def update_values(self):
         if isinstance(self.data_loader, list):
             self.data = self.data_loader[self.data_idx.get()]
-        else:
-            self.data = self.data_loader.dataset[self.data_idx.get()]
+        # else:
+        #     data = self.data_loader.dataset[self.data_idx.get()]
+        #     metas = [[data['img_metas'][0].data]]
+        #     img = [data['img'][0].data]
+        #     data['img_metas'][0] = DC(metas)
+        #     data['img'][0] = DC(img)
+        #     self.data = data
+        #     #self.data['img_metas'][0].data = [[self.data['img_metas'][0].data]]
+            
+        
+        for i,data in enumerate(self.data_loader):
+            if i==self.data_idx.get(): 
+                self.data = data
+                break
             
         if self.selected_head_fusion.get() != "gradcam":
             outputs = self.gen.extract_attentions(self.data)
