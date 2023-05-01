@@ -19,9 +19,11 @@ import tomli
 from Attention import Generator
 from other_scripts.save_model import init_app
 from mmcv.parallel import MMDataParallel
+from mmcv.parallel import DataContainer as DC
 from matplotlib import gridspec
 import matplotlib.pyplot as plt
-
+from tools.data_converter.nuscenes_converter import get_2d_boxes
+from mmdet3d.datasets import NuScenesDataset
             
 class_names = [
     "car",
@@ -80,7 +82,7 @@ class App(Tk):
         self.add_separator()
         
         # Speeding up the testing
-        self.load_from_config()
+        #self.load_from_config()
         
     def show_info(self):
         showinfo(title=None, message="Reload model to apply the GPU change.")
@@ -263,7 +265,7 @@ class App(Tk):
                 
         self.model = MMDataParallel(model, device_ids = [self.gpu_id.get()])
         #self.data_loader = iter(dataloader)
-        self.data_loader = iter(dataloader)
+        self.data_loader = dataloader
         self.gen = Generator(self.model)
         self.new_model = True
         
@@ -326,49 +328,9 @@ class App(Tk):
     def update_data_label(self, idx):
        self.data_label.set(f"Select data index: {int(idx)}")
 
-    def update_bbox_label(self, idx):
-       self.text_label.set(f"Select bbox index: {class_names[self.labels[int(idx)].item()]} ({int(idx)})")
+    # def update_bbox_label(self, idx):
+    #    self.text_label.set(f"Select bbox index: {class_names[self.labels[int(idx)].item()]} ({int(idx)})")
 
-    def update_values(self):
-        if isinstance(self.data_loader, list):
-            self.data = self.data_loader[self.data_idx.get()]
-        else:
-            #self.data = self.data_loader.dataset.prepare_test_data(self.data_idx.get())
-            #self.data = next(self.data_loader,100)
-            self.data = next(self.data_loader)
-
-        #     metas = [[data['img_metas'][0].data]]
-        #     img = [data['img'][0].data]
-        #     data['img_metas'][0] = DC(metas)
-        #     data['img'][0] = DC(img)
-        #     self.data = data
-        #     #self.data['img_metas'][0].data = [[self.data['img_metas'][0].data]]
-        
-          
-        
-        # for i,data in enumerate(self.data_loader, self.data_idx.get()):
-        #     if i==self.data_idx.get(): 
-        #         self.data = data
-        #         break
-            
-        if self.selected_head_fusion.get() != "gradcam":
-            outputs = self.gen.extract_attentions(self.data)
-        else:
-            outputs = self.gen.extract_attentions(self.data, self.selected_bbox.get())
-
-        self.nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes() 
-        self.outputs = outputs[0]["pts_bbox"]
-        
-        self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
-        self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
-        self.pred_bboxes.tensor.detach()
-        self.labels = self.outputs['labels_3d'][self.thr_idxs]
-        
-        imgs = self.data["img"][0]._data[0].numpy()[0]
-        imgs = imgs.transpose(0,2,3,1)[:,:900,:,:]
-        self.imgs = imgs.astype(np.uint8)
- 
-        self.img_metas = self.data["img_metas"][0]._data[0][0]
         
 
         
@@ -454,9 +416,52 @@ class App(Tk):
         self.bbox_opt.delete(3, 'end')
         for i in range(len(self.thr_idxs.nonzero())):
             view_bbox = BooleanVar()
-            self.bbox_opt.add_checkbutton(label = f"{class_names[self.labels[i].item()]} ({i})", onvalue=1, offvalue=0, variable=view_bbox)
+            self.bbox_opt.add_checkbutton(label = f"{class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=view_bbox)
             self.bboxes.append(view_bbox)
 
+    def update_values(self):
+        if isinstance(self.data_loader, list):
+            self.data = self.data_loader[self.data_idx.get()]
+        else:
+            # for i,data in enumerate(self.data_loader, start = self.data_idx.get()):
+            #     if i==self.data_idx.get(): 
+            #         self.data = data
+            #         break
+            # for i, data in enumerate(self.data_loader):
+            #     ok = 0
+                
+            # ciao = 0
+            data = self.data_loader.dataset.__getitem__(5)
+            #self.data = next(self.data_loader,100)
+            #self.data = next(self.data_loader)
+            #self.data = next(itertools.islice(self.data_loader, 1, None))
+
+            metas = [data['img_metas'][0].data]
+            img = [data['img'][0].data]
+            data['img_metas'][0] = DC(metas)
+            data['img'][0] = DC(img)
+            self.data = data
+            #self.data['img_metas'][0].data = [[self.data['img_metas'][0].data]]
+
+            
+        if self.selected_head_fusion.get() != "gradcam":
+            outputs = self.gen.extract_attentions(self.data)
+        else:
+            outputs = self.gen.extract_attentions(self.data, self.selected_bbox.get())
+
+        self.nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes() 
+        self.outputs = outputs[0]["pts_bbox"]
+        
+        self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
+        self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
+        self.pred_bboxes.tensor.detach()
+        self.labels = self.outputs['labels_3d'][self.thr_idxs]
+        
+        imgs = self.data["img"][0]._data[0].numpy()[0]
+        imgs = imgs.transpose(0,2,3,1)[:,:900,:,:]
+        self.imgs = imgs.astype(np.uint8)
+ 
+        self.img_metas = self.data["img_metas"][0]._data[0][0]
     
     def visualize(self):
         
@@ -464,17 +469,15 @@ class App(Tk):
         self.spec = self.fig.add_gridspec(3, 3)
         
         # Avoiding to visualize all layers and all cameras at the same time
-        if self.selected_camera.get() == 6 and self.selected_layer.get() == 6:
-            if self.selected_camera.get() == 6: self.selected_layer.set(5)
-            if self.selected_layer.get() == 6: self.selected_camera.set(0)
+        if self.selected_camera.get() == 6 and self.selected_layer.get() == 6: self.selected_layer.set(5)
         
         if self.old_data_idx != self.data_idx.get() or self.old_thr != self.selected_threshold.get() or self.new_model:
-            self.old_data_idx = self.data_idx.get()
             self.update_values()
             self.update_bbox()
             self.bboxes[0].set(True)  # Default bbox for first visualization
             if self.new_model: self.new_model = False 
             if self.old_thr != self.selected_threshold.get(): self.old_thr = self.selected_threshold.get()
+            if self.old_data_idx != self.data_idx.get(): self.old_data_idx = self.data_idx.get()
         
         else:
             if self.single_bbox.get():
