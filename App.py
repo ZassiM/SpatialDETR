@@ -80,7 +80,7 @@ class App(Tk):
         self.add_separator()
         
         # Speeding up the testing
-        #self.load_from_config()
+        self.load_from_config()
         
     def show_info(self):
         showinfo(title=None, message="Reload model to apply the GPU change.")
@@ -110,13 +110,13 @@ class App(Tk):
         frame1 = Frame(self)
         frame1.pack(fill=Y)
         
-        self.text_label = StringVar()
-        self.text_label.set("Select bbox index:")
-        label2 = Label(frame1,textvariable = self.text_label)
-        label2.pack(side=TOP)
-        self.selected_bbox = Scale(frame1, from_=0, to=len(self.thr_idxs), orient=HORIZONTAL, showvalue=0, command = self.update_bbox_label)
-        self.selected_bbox.set(0)
-        self.selected_bbox.pack()
+        # self.text_label = StringVar()
+        # self.text_label.set("Select bbox index:")
+        # label2 = Label(frame1,textvariable = self.text_label)
+        # label2.pack(side=TOP)
+        # self.selected_bbox = Scale(frame1, from_=0, to=len(self.thr_idxs), orient=HORIZONTAL, showvalue=0, command = self.update_bbox_label)
+        # self.selected_bbox.set(0)
+        # self.selected_bbox.pack()
         
         
         # Prediction threshold + Discard ratio  
@@ -166,6 +166,7 @@ class App(Tk):
         self.BB_bool.set(True)
         self.scale.set(True)
         self.show_labels.set(True)
+        self.attn_norm.set(True)
         self.attn_contr.set(True)
         add_opt.add_checkbutton(label="Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label="Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
@@ -174,7 +175,16 @@ class App(Tk):
         add_opt.add_checkbutton(label="Normalize attention", onvalue=1, offvalue=0, variable=self.attn_norm)
         add_opt.add_checkbutton(label="Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
         add_opt.add_checkbutton(label="Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
-    
+        
+        # Bounding boxes
+        self.bbox_opt = Menu(self.menubar)
+        self.single_bbox = BooleanVar()
+        self.single_bbox.set(False)
+        self.bboxes = []
+        self.bbox_idx = [0]
+        self.bbox_opt.add_checkbutton(label="Single bounding box", onvalue=1, offvalue=0, variable = self.single_bbox, command = self.single_bbox_select)
+        self.bbox_opt.add_separator()
+        
         self.menubar.add_cascade(label="Prediction threshold", menu=thr_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Discard ratio", menu=dr_opt)
@@ -183,12 +193,22 @@ class App(Tk):
         self.add_separator()
         self.menubar.add_cascade(label="Attention", menu=attn_opt)
         self.add_separator()
-        self.menubar.add_cascade(label="View", menu=add_opt)
+        self.menubar.add_cascade(label="Options", menu=add_opt)
+        self.add_separator()
+        self.menubar.add_cascade(label="Bounding boxes", menu=self.bbox_opt)
 
         plot_button = Button(self, command = self.visualize, text = "Visualize")
         
         plot_button.pack()
         
+    def single_bbox_select(self):
+        if self.single_bbox.get():
+            found = 0
+            for i in range(len(self.bboxes)):
+                if self.bboxes[i].get() == True and not found:
+                    found = 1
+                    continue
+                self.bboxes[i].set(False)
         
     def load_from_config(self):
 
@@ -242,7 +262,8 @@ class App(Tk):
             model, _, dataloader = init_app(args)
                 
         self.model = MMDataParallel(model, device_ids = [self.gpu_id.get()])
-        self.data_loader = dataloader
+        #self.data_loader = iter(dataloader)
+        self.data_loader = iter(dataloader)
         self.gen = Generator(self.model)
         self.new_model = True
         
@@ -278,6 +299,7 @@ class App(Tk):
             filetypes=filetypes)
         
         self.data_loader = torch.load(open(filename, 'rb'))
+        self.update_bbox()
         print("Loading completed.")
         
     def load_gtbboxes(self):
@@ -295,6 +317,7 @@ class App(Tk):
         
     def add_separator(self):
         self.menubar.add_command(label="\u22EE", activebackground=self.menubar.cget("background"))
+        #ciao = 0
 
     def update_thr(self):
         self.BB_bool.set(True)
@@ -309,20 +332,24 @@ class App(Tk):
     def update_values(self):
         if isinstance(self.data_loader, list):
             self.data = self.data_loader[self.data_idx.get()]
-        # else:
-        #     data = self.data_loader.dataset[self.data_idx.get()]
+        else:
+            #self.data = self.data_loader.dataset.prepare_test_data(self.data_idx.get())
+            #self.data = next(self.data_loader,100)
+            self.data = next(self.data_loader)
+
         #     metas = [[data['img_metas'][0].data]]
         #     img = [data['img'][0].data]
         #     data['img_metas'][0] = DC(metas)
         #     data['img'][0] = DC(img)
         #     self.data = data
         #     #self.data['img_metas'][0].data = [[self.data['img_metas'][0].data]]
-            
         
-        for i,data in enumerate(self.data_loader):
-            if i==self.data_idx.get(): 
-                self.data = data
-                break
+          
+        
+        # for i,data in enumerate(self.data_loader, self.data_idx.get()):
+        #     if i==self.data_idx.get(): 
+        #         self.data = data
+        #         break
             
         if self.selected_head_fusion.get() != "gradcam":
             outputs = self.gen.extract_attentions(self.data)
@@ -332,14 +359,21 @@ class App(Tk):
         self.nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes() 
         self.outputs = outputs[0]["pts_bbox"]
         
+        self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
+        self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
+        self.pred_bboxes.tensor.detach()
+        self.labels = self.outputs['labels_3d'][self.thr_idxs]
+        
         imgs = self.data["img"][0]._data[0].numpy()[0]
         imgs = imgs.transpose(0,2,3,1)[:,:900,:,:]
         self.imgs = imgs.astype(np.uint8)
  
         self.img_metas = self.data["img_metas"][0]._data[0][0]
         
+
+        
     def update_scores(self):
-        self.all_attn = self.gen.get_all_attn(self.selected_bbox.get(), self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
+        self.all_attn = self.gen.get_all_attn(self.bbox_idx, self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
         self.scores = []
         self.scores_perc = []
         if self.selected_layer.get() == 6:
@@ -367,7 +401,7 @@ class App(Tk):
         attn_cameras = []
         if self.selected_camera.get() == 6:
             for i in range(6):
-                attn_cam = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, i, self.head_fusion, self.discard_ratio, self.raw_attn.get())       
+                attn_cam = self.gen.generate_rollout(self.bbox_idx, self.nms_idxs, i, self.head_fusion, self.discard_ratio, self.raw_attn.get())       
                 attn_cameras.append(attn_cam)
             attn_max = torch.max(torch.cat(attn_cameras))
             self.gen.camidx = self.selected_camera.get()
@@ -377,7 +411,7 @@ class App(Tk):
             for i in range(6):
                 if self.selected_layer.get() == 6: self.gen.layer = i
                 else: self.selected_camera.set(self.cam_idx[i])
-                attn = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
+                attn = self.gen.generate_rollout(self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
                 # Normalization
                 if attn_cameras and self.attn_norm.get():
                     attn /= attn_max
@@ -401,7 +435,7 @@ class App(Tk):
                 self.selected_camera.set(6)
                 
         else:
-            attn = self.gen.generate_rollout(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
+            attn = self.gen.generate_rollout(self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
             attn = attn.view(29, 50).cpu().numpy()
             ax_attn = self.fig.add_subplot(self.spec[1,grid_clm])
             if self.attn_norm.get():
@@ -415,7 +449,14 @@ class App(Tk):
                 im_ratio = attn.shape[1]/attn.shape[0]
                 self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
         
-    
+    def update_bbox(self):
+        self.bboxes = []
+        self.bbox_opt.delete(3, 'end')
+        for i in range(len(self.thr_idxs.nonzero())):
+            view_bbox = BooleanVar()
+            self.bbox_opt.add_checkbutton(label = f"{class_names[self.labels[i].item()]} ({i})", onvalue=1, offvalue=0, variable=view_bbox)
+            self.bboxes.append(view_bbox)
+
     
     def visualize(self):
         
@@ -430,15 +471,16 @@ class App(Tk):
         if self.old_data_idx != self.data_idx.get() or self.old_thr != self.selected_threshold.get() or self.new_model:
             self.old_data_idx = self.data_idx.get()
             self.update_values()
-            self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
-            self.selected_bbox.configure(to = len(self.thr_idxs.nonzero())-1)
-            self.selected_bbox.set(0)
+            self.update_bbox()
+            self.bboxes[0].set(True)  # Default bbox for first visualization
             if self.new_model: self.new_model = False 
             if self.old_thr != self.selected_threshold.get(): self.old_thr = self.selected_threshold.get()
+        
+        else:
+            if self.single_bbox.get():
+                self.single_bbox_select()
+            self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
-        self.labels = self.outputs['labels_3d'][self.thr_idxs]
-        self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
-        self.pred_bboxes.tensor.detach()
             
         if self.selected_layer.get() != 6:
             self.gen.layer = self.selected_layer.get()
@@ -464,7 +506,7 @@ class App(Tk):
                     color=(0,255,0),
                     with_label = self.show_labels.get(),
                     all_bbx = self.BB_bool.get(),
-                    bbx_idx = self.selected_bbox.get())  
+                    bbx_idx = self.bbox_idx)  
             
             if self.gt_bbox:
                 img = draw_lidar_bbox3d_on_img(
@@ -479,13 +521,11 @@ class App(Tk):
                        
             
         if self.head_fusion not in ("all", "gradcam"):
+            self.show_attn_maps()
             # if self.overlay.get():
             #     attn = cv2.resize(attn, (self.imgs_bbox[0].shape[1], self.imgs_bbox[0].shape[0]))
             #     img = show_attn_on_img(self.imgs_bbox[self.selected_camera.get()], attn)
             #     attmap = ax_attn.imshow(img)
-            
-            #else
-            self.show_attn_maps()
 
 
         elif self.head_fusion == "gradcam":   
