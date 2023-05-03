@@ -23,3 +23,5 @@ docker run \
 --mount source=$work_dirs,target=/workspace/work_dirs,type=bind,consistency=cached \
 -it \
 $DOCKER_NAME
+
+xhost -
