@@ -14,6 +14,7 @@ import cv2
 import random
 import pathlib
 import tomli
+import itertools
 
 
 from Attention import Generator
@@ -250,7 +251,7 @@ class App(Tk):
         
         filename = fd.askopenfilename(
             title='Load model file',
-            initialdir='/workspace/configs/submission/frozen_4/',
+            initialdir='/workspace/configs/submission/',
             filetypes=filetypes)
         
         if pathlib.Path(filename).suffix == '.pth':
@@ -265,7 +266,7 @@ class App(Tk):
                 
         self.model = MMDataParallel(model, device_ids = [self.gpu_id.get()])
         #self.data_loader = iter(dataloader)
-        self.data_loader = dataloader
+        self.data_loader = iter(dataloader)
         self.gen = Generator(self.model)
         self.new_model = True
         
@@ -431,16 +432,16 @@ class App(Tk):
             #     ok = 0
                 
             # ciao = 0
-            data = self.data_loader.dataset.__getitem__(5)
+            #data = self.data_loader.dataset.__getitem__(5)
             #self.data = next(self.data_loader,100)
             #self.data = next(self.data_loader)
-            #self.data = next(itertools.islice(self.data_loader, 1, None))
+            self.data = next(self.data_loader)
 
-            metas = [data['img_metas'][0].data]
-            img = [data['img'][0].data]
-            data['img_metas'][0] = DC(metas)
-            data['img'][0] = DC(img)
-            self.data = data
+            # metas = [data['img_metas'][0].data]
+            # img = [data['img'][0].data]
+            # data['img_metas'][0] = DC(metas)
+            # data['img'][0] = DC(img)
+            # self.data = data
             #self.data['img_metas'][0].data = [[self.data['img_metas'][0].data]]
 
             
