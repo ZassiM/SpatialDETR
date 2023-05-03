@@ -448,7 +448,7 @@ class App(Tk):
         if self.selected_head_fusion.get() != "gradcam":
             outputs = self.gen.extract_attentions(self.data)
         else:
-            outputs = self.gen.extract_attentions(self.data, self.selected_bbox.get())
+            outputs = self.gen.extract_attentions(self.data, self.bbox_idx)
 
         self.nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes() 
         self.outputs = outputs[0]["pts_bbox"]
@@ -533,8 +533,8 @@ class App(Tk):
 
 
         elif self.head_fusion == "gradcam":   
-            self.gen.extract_attentions(self.data, self.selected_bbox.get())
-            attn = self.gen.generate_attn_gradcam(self.selected_bbox.get(), self.nms_idxs, self.selected_camera.get())
+            self.gen.extract_attentions(self.data, self.bbox_idx)
+            attn = self.gen.generate_attn_gradcam(self.bbox_idx, self.nms_idxs, self.selected_camera.get())
             attn = attn.view(29, 50).cpu().numpy()
             ax_attn = self.fig.add_subplot(self.spec[1,1])
             attmap = ax_attn.imshow(attn)
