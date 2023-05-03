@@ -1,5 +1,5 @@
-import numpy as np
 import torch
+
 
 def compute_rollout_attention(all_layer_matrices, start_layer=0):
     # adding residual consideration
@@ -14,6 +14,7 @@ def compute_rollout_attention(all_layer_matrices, start_layer=0):
         joint_attention = matrices_aug[i].matmul(joint_attention)
     return joint_attention
 
+
 # rule 5 from paper
 def avg_heads(attn, grad):
     attn = attn.reshape(-1, attn.shape[-2], attn.shape[-1])
@@ -22,7 +23,8 @@ def avg_heads(attn, grad):
     attn = attn.clamp(min=0).mean(dim=0)
     return attn
 
-def avg_heads(attn, head_fusion = "min", discard_ratio = 0.9):
+
+def avg_heads(attn, head_fusion="min", discard_ratio=0.9):
     if head_fusion == "mean":
         attn = attn.mean(dim=0)
     elif head_fusion == "max":
@@ -68,6 +70,9 @@ def handle_residual(orig_self_attention):
 
 
 class Generator:
+    """
+    Short description - What is the purpose ?
+    """
     def __init__(self, model):
         self.model = model
         self.model.eval()
@@ -78,8 +83,7 @@ class Generator:
         self.layer = self.layers - 1
         self.dec_cross_attn_weights, self.dec_cross_attn_grads, self.dec_self_attn_weights, self.dec_self_attn_grads = [], [], [], []    
     
-    def extract_attentions(self, data, target_index = None):
-        
+    def extract_attentions(self, data, target_index=None):
         self.dec_self_attn_weights, self.dec_cross_attn_weights = [], []
         hooks = []
         for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
@@ -127,7 +131,7 @@ class Generator:
             
         return outputs
 
-    def get_all_attn(self, target_idx, indexes, head_fusion = "min", discard_ratio = 0.9, raw = True):
+    def get_all_attn(self, target_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True):
         #self.dec_cross_attn_weights = 6x[6x8x900x1450] = layers x (cams x heads x queries x keys)
 
         all_attn_layers = []
@@ -136,7 +140,7 @@ class Generator:
             all_attn = []
             # loop through cameras
             for attn in self.dec_cross_attn_weights[i]:
-                attn_avg = avg_heads(attn, head_fusion = head_fusion, discard_ratio = discard_ratio)
+                attn_avg = avg_heads(attn, head_fusion=head_fusion, discard_ratio=discard_ratio)
                 if isinstance(target_idx, list):
                     attn_avg = attn_avg[indexes[target_idx]].detach()
                     attn_avg = attn_avg.sum(dim=0)
@@ -194,7 +198,7 @@ class Generator:
                 
     #     return aggregated
     
-    def generate_rollout(self, target_idx, indexes, camidx, head_fusion = "min", discard_ratio = 0.9, raw = True):
+    def generate_rollout(self, target_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):
         self.camidx = camidx
         self.head_fusion = head_fusion
         self.discard_ratio = discard_ratio

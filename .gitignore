@@ -137,6 +137,5 @@ mmdet3d/core/evaluation/waymo_utils/compute_detection_metrics_main
 tk_try.py
 try_code.py
 output_video.avi
-try_code.py
-try_code.py
-try_code.py
+
+spatial_detr.egg-info
