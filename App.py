@@ -14,18 +14,19 @@ import cv2
 import random
 import pathlib
 import tomli
-import itertools
+import itertools  # not used 
 
 
-from Attention import Generator
-from other_scripts.save_model import init_app
+from Attention import Generator  # better Naming
+from other_scripts.save_model import init_app  # other_script not a good naming
 from mmcv.parallel import MMDataParallel
-from mmcv.parallel import DataContainer as DC
-from matplotlib import gridspec
-import matplotlib.pyplot as plt
-from tools.data_converter.nuscenes_converter import get_2d_boxes
-from mmdet3d.datasets import NuScenesDataset
-            
+from mmcv.parallel import DataContainer as DC  # not used
+from matplotlib import gridspec  # not used
+import matplotlib.pyplot as plt  # duplicate line
+from tools.data_converter.nuscenes_converter import get_2d_boxes  # not used
+from mmdet3d.datasets import NuScenesDataset  # not used
+
+
 class_names = [
     "car",
     "truck",
@@ -39,6 +40,7 @@ class_names = [
     "traffic_cone",
 ]
 
+# https://www.etutorialspoint.com/index.php/319-python-opencv-overlaying-or-blending-two-images
 def show_attn_on_img(img, mask):
     img = np.float32(img) / 255
     heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
@@ -48,12 +50,14 @@ def show_attn_on_img(img, mask):
     return np.uint8(255 * cam)
 
 
-
 class App(Tk):
-        
+    """
+    Implements UI
+    """
+
     def __init__(self):
         super().__init__()
-        
+
         style = ttk.Style(self)
         style.theme_use("clam")
         self.title('Attention Visualization')
@@ -69,9 +73,9 @@ class App(Tk):
         file_opt, gpu_opt = Menu(self.menubar), Menu(self.menubar)
         self.gpu_id = IntVar()
         self.gpu_id.set(0)
-        file_opt.add_command(label="Load model", command = self.load_model)
+        file_opt.add_command(label="Load model", command=self.load_model)
         #file_opt.add_command(label="Load weights", command = self.load_weights)
-        file_opt.add_command(label="Load dataset", command = self.load_dataset)
+        file_opt.add_command(label="Load dataset", command=self.load_dataset)
         file_opt.add_command(label="Load gt bboxes", command = self.load_gtbboxes)
         file_opt.add_command(label="Load from config file", command = self.load_from_config)
         file_opt.add_separator()
@@ -94,7 +98,7 @@ class App(Tk):
         self.old_data_idx, self.old_bbox_idx, self.old_layer_idx, self.new_model, self.canvas, self.gt_bbox= None, None, None, None, None, None
         self.old_thr = -1
         self.head_fusion = "min"
-        self.discard_ratio = 0.9      
+        self.discard_ratio = 0.9
         self.cam_idx = [2, 0, 1, 5, 3, 4]
         self.scores = []
         
@@ -103,9 +107,9 @@ class App(Tk):
         
         self.data_label = StringVar()
         self.data_label.set("Select data index:")
-        label0 = Label(frame,textvariable=self.data_label, anchor = CENTER)
+        label0 = Label(frame,textvariable=self.data_label, anchor=CENTER)
         label0.pack(side=TOP)
-        self.data_idx = Scale(frame, from_=0, to=len(self.data_loader)-1, showvalue=0, orient=HORIZONTAL, command = self.update_data_label)
+        self.data_idx = Scale(frame, from_=0, to=len(self.data_loader)-1, showvalue=0, orient=HORIZONTAL, command=self.update_data_label)
         idx = random.randint(0, len(self.data_loader)-1)
         self.data_idx.set(idx)
         self.data_idx.pack()
@@ -127,9 +131,9 @@ class App(Tk):
         self.selected_threshold, self.selected_discard_ratio = DoubleVar(), DoubleVar()
         self.selected_threshold.set(0.5)
         self.selected_discard_ratio.set(0.5)
-        values = np.arange(0.0,1,0.1).round(1)
+        values = np.arange(0.0, 1, 0.1).round(1)
         for i in values:
-            thr_opt.add_radiobutton(label=i, variable=self.selected_threshold, command = self.update_thr)
+            thr_opt.add_radiobutton(label=i, variable=self.selected_threshold, command=self.update_thr)
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_ratio)
             
         # Camera
@@ -138,7 +142,7 @@ class App(Tk):
         self.selected_camera = IntVar()
         self.selected_camera.set(0)
         for value,key in enumerate(self.cameras):
-            camera_opt.add_radiobutton(label = key, variable = self.selected_camera, value = value)
+            camera_opt.add_radiobutton(label=key, variable=self.selected_camera, value=value)
         
         # Attention
         attn_opt, attn_rollout = Menu(self.menubar), Menu(self.menubar)
@@ -149,18 +153,18 @@ class App(Tk):
         self.raw_attn.set(True)
         attn_opt.add_cascade(label="Attention Rollout", menu=attn_rollout)
         for i in range(len(self.head_types)):
-            attn_rollout.add_radiobutton(label = self.head_types[i].capitalize(), variable = self.selected_head_fusion, value = self.head_types[i])
-        attn_rollout.add_radiobutton(label = "All", variable = self.selected_head_fusion, value = "all")
-        attn_rollout.add_checkbutton(label = "Raw attention", variable = self.raw_attn, onvalue=1, offvalue=0)
-        attn_opt.add_radiobutton(label = "Grad-CAM", variable = self.selected_head_fusion, value = "gradcam")
+            attn_rollout.add_radiobutton(label=self.head_types[i].capitalize(), variable = self.selected_head_fusion, value=self.head_types[i])
+        attn_rollout.add_radiobutton(label="All", variable=self.selected_head_fusion, value="all")
+        attn_rollout.add_checkbutton(label="Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
+        attn_opt.add_radiobutton(label="Grad-CAM", variable=self.selected_head_fusion, value="gradcam")
         attn_opt.add_separator()
                 
         attn_layer = Menu(self.menubar)
         self.selected_layer = IntVar()
         self.selected_layer.set(5)
         for i in range(len(self.model.module.pts_bbox_head.transformer.decoder.layers)):
-            attn_layer.add_radiobutton(label = i, variable = self.selected_layer)
-        attn_layer.add_radiobutton(label = "All", variable = self.selected_layer, value=6)
+            attn_layer.add_radiobutton(label=i, variable=self.selected_layer)
+        attn_layer.add_radiobutton(label="All", variable=self.selected_layer, value=6)
         attn_opt.add_cascade(label="Layer", menu=attn_layer)
         
         # View options
@@ -185,7 +189,7 @@ class App(Tk):
         self.single_bbox.set(False)
         self.bboxes = []
         self.bbox_idx = [0]
-        self.bbox_opt.add_checkbutton(label="Single bounding box", onvalue=1, offvalue=0, variable = self.single_bbox, command = self.single_bbox_select)
+        self.bbox_opt.add_checkbutton(label="Single bounding box", onvalue=1, offvalue=0, variable=self.single_bbox, command=self.single_bbox_select)
         self.bbox_opt.add_separator()
         
         self.menubar.add_cascade(label="Prediction threshold", menu=thr_opt)
@@ -200,7 +204,7 @@ class App(Tk):
         self.add_separator()
         self.menubar.add_cascade(label="Bounding boxes", menu=self.bbox_opt)
 
-        plot_button = Button(self, command = self.visualize, text = "Visualize")
+        plot_button = Button(self, command=self.visualize, text="Visualize")
         
         plot_button.pack()
         
@@ -208,14 +212,14 @@ class App(Tk):
         if self.single_bbox.get():
             found = 0
             for i in range(len(self.bboxes)):
-                if self.bboxes[i].get() == True and not found:
+                if self.bboxes[i].get() and not found:
                     found = 1
                     continue
                 self.bboxes[i].set(False)
         
     def load_from_config(self):
 
-        with open("config.toml", mode = "rb") as argsF:
+        with open("config.toml", mode="rb") as argsF:
             args = tomli.load(argsF)
             
         model_filename = args["model_filename"]
@@ -231,7 +235,7 @@ class App(Tk):
         print(f"Loading GT Bounding Boxes from {GT_filename}...\n")
         gt_bboxes = torch.load(open(GT_filename, 'rb'))
         
-        self.model = MMDataParallel(model, device_ids = [self.gpu_id.get()])
+        self.model = MMDataParallel(model, device_ids=[self.gpu_id.get()])
         self.data_loader = dataset
         self.gt_bboxes = gt_bboxes
         self.gen = Generator(self.model)
@@ -259,26 +263,30 @@ class App(Tk):
             
         elif pathlib.Path(filename).suffix == '.py':
             # Model configuration needs to load weights
-            args={}
+            args = {}
             args["config"] = filename
             args["checkpoint"] = self.load_weights()
             model, _, dataloader = init_app(args)
-                
-        self.model = MMDataParallel(model, device_ids = [self.gpu_id.get()])
-        #self.data_loader = iter(dataloader)
-        self.data_loader = iter(dataloader)
-        self.gen = Generator(self.model)
+        
+        # I don't think we need a parallel model here, just take the normal model object
+        # Parallel model is used for Training on severl GPUs
+        # self.model = model.to(self.gpu_id.get())
+        self.model = MMDataParallel(model, device_ids=[self.gpu_id.get()])
+
+        # self.data_loader = iter(dataloader)  # double line
+        self.data_loader = iter(dataloader)  # why is it necessary here ?
+        self.gen = Generator(self.model)  # better name for Generator, more specific
         self.new_model = True
-        
-        
+
+
         if not self.started_app:
             #self.load_dataset()
             #self.load_gtbboxes()
             self.start_app()
             self.started_app = True
-        
+
         print("Loading completed.")
-            
+
     def load_weights(self):
         filetypes = (
             ('Pickle', '*.pth'),
@@ -287,11 +295,11 @@ class App(Tk):
         filename = fd.askopenfilename(
             title='Load weights',
             initialdir='/workspace/work_dirs/checkpoints/',
-            filetypes=filetypes)     
-                
+            filetypes=filetypes)
+
         return filename
 
-    
+
     def load_dataset(self):
         filetypes = (
             ('Pickle', '*.pth'),
@@ -317,7 +325,7 @@ class App(Tk):
 
         self.gt_bboxes = torch.load(open(filename, 'rb'))
         print("Loading completed.")
-        
+
     def add_separator(self):
         self.menubar.add_command(label="\u22EE", activebackground=self.menubar.cget("background"))
         #ciao = 0
@@ -325,17 +333,18 @@ class App(Tk):
     def update_thr(self):
         self.BB_bool.set(True)
         self.show_labels.set(True)
-        
+
     def update_data_label(self, idx):
-       self.data_label.set(f"Select data index: {int(idx)}")
+        self.data_label.set(f"Select data index: {int(idx)}")
 
     # def update_bbox_label(self, idx):
     #    self.text_label.set(f"Select bbox index: {class_names[self.labels[int(idx)].item()]} ({int(idx)})")
 
-        
 
-        
     def update_scores(self):
+        """
+        add short docstring which explains the function
+        """
         self.all_attn = self.gen.get_all_attn(self.bbox_idx, self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
         self.scores = []
         self.scores_perc = []
@@ -355,7 +364,7 @@ class App(Tk):
             score_perc = round(((self.scores[i]/sum_scores)*100))
             self.scores_perc.append(score_perc)
                 
-    def show_attn_maps(self, grid_clm = 1):
+    def show_attn_maps(self, grid_clm=1):
         
         if self.attn_contr.get():
             self.update_scores()
@@ -364,22 +373,25 @@ class App(Tk):
         attn_cameras = []
         if self.selected_camera.get() == 6:
             for i in range(6):
-                attn_cam = self.gen.generate_rollout(self.bbox_idx, self.nms_idxs, i, self.head_fusion, self.discard_ratio, self.raw_attn.get())       
+                attn_cam = self.gen.generate_rollout(self.bbox_idx, self.nms_idxs, i, self.head_fusion, self.discard_ratio, self.raw_attn.get())
                 attn_cameras.append(attn_cam)
             attn_max = torch.max(torch.cat(attn_cameras))
             self.gen.camidx = self.selected_camera.get()
-            
+        
+        # add inline comment what is done here
         if self.selected_layer.get() == 6 or self.selected_camera.get() == 6:
-            layer_grid = self.spec[1,grid_clm].subgridspec(2,3)
+            layer_grid = self.spec[1, grid_clm].subgridspec(2, 3)
             for i in range(6):
-                if self.selected_layer.get() == 6: self.gen.layer = i
-                else: self.selected_camera.set(self.cam_idx[i])
+                if self.selected_layer.get() == 6:
+                    self.gen.layer = i
+                else:
+                    self.selected_camera.set(self.cam_idx[i])
                 attn = self.gen.generate_rollout(self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
                 # Normalization
                 if attn_cameras and self.attn_norm.get():
                     attn /= attn_max
-                attn = attn.view(29, 50).cpu().numpy()
-                ax_attn = self.fig.add_subplot(layer_grid[i>2,i if i<3 else i-3])
+                attn = attn.view(29, 50).cpu().numpy()  # hard coded
+                ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i-3])
                 if attn_cameras and self.attn_norm.get():
                     attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
                 else:
@@ -388,15 +400,19 @@ class App(Tk):
                 if self.scale.get():  
                     im_ratio = attn.shape[1]/attn.shape[0]
                     self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
+                # hard to read the following code
                 if self.attn_contr.get():
-                    if self.selected_layer.get() == 6: ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[i]}%', fontsize=fontsize)
-                    else: ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[self.cam_idx[i]]}%', fontsize=fontsize)
+                    if self.selected_layer.get() == 6:
+                        ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[i]}%', fontsize=fontsize)
+                    else:
+                        ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[self.cam_idx[i]]}%', fontsize=fontsize)
                 else:
                     ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}', fontsize=fontsize)
 
             if self.selected_layer.get() != 6:
                 self.selected_camera.set(6)
-                
+
+        # add inline comment what is the case here ?
         else:
             attn = self.gen.generate_rollout(self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
             attn = attn.view(29, 50).cpu().numpy()
@@ -425,7 +441,7 @@ class App(Tk):
             self.data = self.data_loader[self.data_idx.get()]
         else:
             # for i,data in enumerate(self.data_loader, start = self.data_idx.get()):
-            #     if i==self.data_idx.get(): 
+            #     if i==self.data_idx.get():
             #         self.data = data
             #         break
             # for i, data in enumerate(self.data_loader):
@@ -459,14 +475,14 @@ class App(Tk):
         self.labels = self.outputs['labels_3d'][self.thr_idxs]
         
         imgs = self.data["img"][0]._data[0].numpy()[0]
-        imgs = imgs.transpose(0,2,3,1)[:,:900,:,:]
+        imgs = imgs.transpose(0, 2, 3, 1)[:, :900, :, :]
         self.imgs = imgs.astype(np.uint8)
  
         self.img_metas = self.data["img_metas"][0]._data[0][0]
     
     def visualize(self):
         
-        self.fig = plt.figure(figsize=(80,60), layout="constrained")
+        self.fig = plt.figure(figsize=(80, 60), layout="constrained")
         self.spec = self.fig.add_gridspec(3, 3)
         
         # Avoiding to visualize all layers and all cameras at the same time
@@ -503,14 +519,14 @@ class App(Tk):
         self.imgs_bbox = []
         for camidx in range(6):
             img = draw_lidar_bbox3d_on_img(
-                    self.pred_bboxes ,
+                    self.pred_bboxes,
                     self.imgs[camidx],
                     self.img_metas['lidar2img'][camidx],
                     self.img_metas,
-                    color=(0,255,0),
-                    with_label = self.show_labels.get(),
-                    all_bbx = self.BB_bool.get(),
-                    bbx_idx = self.bbox_idx)  
+                    color=(0, 255, 0),
+                    with_label=self.show_labels.get(),
+                    all_bbx=self.BB_bool.get(),
+                    bbx_idx=self.bbox_idx)  
             
             if self.gt_bbox:
                 img = draw_lidar_bbox3d_on_img(
@@ -518,7 +534,7 @@ class App(Tk):
                         img,
                         self.img_metas['lidar2img'][camidx],
                         self.img_metas,
-                        color=(255,0,0))
+                        color=(255, 0, 0))
             
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.imgs_bbox.append(img)
@@ -532,16 +548,16 @@ class App(Tk):
             #     attmap = ax_attn.imshow(img)
 
 
-        elif self.head_fusion == "gradcam":   
+        elif self.head_fusion == "gradcam":
             self.gen.extract_attentions(self.data, self.bbox_idx)
             attn = self.gen.generate_attn_gradcam(self.bbox_idx, self.nms_idxs, self.selected_camera.get())
             attn = attn.view(29, 50).cpu().numpy()
-            ax_attn = self.fig.add_subplot(self.spec[1,1])
+            ax_attn = self.fig.add_subplot(self.spec[1, 1])
             attmap = ax_attn.imshow(attn)
             ax_attn.axis('off')
             ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}')  
             
-            if self.scale.get():  
+            if self.scale.get():
                 im_ratio = attn.shape[1]/attn.shape[0]
                 norm = mpl.colors.Normalize(vmin=0, vmax=1)
                 self.fig.colorbar(attmap, norm=norm, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
@@ -549,7 +565,7 @@ class App(Tk):
         elif self.head_fusion == "all":
             for k in range(len(self.head_types)):
                 self.head_fusion = self.head_types[k]
-                self.show_attn_maps(grid_clm = k)
+                self.show_attn_maps(grid_clm=k)
                 
        
         for i in range(6):
@@ -562,18 +578,18 @@ class App(Tk):
             ax.axis('off')
             
             if self.attn_contr.get():
-                if self.selected_layer.get() == 6: ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}') 
-                else: ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}, {self.scores_perc[self.cam_idx[i]]}%') 
+                if self.selected_layer.get() == 6:
+                    ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
+                else:
+                    ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}, {self.scores_perc[self.cam_idx[i]]}%')
             else: 
                 ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
    
-            
-        if self.canvas: self.canvas.get_tk_widget().pack_forget()
+        if self.canvas:
+            self.canvas.get_tk_widget().pack_forget()
         
-        self.canvas = FigureCanvasTkAgg(self.fig, self)  
+        self.canvas = FigureCanvasTkAgg(self.fig, self)
         self.canvas.draw()
         
         self.canvas.get_tk_widget().pack()
-        
-
         

@@ -187,8 +187,8 @@ def init_app(args):
 
 
 
-    dataset = build_dataset(cfg.data.test)
-    data_loader = build_dataloader(
+    dataset = build_dataset(cfg.data.test) 
+    data_loader = build_dataloader( # why do we need a data_loader, we can just take the dataset object
         dataset,
         samples_per_gpu=samples_per_gpu,
         workers_per_gpu=cfg.data.workers_per_gpu,

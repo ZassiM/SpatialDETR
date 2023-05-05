@@ -23,7 +23,7 @@ def avg_heads(attn, grad):
     attn = attn.clamp(min=0).mean(dim=0)
     return attn
 
-
+#  double definition !!!
 def avg_heads(attn, head_fusion="min", discard_ratio=0.9):
     if head_fusion == "mean":
         attn = attn.mean(dim=0)
@@ -72,6 +72,7 @@ def handle_residual(orig_self_attention):
 class Generator:
     """
     Short description - What is the purpose ?
+    Very generic name - better be more specific - ModelWithAttentionOutput
     """
     def __init__(self, model):
         self.model = model
@@ -215,10 +216,10 @@ class Generator:
 
         cam_q_i = self.dec_cross_attn_weights[self.layer][self.camidx]
         
-        cam_q_i = avg_heads(cam_q_i, head_fusion = self.head_fusion, discard_ratio = self.discard_ratio)
+        cam_q_i = avg_heads(cam_q_i, head_fusion=self.head_fusion, discard_ratio=self.discard_ratio)
         
         if raw: 
-            self.R_q_i = cam_q_i # Only one layer 
+            self.R_q_i = cam_q_i  # Only one layer
         else: 
             self.R_q_q = compute_rollout_attention(self.dec_self_attn_weights)
             #self.R_q_i = torch.matmul(self.R_q_q, torch.matmul(cam_q_i, self.R_i_i))[0]
