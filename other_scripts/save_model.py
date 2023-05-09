@@ -126,7 +126,7 @@ def init(args):
         # segmentation dataset has `PALETTE` attribute
         model.PALETTE = dataset.PALETTE
     
-    return model, dataset, data_loader, gpu_ids, cfg, distributed
+    return model, dataset, data_loader
 
 def init_app(args):
     
@@ -217,7 +217,7 @@ def init_app(args):
         # segmentation dataset has `PALETTE` attribute
         model.PALETTE = dataset.PALETTE
     
-    return model, dataset, data_loader
+    return model, data_loader
 
 def main():
     
@@ -225,21 +225,21 @@ def main():
         args = tomli.load(argsF)
     
     print("Loading data from configurations...")
-    model, dataset, data_loader, gpu_ids, cfg, distributed = init(args)
+    model, dataset, data_loader = init(args)
     
     if not os.path.exists("work_dirs/saved/"):
         os.makedirs("work_dirs/saved/")
 
-    # model_filename = args["model_filename"]
-    # print(f"Saving Model in {model_filename}...")
-    # torch.save(model, model_filename)
+    model_filename = args["model_filename"]
+    print(f"Saving Model in {model_filename}...")
+    torch.save(model, model_filename)
     
     dataset_filename = args["dataset_filename"]
     print(f"Loading Dataset...")
     dataset_list = []
     gt_bboxes = []
     for i, data in enumerate(data_loader):
-        if i>150: break
+        if i > 200: break
         dataset_list.append(data)
         gt_bbox = dataset.get_ann_info(i)['gt_bboxes_3d']
         gt_bboxes.append(gt_bbox)

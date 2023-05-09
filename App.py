@@ -1,4 +1,4 @@
-from tkinter import *
+import tkinter as tk
 from tkinter import ttk
 from tkinter.messagebox import showinfo
 from tkinter import filedialog as fd
@@ -12,20 +12,14 @@ import torch
 import numpy as np
 import cv2
 import random
-import pathlib
 import tomli
-import itertools
 
-
-from Attention import Generator
+from Attention import Attention
 from other_scripts.save_model import init_app
 from mmcv.parallel import MMDataParallel
 from mmcv.parallel import DataContainer as DC
-from matplotlib import gridspec
-import matplotlib.pyplot as plt
-from tools.data_converter.nuscenes_converter import get_2d_boxes
-from mmdet3d.datasets import NuScenesDataset
-            
+
+
 class_names = [
     "car",
     "truck",
@@ -39,6 +33,7 @@ class_names = [
     "traffic_cone",
 ]
 
+
 def show_attn_on_img(img, mask):
     img = np.float32(img) / 255
     heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
@@ -48,8 +43,7 @@ def show_attn_on_img(img, mask):
     return np.uint8(255 * cam)
 
 
-
-class App(Tk):
+class App(tk.Tk):
         
     def __init__(self):
         super().__init__()
@@ -63,109 +57,107 @@ class App(Tk):
         
         self.model, self.data_loader, self.gt_bboxes = None, None, None
         self.started_app = False
-        self.menubar = Menu(self)
+        self.menubar = tk.Menu(self)
         self.config(menu=self.menubar)
         
-        file_opt, gpu_opt = Menu(self.menubar), Menu(self.menubar)
-        self.gpu_id = IntVar()
+        file_opt, gpu_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
+        self.gpu_id = tk.IntVar()
         self.gpu_id.set(0)
-        file_opt.add_command(label="Load model", command = self.load_model)
-        #file_opt.add_command(label="Load weights", command = self.load_weights)
-        file_opt.add_command(label="Load dataset", command = self.load_dataset)
-        file_opt.add_command(label="Load gt bboxes", command = self.load_gtbboxes)
-        file_opt.add_command(label="Load from config file", command = self.load_from_config)
+        file_opt.add_command(label="Load model", command=self.load_model)
+        file_opt.add_command(label="Load from config file", command=self.load_from_config)
         file_opt.add_separator()
         file_opt.add_cascade(label="Gpu", menu=gpu_opt)
         for i in range(torch.cuda.device_count()):
-            gpu_opt.add_radiobutton(label = f"GPU {i}", variable = self.gpu_id, value = i, command = self.show_info)
+            gpu_opt.add_radiobutton(label=f"GPU {i}", variable=self.gpu_id, value=i, command=self.show_info)
         
         self.menubar.add_cascade(label="File", menu=file_opt)
         self.add_separator()
         
         # Speeding up the testing
-        #self.load_from_config()
+        self.load_from_config()
         
     def show_info(self):
         showinfo(title=None, message="Reload model to apply the GPU change.")
         
     def start_app(self):  
         
-        self.thr_idxs, self.imgs_bbox  = [], []
-        self.old_data_idx, self.old_bbox_idx, self.old_layer_idx, self.new_model, self.canvas, self.gt_bbox= None, None, None, None, None, None
+        self.thr_idxs, self.imgs_bbox = [], []
+        self.old_data_idx, self.old_bbox_idx, self.old_layer_idx, self.new_model, self.canvas, self.gt_bbox = None, None, None, None, None, None
         self.old_thr = -1
         self.head_fusion = "min"
         self.discard_ratio = 0.9      
         self.cam_idx = [2, 0, 1, 5, 3, 4]
         self.scores = []
         
-        frame = Frame(self)
-        frame.pack(fill=Y)
+        frame = tk.Frame(self)
+        frame.pack(fill=tk.Y)
         
-        self.data_label = StringVar()
+        self.data_label = tk.StringVar()
         self.data_label.set("Select data index:")
-        label0 = Label(frame,textvariable=self.data_label, anchor = CENTER)
-        label0.pack(side=TOP)
-        self.data_idx = Scale(frame, from_=0, to=len(self.data_loader)-1, showvalue=0, orient=HORIZONTAL, command = self.update_data_label)
+        label0 = tk.Label(frame, textvariable=self.data_label, anchor=tk.CENTER)
+        label0.pack(side=tk.TOP)
+        self.data_idx = tk.Scale(frame, from_=0, to=len(self.data_loader)-1, showvalue=0, orient=tk.HORIZONTAL, command=self.update_data_label)
         idx = random.randint(0, len(self.data_loader)-1)
         self.data_idx.set(idx)
         self.data_idx.pack()
-        
-        frame1 = Frame(self)
-        frame1.pack(fill=Y)
-        
-        # self.text_label = StringVar()
-        # self.text_label.set("Select bbox index:")
-        # label2 = Label(frame1,textvariable = self.text_label)
-        # label2.pack(side=TOP)
-        # self.selected_bbox = Scale(frame1, from_=0, to=len(self.thr_idxs), orient=HORIZONTAL, showvalue=0, command = self.update_bbox_label)
-        # self.selected_bbox.set(0)
-        # self.selected_bbox.pack()
-        
-        
+
+        frame1 = tk.Frame(self)
+        frame1.pack(fill=tk.Y)
+
         # Prediction threshold + Discard ratio  
-        thr_opt, dr_opt = Menu(self.menubar), Menu(self.menubar)
-        self.selected_threshold, self.selected_discard_ratio = DoubleVar(), DoubleVar()
+        thr_opt, dr_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
+        self.selected_threshold, self.selected_discard_ratio = tk.DoubleVar(), tk.DoubleVar()
         self.selected_threshold.set(0.5)
         self.selected_discard_ratio.set(0.5)
         values = np.arange(0.0,1,0.1).round(1)
         for i in values:
-            thr_opt.add_radiobutton(label=i, variable=self.selected_threshold, command = self.update_thr)
+            thr_opt.add_radiobutton(label=i, variable=self.selected_threshold, command=self.update_thr)
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_ratio)
             
         # Camera
-        camera_opt = Menu(self.menubar)
+        camera_opt = tk.Menu(self.menubar)
         self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5, 'All': 6}
-        self.selected_camera = IntVar()
+        self.selected_camera = tk.IntVar()
         self.selected_camera.set(0)
-        for value,key in enumerate(self.cameras):
-            camera_opt.add_radiobutton(label = key, variable = self.selected_camera, value = value)
+        for value, key in enumerate(self.cameras):
+            camera_opt.add_radiobutton(label=key, variable=self.selected_camera, value=value)
         
         # Attention
-        attn_opt, attn_rollout = Menu(self.menubar), Menu(self.menubar)
+        attn_opt, attn_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.head_types = ["mean", "min", "max"]
-        self.selected_head_fusion = StringVar()
+        self.selected_head_fusion = tk.StringVar()
         self.selected_head_fusion.set(self.head_types[2])
-        self.raw_attn = BooleanVar()
+        self.raw_attn = tk.BooleanVar()
         self.raw_attn.set(True)
         attn_opt.add_cascade(label="Attention Rollout", menu=attn_rollout)
         for i in range(len(self.head_types)):
-            attn_rollout.add_radiobutton(label = self.head_types[i].capitalize(), variable = self.selected_head_fusion, value = self.head_types[i])
-        attn_rollout.add_radiobutton(label = "All", variable = self.selected_head_fusion, value = "all")
-        attn_rollout.add_checkbutton(label = "Raw attention", variable = self.raw_attn, onvalue=1, offvalue=0)
-        attn_opt.add_radiobutton(label = "Grad-CAM", variable = self.selected_head_fusion, value = "gradcam")
+            attn_rollout.add_radiobutton(label=self.head_types[i].capitalize(), variable = self.selected_head_fusion, value = self.head_types[i])
+        attn_rollout.add_radiobutton(label="All", variable=self.selected_head_fusion, value="all")
+        attn_rollout.add_checkbutton(label="Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
+        attn_opt.add_radiobutton(label="Grad-CAM", variable=self.selected_head_fusion, value="gradcam")
         attn_opt.add_separator()
                 
-        attn_layer = Menu(self.menubar)
-        self.selected_layer = IntVar()
+        attn_layer = tk.Menu(self.menubar)
+        self.selected_layer = tk.IntVar()
         self.selected_layer.set(5)
         for i in range(len(self.model.module.pts_bbox_head.transformer.decoder.layers)):
-            attn_layer.add_radiobutton(label = i, variable = self.selected_layer)
-        attn_layer.add_radiobutton(label = "All", variable = self.selected_layer, value=6)
+            attn_layer.add_radiobutton(label=i, variable=self.selected_layer)
+        attn_layer.add_radiobutton(label="All", variable=self.selected_layer, value=6)
         attn_opt.add_cascade(label="Layer", menu=attn_layer)
+
+        # Bounding boxes
+        self.bbox_opt = tk.Menu(self.menubar)
+        self.single_bbox = tk.BooleanVar()
+        self.single_bbox.set(False)
+        self.bboxes = []
+        # self.bbox_idx = [0]
+        self.bbox_idx = []
+        self.bbox_opt.add_checkbutton(label="Single bounding box", onvalue=1, offvalue=0, variable = self.single_bbox)
+        self.bbox_opt.add_separator()
         
         # View options
-        add_opt = Menu(self.menubar)
-        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.attn_contr, self.attn_norm, self.overlay, self.show_labels = BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar(), BooleanVar()
+        add_opt = tk.Menu(self.menubar)
+        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.attn_contr, self.attn_norm, self.overlay, self.show_labels = tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.BB_bool.set(True)
         self.scale.set(True)
         self.show_labels.set(True)
@@ -179,14 +171,6 @@ class App(Tk):
         add_opt.add_checkbutton(label="Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
         add_opt.add_checkbutton(label="Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
         
-        # Bounding boxes
-        self.bbox_opt = Menu(self.menubar)
-        self.single_bbox = BooleanVar()
-        self.single_bbox.set(False)
-        self.bboxes = []
-        self.bbox_idx = [0]
-        self.bbox_opt.add_checkbutton(label="Single bounding box", onvalue=1, offvalue=0, variable = self.single_bbox, command = self.single_bbox_select)
-        self.bbox_opt.add_separator()
         
         self.menubar.add_cascade(label="Prediction threshold", menu=thr_opt)
         self.add_separator()
@@ -196,145 +180,74 @@ class App(Tk):
         self.add_separator()
         self.menubar.add_cascade(label="Attention", menu=attn_opt)
         self.add_separator()
-        self.menubar.add_cascade(label="Options", menu=add_opt)
-        self.add_separator()
         self.menubar.add_cascade(label="Bounding boxes", menu=self.bbox_opt)
+        self.add_separator()
+        self.menubar.add_cascade(label="Options", menu=add_opt)
 
-        plot_button = Button(self, command = self.visualize, text = "Visualize")
+        plot_button = tk.Button(self, command=self.visualize, text="Visualize")
         
         plot_button.pack()
-        
-    def single_bbox_select(self):
-        if self.single_bbox.get():
-            found = 0
-            for i in range(len(self.bboxes)):
-                if self.bboxes[i].get() == True and not found:
-                    found = 1
-                    continue
-                self.bboxes[i].set(False)
+    
+    def add_separator(self):
+        self.menubar.add_command(label="\u007C", activebackground=self.menubar.cget("background"))
+        #\u007C, \u22EE´
+        #ciao = 0
         
     def load_from_config(self):
 
-        with open("config.toml", mode = "rb") as argsF:
+        with open("config.toml", mode="rb") as argsF:
             args = tomli.load(argsF)
             
-        model_filename = args["model_filename"]
-        print(f"\nLoading Model from {model_filename}...\n")
-        model = torch.load(open(model_filename, 'rb'))
+        cfg_file = args["cfg_file"]
+        weights_file = args["weights_file"]
 
-        dataset_filename = args["dataset_filename"]
-        print(f"Loading Dataset from {dataset_filename}...\n")
-        dataset = torch.load(open(dataset_filename, 'rb'))
-
+        self.load_model(cfg_file, weights_file)
         
-        GT_filename = args["GTbboxes_filename"]
-        print(f"Loading GT Bounding Boxes from {GT_filename}...\n")
-        gt_bboxes = torch.load(open(GT_filename, 'rb'))
-        
-        self.model = MMDataParallel(model, device_ids = [self.gpu_id.get()])
-        self.data_loader = dataset
-        self.gt_bboxes = gt_bboxes
-        self.gen = Generator(self.model)
-        
-        if not self.started_app:
-            self.start_app()
-            self.started_app = True
-        
-        print("Loading completed.")
-
-        
-    def load_model(self):
-        filetypes = (
+    def load_model(self, cfg_file=None, weights_file=None):
+        cfg_filetypes = (
             ('Config', '*.py'),
+        )
+        weights_filetypes = (
             ('Pickle', '*.pth'),
         )
         
-        filename = fd.askopenfilename(
-            title='Load model file',
-            initialdir='/workspace/configs/submission/',
-            filetypes=filetypes)
+        if cfg_file is None:
+            cfg_file = fd.askopenfilename(
+                title='Load model file',
+                initialdir='/workspace/configs/submission/',
+                filetypes=cfg_filetypes)
         
-        if pathlib.Path(filename).suffix == '.pth':
-            model = torch.load(open(filename, 'rb'))
-            
-        elif pathlib.Path(filename).suffix == '.py':
-            # Model configuration needs to load weights
-            args={}
-            args["config"] = filename
-            args["checkpoint"] = self.load_weights()
-            model, _, dataloader = init_app(args)
+        if weights_file is None:
+            weights_file = fd.askopenfilename(
+                title='Load weights',
+                initialdir='/workspace/work_dirs/checkpoints/',
+                filetypes=weights_filetypes)  
+        
+        # Model configuration needs to load weights
+        args = {}
+        args["config"] = cfg_file
+        args["checkpoint"] = weights_file
+        model, dataloader = init_app(args)
                 
-        self.model = MMDataParallel(model, device_ids = [self.gpu_id.get()])
-        #self.data_loader = iter(dataloader)
-        self.data_loader = iter(dataloader)
-        self.gen = Generator(self.model)
+        self.model = MMDataParallel(model, device_ids=[self.gpu_id.get()])
+        self.data_loader = dataloader
+        self.gen = Attention(self.model)
         self.new_model = True
         
         
         if not self.started_app:
-            #self.load_dataset()
-            #self.load_gtbboxes()
             self.start_app()
             self.started_app = True
         
         print("Loading completed.")
-            
-    def load_weights(self):
-        filetypes = (
-            ('Pickle', '*.pth'),
-        )
-
-        filename = fd.askopenfilename(
-            title='Load weights',
-            initialdir='/workspace/work_dirs/checkpoints/',
-            filetypes=filetypes)     
-                
-        return filename
-
-    
-    def load_dataset(self):
-        filetypes = (
-            ('Pickle', '*.pth'),
-        )
-        filename = fd.askopenfilename(
-            title='Load dataset',
-            initialdir='/workspace/work_dirs/saved/',
-            filetypes=filetypes)
         
-        self.data_loader = torch.load(open(filename, 'rb'))
-        self.update_bbox()
-        print("Loading completed.")
-        
-    def load_gtbboxes(self):
-        filetypes = (
-            ('Pickle', '*.pth'),
-        )
-
-        filename = fd.askopenfilename(
-            title='Load GT bboxes',
-            initialdir='/workspace/work_dirs/saved/',
-            filetypes=filetypes)
-
-        self.gt_bboxes = torch.load(open(filename, 'rb'))
-        print("Loading completed.")
-        
-    def add_separator(self):
-        self.menubar.add_command(label="\u22EE", activebackground=self.menubar.cget("background"))
-        #ciao = 0
-
     def update_thr(self):
         self.BB_bool.set(True)
         self.show_labels.set(True)
         
     def update_data_label(self, idx):
-       self.data_label.set(f"Select data index: {int(idx)}")
+        self.data_label.set(f"Select data index: {int(idx)}")
 
-    # def update_bbox_label(self, idx):
-    #    self.text_label.set(f"Select bbox index: {class_names[self.labels[int(idx)].item()]} ({int(idx)})")
-
-        
-
-        
     def update_scores(self):
         self.all_attn = self.gen.get_all_attn(self.bbox_idx, self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
         self.scores = []
@@ -402,7 +315,7 @@ class App(Tk):
             attn = attn.view(29, 50).cpu().numpy()
             ax_attn = self.fig.add_subplot(self.spec[1,grid_clm])
             if self.attn_norm.get():
-                attn /= attn.max()
+                if attn.max() != 0: attn /= attn.max()
                 attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
             else:
                 attmap = ax_attn.imshow(attn)
@@ -416,35 +329,29 @@ class App(Tk):
         self.bboxes = []
         self.bbox_opt.delete(3, 'end')
         for i in range(len(self.thr_idxs.nonzero())):
-            view_bbox = BooleanVar()
-            self.bbox_opt.add_checkbutton(label = f"{class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=view_bbox)
+            view_bbox = tk.BooleanVar()
+            view_bbox.set(False)
             self.bboxes.append(view_bbox)
+            self.bbox_opt.add_checkbutton(label = f"{class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
+
+    def single_bbox_select(self, idx):
+        if self.single_bbox.get():
+            for i in range(len(self.bboxes)):
+                if i!= idx: 
+                    self.bboxes[i].set(False)
+
 
     def update_values(self):
         if isinstance(self.data_loader, list):
             self.data = self.data_loader[self.data_idx.get()]
         else:
-            # for i,data in enumerate(self.data_loader, start = self.data_idx.get()):
-            #     if i==self.data_idx.get(): 
-            #         self.data = data
-            #         break
-            # for i, data in enumerate(self.data_loader):
-            #     ok = 0
-                
-            # ciao = 0
-            #data = self.data_loader.dataset.__getitem__(5)
-            #self.data = next(self.data_loader,100)
-            #self.data = next(self.data_loader)
-            self.data = next(self.data_loader)
+            data = self.data_loader.dataset[self.data_idx.get()]
+            metas = [[data['img_metas'][0].data]]
+            img = [data['img'][0].data.unsqueeze(0)]
+            data['img_metas'][0] = DC(metas, cpu_only = True)
+            data['img'][0] = DC(img)
+            self.data = data
 
-            # metas = [data['img_metas'][0].data]
-            # img = [data['img'][0].data]
-            # data['img_metas'][0] = DC(metas)
-            # data['img'][0] = DC(img)
-            # self.data = data
-            #self.data['img_metas'][0].data = [[self.data['img_metas'][0].data]]
-
-            
         if self.selected_head_fusion.get() != "gradcam":
             outputs = self.gen.extract_attentions(self.data)
         else:
@@ -480,18 +387,13 @@ class App(Tk):
             if self.old_thr != self.selected_threshold.get(): self.old_thr = self.selected_threshold.get()
             if self.old_data_idx != self.data_idx.get(): self.old_data_idx = self.data_idx.get()
         
-        else:
-            if self.single_bbox.get():
-                self.single_bbox_select()
-            self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
+        self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
-            
         if self.selected_layer.get() != 6:
             self.gen.layer = self.selected_layer.get()
             
 
         if self.GT_bool.get():
-            #self.gt_bbox = self.gt_bboxes[self.data_idx.get()]
             self.gt_bbox = self.data_loader.dataset.get_ann_info(self.data_idx.get())['gt_bboxes_3d']
             
         else:
@@ -526,11 +428,6 @@ class App(Tk):
             
         if self.head_fusion not in ("all", "gradcam"):
             self.show_attn_maps()
-            # if self.overlay.get():
-            #     attn = cv2.resize(attn, (self.imgs_bbox[0].shape[1], self.imgs_bbox[0].shape[0]))
-            #     img = show_attn_on_img(self.imgs_bbox[self.selected_camera.get()], attn)
-            #     attmap = ax_attn.imshow(img)
-
 
         elif self.head_fusion == "gradcam":   
             self.gen.extract_attentions(self.data, self.bbox_idx)

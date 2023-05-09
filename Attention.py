@@ -69,7 +69,7 @@ def handle_residual(orig_self_attention):
     return self_attention
 
 
-class Generator:
+class Attention:
     """
     Short description - What is the purpose ?
     """
@@ -167,36 +167,6 @@ class Generator:
                                                apply_normalization=self.normalize_self_attention,
                                                apply_self_in_rule_10=self.apply_self_in_rule_10)
 
-    
-    # def generate_rollout(self, target_index, indexes, camidx, head_fusion = "min", discard_ratio = 0.9, raw = True):
-    #     self.camidx = camidx
-    #     self.head_fusion = head_fusion
-    #     self.discard_ratio = discard_ratio
-        
-    #     # initialize relevancy matrices
-    #     image_bboxes = self.dec_cross_attn_weights[0].shape[-1]
-    #     queries_num = self.dec_self_attn_weights[0].shape[-1]
-
-    #     device = self.dec_cross_attn_weights[0].device
-    #     # image self attention matrix
-    #     self.R_i_i = torch.eye(image_bboxes, image_bboxes).to(device)
-    #     # queries self attention matrix
-    #     self.R_q_q = torch.eye(queries_num, queries_num).to(device)
-
-    #     cam_q_i = self.dec_cross_attn_weights[self.layer][self.camidx]
-        
-    #     cam_q_i = avg_heads(cam_q_i, head_fusion = self.head_fusion, discard_ratio = self.discard_ratio)
-        
-    #     if raw: 
-    #         self.R_q_i = cam_q_i # Only one layer 
-    #     else: 
-    #         self.R_q_q = compute_rollout_attention(self.dec_self_attn_weights)
-    #         #self.R_q_i = torch.matmul(self.R_q_q, torch.matmul(cam_q_i, self.R_i_i))[0]
-    #         self.R_q_i = torch.matmul(self.R_q_q, cam_q_i)
-            
-    #     aggregated = self.R_q_i[indexes[target_index].item()].detach()
-                
-    #     return aggregated
     
     def generate_rollout(self, target_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):
         self.camidx = camidx
