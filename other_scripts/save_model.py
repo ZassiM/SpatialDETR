@@ -186,7 +186,6 @@ def init_app(args):
                 ds_cfg.pipeline = replace_ImageToTensor(ds_cfg.pipeline)
 
 
-
     dataset = build_dataset(cfg.data.test)
     data_loader = build_dataloader(
         dataset,
@@ -217,7 +216,7 @@ def init_app(args):
         # segmentation dataset has `PALETTE` attribute
         model.PALETTE = dataset.PALETTE
     
-    return model, data_loader
+    return model, data_loader, checkpoint
 
 def main():
     
