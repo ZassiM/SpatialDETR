@@ -101,9 +101,7 @@ class App(tk.Tk):
         self.data_idx.set(idx)
         self.data_idx.pack()
 
-        frame1 = tk.Frame(self)
-        frame1.pack(fill=tk.Y)
-
+        
         # Prediction threshold + Discard ratio  
         thr_opt, dr_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.selected_threshold, self.selected_discard_ratio = tk.DoubleVar(), tk.DoubleVar()
@@ -131,11 +129,12 @@ class App(tk.Tk):
         self.raw_attn.set(True)
         attn_opt.add_cascade(label="Attention Rollout", menu=attn_rollout)
         for i in range(len(self.head_types)):
-            attn_rollout.add_radiobutton(label=self.head_types[i].capitalize(), variable = self.selected_head_fusion, value = self.head_types[i])
+            attn_rollout.add_radiobutton(label=self.head_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_types[i])
         attn_rollout.add_radiobutton(label="All", variable=self.selected_head_fusion, value="all")
         attn_rollout.add_checkbutton(label="Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
         attn_opt.add_radiobutton(label="Grad-CAM", variable=self.selected_head_fusion, value="gradcam")
         attn_opt.add_separator()
+        attn_opt.add
                 
         attn_layer = tk.Menu(self.menubar)
         self.selected_layer = tk.IntVar()
@@ -154,6 +153,11 @@ class App(tk.Tk):
         self.bbox_idx = []
         self.bbox_opt.add_checkbutton(label="Single bounding box", onvalue=1, offvalue=0, variable = self.single_bbox)
         self.bbox_opt.add_separator()
+
+        # Data index
+        dataidx_opt = tk.Menu(self.menubar)
+        dataidx_opt.add_command(label="Select random data", command=self.random_data_idx)
+
         
         # View options
         add_opt = tk.Menu(self.menubar)
@@ -182,7 +186,10 @@ class App(tk.Tk):
         self.add_separator()
         self.menubar.add_cascade(label="Bounding boxes", menu=self.bbox_opt)
         self.add_separator()
+        self.menubar.add_cascade(label="Data", menu=dataidx_opt)
+        self.add_separator()
         self.menubar.add_cascade(label="Options", menu=add_opt)
+
 
         plot_button = tk.Button(self, command=self.visualize, text="Visualize")
         
@@ -240,6 +247,11 @@ class App(tk.Tk):
             self.started_app = True
         
         print("Loading completed.")
+
+    def random_data_idx(self):
+        idx = random.randint(0, len(self.data_loader)-1)
+        self.data_idx.set(idx)
+        self.data_label.set(f"Select data index: {int(idx)}")
         
     def update_thr(self):
         self.BB_bool.set(True)
@@ -268,7 +280,7 @@ class App(tk.Tk):
             score_perc = round(((self.scores[i]/sum_scores)*100))
             self.scores_perc.append(score_perc)
                 
-    def show_attn_maps(self, grid_clm = 1):
+    def show_attn_maps(self, grid_clm=1):
         
         if self.attn_contr.get():
             self.update_scores()
@@ -332,7 +344,7 @@ class App(tk.Tk):
             view_bbox = tk.BooleanVar()
             view_bbox.set(False)
             self.bboxes.append(view_bbox)
-            self.bbox_opt.add_checkbutton(label = f"{class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
+            self.bbox_opt.add_checkbutton(label=f"{class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
 
     def single_bbox_select(self, idx):
         if self.single_bbox.get():
