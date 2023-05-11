@@ -9,7 +9,6 @@ def capture(self):
     y1 = y0 + self.canvas.get_width_height()[1]
     
     im = ImageGrab.grab((x0, y0, x1, y1))
-    self.suffix = 0
     path = f"screenshots/{self.model_name}_{self.data_idx}"
 
     if os.path.exists(path+"_"+str(self.suffix)+".png"):

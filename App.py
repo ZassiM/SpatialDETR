@@ -42,6 +42,8 @@ class App(tk.Tk):
         self.geometry('1500x1500')
         self.font = cv2.FONT_HERSHEY_SIMPLEX
         self.font_scale = 1
+        self.suffix = 0 
+        self.canvas = None
         
         self.model, self.data_loader, self.gt_bboxes = None, None, None
         self.started_app = False
@@ -132,7 +134,7 @@ class App(tk.Tk):
         # Bounding boxes
         self.bbox_opt = tk.Menu(self.menubar)
         self.single_bbox = tk.BooleanVar()
-        self.single_bbox.set(False)
+        self.single_bbox.set(True)
         self.bboxes = []
         # self.bbox_idx = [0]
         self.bbox_idx = []
@@ -405,13 +407,18 @@ class App(tk.Tk):
                 ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
    
             
-        if self.canvas: self.canvas.get_tk_widget().pack_forget()
-        self.canvas = FigureCanvasTkAgg(self.fig, self)  
+        # if self.canvas: self.canvas.get_tk_widget().pack_forget()
+        # self.canvas = FigureCanvasTkAgg(self.fig, self)  
+        if self.canvas is None: 
+            self.canvas = FigureCanvasTkAgg(self.fig, self)  
+
         self.canvas.draw()
-        self.canvas.get_tk_widget().pack()
 
         if self.capture_bool.get():
             capture(self)
+
+        self.canvas.get_tk_widget().pack()
+
         
 
         
