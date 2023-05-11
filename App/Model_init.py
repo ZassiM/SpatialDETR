@@ -1,20 +1,14 @@
-# Copyright (c) OpenMMLab. All rights reserved.
-
 import os
 import tomli
-
-#import mmcv
 import torch
-from mmcv import Config, DictAction
+from mmcv import Config
 from mmcv.cnn import fuse_conv_bn
-from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
-from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
+from mmcv.runner import (init_dist, load_checkpoint,
                          wrap_fp16_model)
-
 from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_model
-from mmdet.apis import multi_gpu_test, set_random_seed
 from mmdet.datasets import replace_ImageToTensor
+
 
 def init(args):
     

@@ -2,8 +2,8 @@ import tkinter as tk
 from tkinter.messagebox import showinfo
 from tkinter import scrolledtext
 import random
-from PIL import ImageGrab
 import os
+from PIL import ImageGrab
 
 
 def show_message(self, message):

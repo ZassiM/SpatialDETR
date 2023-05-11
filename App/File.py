@@ -3,12 +3,11 @@ import os
 import tkinter as tk
 from tkinter import filedialog as fd
 from tkinter import ttk
-from tkinter.messagebox import showinfo
-from XAI.Attention import Attention
-from App.Model_init import init_app
 from mmcv.parallel import MMDataParallel
 
 from App.Utils import random_data_idx, update_data_label
+from XAI.Attention import Attention
+from App.Model_init import init_app
 
 
 def load_from_config(self):
@@ -52,23 +51,17 @@ def load_model(self, cfg_file=None, weights_file=None, gpu_id=None):
         if pb['value'] + i < 100:
             pb['value'] += i
             value_label['text'] = update_progress_label(message)
-            popup.update()
+            self.update()
         else:
-            popup.destroy()
+            pb.destroy()
+            value_label.destroy()
     
-    popup = tk.Toplevel(self)
-    popup.geometry("300x120")
-    popup.title("Loading Model")
-    pb = ttk.Progressbar(popup, orient='horizontal', mode='determinate', length=280)
+    pb = ttk.Progressbar(self, orient='horizontal', mode='determinate', length=280)
+    pb.pack()
 
-    # place the progressbar
-    pb.grid(column=0, row=0, columnspan=2, padx=10, pady=20)
-
-    # label
-    value_label = ttk.Label(popup, text=update_progress_label("Progress"))
-    value_label.grid(column=0, row=1, columnspan=2)
-    popup.pack_slaves()
-
+    value_label = ttk.Label(self, text=update_progress_label("Progress"))
+    value_label.pack()
+    #self.pack_slaves()
 
     progress(20, "Loading model with weights")
     # Model configuration needs to load weights
