@@ -40,10 +40,11 @@ class App(tk.Tk):
         style.theme_use("clam")
         self.title('Attention Visualization')
         self.geometry('1500x1500')
+        self.protocol("WM_DELETE_WINDOW", lambda: (self.quit(), self.destroy()))
         self.font = cv2.FONT_HERSHEY_SIMPLEX
         self.font_scale = 1
         self.suffix = 0 
-        self.canvas = None
+        self.canvas, self.fig, self.spec = None, None, None
         
         self.model, self.data_loader, self.gt_bboxes = None, None, None
         self.started_app = False
@@ -54,9 +55,9 @@ class App(tk.Tk):
         self.info_text = tk.StringVar()
         self.info_label = tk.Label(frame, textvariable=self.info_text, anchor=tk.CENTER)
 
-        self.info_label.bind("<Button-1>", lambda event, k=self: show_model_info(k))
-        self.info_label.bind("<Enter>", lambda event, k=self:red_text(k))
-        self.info_label.bind("<Leave>", lambda event, k=self:black_text(k))
+        self.info_label.bind("<Button-1>", lambda event, k=self: show_model_info(self))
+        self.info_label.bind("<Enter>", lambda event, k=self:red_text(self))
+        self.info_label.bind("<Leave>", lambda event, k=self:black_text(self))
 
         self.menubar = tk.Menu(self)
         self.config(menu=self.menubar)
@@ -70,7 +71,7 @@ class App(tk.Tk):
         file_opt.add_cascade(label="Gpu", menu=gpu_opt)
         message = "You need to reload the model to apply GPU change."
         for i in range(torch.cuda.device_count()):
-            gpu_opt.add_radiobutton(label=f"GPU {i}", variable=self.gpu_id, value=i, command=lambda k=self:show_message(k, message))
+            gpu_opt.add_radiobutton(label=f"GPU {i}", variable=self.gpu_id, value=i, command=lambda:show_message(self, message))
         
         self.menubar.add_cascade(label="File", menu=file_opt)
         self.add_separator()
@@ -96,7 +97,7 @@ class App(tk.Tk):
         self.selected_discard_ratio.set(0.5)
         values = np.arange(0.0,1,0.1).round(1)
         for i in values:
-            thr_opt.add_radiobutton(label=i, variable=self.selected_threshold, command=lambda k=self:update_thr(k))
+            thr_opt.add_radiobutton(label=i, variable=self.selected_threshold, command=lambda:update_thr(self))
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_ratio)
             
         # Camera
@@ -143,8 +144,8 @@ class App(tk.Tk):
 
         # Data index
         dataidx_opt = tk.Menu(self.menubar)
-        dataidx_opt.add_command(label="Select data index", command=lambda k=self:select_data_idx(k))
-        dataidx_opt.add_command(label="Select random data", command=lambda k=self:random_data_idx(k))
+        dataidx_opt.add_command(label="Select data index", command=lambda:select_data_idx(self))
+        dataidx_opt.add_command(label="Select random data", command=lambda:random_data_idx(self))
 
         
         # View options
@@ -165,7 +166,7 @@ class App(tk.Tk):
         add_opt.add_checkbutton(label="Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
         add_opt.add_checkbutton(label="Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
         add_opt.add_checkbutton(label="Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
-        add_opt.add_checkbutton(label="Show info", command=lambda k=self:show_info(k))
+        add_opt.add_checkbutton(label="Show info", command=lambda:show_info(self))
 
 
         self.menubar.add_cascade(label="Data", menu=dataidx_opt)
@@ -315,8 +316,11 @@ class App(tk.Tk):
     
     def visualize(self):
         
-        self.fig = plt.figure(figsize=(80,60), layout="constrained")
-        self.spec = self.fig.add_gridspec(3, 3)
+        if self.fig is None:
+            self.fig = plt.figure(figsize=(80,60), layout="constrained")
+            self.spec = self.fig.add_gridspec(3, 3)
+        else:
+            self.fig.clear()
         
         # Avoiding to visualize all layers and all cameras at the same time
         if self.selected_camera.get() == 6 and self.selected_layer.get() == 6: self.selected_layer.set(5)
@@ -406,18 +410,15 @@ class App(tk.Tk):
             else: 
                 ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
    
-            
-        # if self.canvas: self.canvas.get_tk_widget().pack_forget()
-        # self.canvas = FigureCanvasTkAgg(self.fig, self)  
         if self.canvas is None: 
-            self.canvas = FigureCanvasTkAgg(self.fig, self)  
-
+            self.canvas = FigureCanvasTkAgg(self.fig, master=self)  
+            self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=1)
+    
         self.canvas.draw()
 
         if self.capture_bool.get():
             capture(self)
 
-        self.canvas.get_tk_widget().pack()
 
         
 
