@@ -9,13 +9,13 @@ from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 import torch
 import numpy as np
 import cv2
-import random
+import time
 
 from mmcv.parallel import DataContainer as DC
 
 from capture import capture
 from file import load_from_config, load_model
-from utils import show_message, show_model_info, show_info, red_text, black_text, select_data_idx, random_data_idx, update_thr
+from utils import show_message, show_model_info, red_text, black_text, select_data_idx, random_data_idx, update_thr
 
 
 class_names = [
@@ -54,6 +54,7 @@ class App(tk.Tk):
         
         self.info_text = tk.StringVar()
         self.info_label = tk.Label(frame, textvariable=self.info_text, anchor=tk.CENTER)
+        self.info_label.pack(side=tk.TOP)
 
         self.info_label.bind("<Button-1>", lambda event, k=self: show_model_info(self))
         self.info_label.bind("<Enter>", lambda event, k=self:red_text(self))
@@ -65,8 +66,8 @@ class App(tk.Tk):
         file_opt, gpu_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.gpu_id = tk.IntVar()
         self.gpu_id.set(0)
-        file_opt.add_command(label="Load model", command=load_model)
-        file_opt.add_command(label="Load from config file", command=load_from_config)
+        file_opt.add_command(label="Load model", command=lambda:load_model(self))
+        file_opt.add_command(label="Load from config file", command=lambda:load_from_config(self))
         file_opt.add_separator()
         file_opt.add_cascade(label="Gpu", menu=gpu_opt)
         message = "You need to reload the model to apply GPU change."
@@ -77,7 +78,7 @@ class App(tk.Tk):
         self.add_separator()
         
         # Speeding up the testing
-        load_from_config(self)
+        #load_from_config(self)
         
 
     def start_app(self):  
@@ -150,13 +151,12 @@ class App(tk.Tk):
         
         # View options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.attn_contr, self.attn_norm, self.overlay, self.show_labels, self.showed_info, self.capture_bool= tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.attn_contr, self.attn_norm, self.overlay, self.show_labels, self.capture_bool= tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.BB_bool.set(True)
         self.scale.set(True)
         self.show_labels.set(True)
         self.attn_norm.set(True)
         self.attn_contr.set(True)
-        self.showed_info.set(False)
         self.capture_bool.set(False)
         add_opt.add_checkbutton(label="Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label="Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
@@ -166,7 +166,6 @@ class App(tk.Tk):
         add_opt.add_checkbutton(label="Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
         add_opt.add_checkbutton(label="Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
         add_opt.add_checkbutton(label="Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
-        add_opt.add_checkbutton(label="Show info", command=lambda:show_info(self))
 
 
         self.menubar.add_cascade(label="Data", menu=dataidx_opt)
@@ -184,7 +183,6 @@ class App(tk.Tk):
         self.menubar.add_cascade(label="Options", menu=add_opt)
         self.add_separator("|")
         self.menubar.add_command(label="Visualize", command = self.visualize)
-
             
     def add_separator(self, sep="|"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))

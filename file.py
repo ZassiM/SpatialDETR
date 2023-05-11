@@ -2,10 +2,10 @@ import tomli
 import os
 from tkinter import filedialog as fd
 from Attention import Attention
-from other_scripts.save_model import init_app
+from save_model import init_app
 from mmcv.parallel import MMDataParallel
 
-from utils import random_data_idx
+from utils import random_data_idx, update_data_label
 
 
 def load_from_config(self):
@@ -54,10 +54,10 @@ def load_model(self, cfg_file=None, weights_file=None, gpu_id=None):
     self.new_model = True
     self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
 
-    random_data_idx(self)
-
     if not self.started_app:
         self.start_app()
+        random_data_idx(self)
         self.started_app = True
-    
+        
+    update_data_label(self)
     print("Loading completed.")

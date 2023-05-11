@@ -4,14 +4,6 @@ from tkinter import scrolledtext
 import random
 
 
-def show_info(self):
-    if not self.showed_info.get():
-        self.info_label.pack(side=tk.TOP)
-        self.showed_info.set(True)
-    else:
-        self.info_label.pack_forget()
-        self.showed_info.set(False)
-
 def show_message(self, message):
     showinfo(title=None, message=message)
 
@@ -49,22 +41,22 @@ def close_entry(self, popup):
     idx = self.entry.get()
     if idx.isnumeric() and int(idx) <= (len(self.data_loader)-1):
         self.data_idx = int(idx)
-        update_data_label(self, int(idx))
+        update_data_label(self)
         popup.destroy()
     else:
         show_message(self, f"Insert an integer between 0 and {len(self.data_loader)-1}")
 
-
-def update_data_label(self, idx):
-    info = f"Model name: {self.model_name} | GPU ID: {self.gpu_id.get()} | Data index: {int(idx)}"
-    self.info_text.set(info)
-    
-
 def random_data_idx(self):
     idx = random.randint(0, len(self.data_loader)-1)
     self.data_idx = idx
-    update_data_label(self, idx)
-    
+    update_data_label(self)
+
+def update_data_label(self):
+    idx = self.data_idx
+    info = f"Model name: {self.model_name} | GPU ID: {self.gpu_id.get()} | Data index: {idx}"
+    self.info_text.set(info)
+
+
 def update_thr(self):
     self.BB_bool.set(True)
     self.show_labels.set(True)
