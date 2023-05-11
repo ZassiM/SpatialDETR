@@ -12,9 +12,9 @@ import cv2
 
 from mmcv.parallel import DataContainer as DC
 
-from capture import capture
-from file import load_from_config, load_model
-from utils import show_message, show_model_info, red_text, black_text, select_data_idx, random_data_idx, update_thr
+from App.File import load_from_config, load_model
+from App.Utils import show_message, show_model_info, red_text, black_text, \
+                    select_data_idx, random_data_idx, update_thr, capture
 
 
 class_names = [
@@ -30,7 +30,7 @@ class_names = [
     "traffic_cone",
 ]
 
-class App(tk.Tk):
+class UserInterface(tk.Tk):
         
     def __init__(self):
         super().__init__()

@@ -4,11 +4,11 @@ import tkinter as tk
 from tkinter import filedialog as fd
 from tkinter import ttk
 from tkinter.messagebox import showinfo
-from Attention import Attention
-from save_model import init_app
+from XAI.Attention import Attention
+from App.Model_init import init_app
 from mmcv.parallel import MMDataParallel
 
-from utils import random_data_idx, update_data_label
+from App.Utils import random_data_idx, update_data_label
 
 
 def load_from_config(self):

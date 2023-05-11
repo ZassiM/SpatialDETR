@@ -1,9 +1,9 @@
-from App import App
+from App.UserInterface import UserInterface
 
 
 def main():
 
-    app = App()
+    app = UserInterface()
     app.mainloop()
 
 
