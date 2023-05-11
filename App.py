@@ -9,7 +9,6 @@ from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 import torch
 import numpy as np
 import cv2
-import time
 
 from mmcv.parallel import DataContainer as DC
 
