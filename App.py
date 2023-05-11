@@ -77,7 +77,7 @@ class App(tk.Tk):
         self.add_separator()
         
         # Speeding up the testing
-        #load_from_config(self)
+        load_from_config(self)
         
 
     def start_app(self):  
@@ -150,7 +150,9 @@ class App(tk.Tk):
         
         # View options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.attn_contr, self.attn_norm, self.overlay, self.show_labels, self.capture_bool= tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.attn_contr, self.attn_norm, self.overlay, self.show_labels, self.capture_bool, self.bbox_2d = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        
         self.BB_bool.set(True)
         self.scale.set(True)
         self.show_labels.set(True)
@@ -165,7 +167,7 @@ class App(tk.Tk):
         add_opt.add_checkbutton(label="Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
         add_opt.add_checkbutton(label="Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
         add_opt.add_checkbutton(label="Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
-
+        add_opt.add_checkbutton(label="2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
 
         self.menubar.add_cascade(label="Data", menu=dataidx_opt)
         self.add_separator()
@@ -353,9 +355,10 @@ class App(tk.Tk):
                     self.img_metas['lidar2img'][camidx],
                     self.img_metas,
                     color=(0,255,0),
-                    with_label = self.show_labels.get(),
-                    all_bbx = self.BB_bool.get(),
-                    bbx_idx = self.bbox_idx)  
+                    with_label=self.show_labels.get(),
+                    all_bbx=self.BB_bool.get(),
+                    bbx_idx=self.bbox_idx,
+                    mode_2d=self.bbox_2d.get())  
             
             if self.gt_bbox:
                 img = draw_lidar_bbox3d_on_img(

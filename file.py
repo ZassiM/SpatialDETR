@@ -46,7 +46,7 @@ def load_model(self, cfg_file=None, weights_file=None, gpu_id=None):
         self.gpu_id.set(gpu_id)
 
     def update_progress_label(message):
-        return f"{message}: {pb['value']}%"
+        return f"{message}...{pb['value']}%"
 
     def progress(i, message="Finished"):
         if pb['value'] + i < 100:
@@ -76,7 +76,7 @@ def load_model(self, cfg_file=None, weights_file=None, gpu_id=None):
     args["config"] = cfg_file
     args["checkpoint"] = weights_file
     model, dataloader, checkpoint = init_app(args)
-    progress(50, "Updating application info")
+    progress(50, "Updating application")
             
     self.model = MMDataParallel(model, device_ids=[self.gpu_id.get()])
     self.data_loader = dataloader
