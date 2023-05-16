@@ -12,7 +12,8 @@ from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 
 from App.File import load_from_config, load_model
 from App.Utils import show_message, show_model_info, red_text, black_text, \
-                    select_data_idx, random_data_idx, update_thr, capture
+                    select_data_idx, random_data_idx, update_thr, capture, \
+                    single_bbox_select, update_scores
 
 
 class_names = [
@@ -185,34 +186,16 @@ class UserInterface(tk.Tk):
     def add_separator(self, sep="\u22EE"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
 
-    def update_scores(self):
-        self.all_attn = self.Attention.get_all_attn(self.bbox_idx, self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
-        self.scores = []
-        self.scores_perc = []
-        if self.layer == 6:
-            for layer in range(6):
-                attn = self.all_attn[layer][self.camera]
-                score = round(attn.sum().item(), 2)
-                self.scores.append(score)
-        else:
-            for cam in range(6):
-                attn = self.all_attn[self.layer][cam]
-                score = round(attn.sum().item(), 2)
-                self.scores.append(score)
-
-        sum_scores = sum(self.scores)
-        for i in range(len(self.scores)):
-            score_perc = round(((self.scores[i]/sum_scores)*100))
-            self.scores_perc.append(score_perc)
-
     def show_attn_maps(self, grid_clm=1):
 
+        # If attention contribution option is selected, the scores are updated
         if self.attn_contr.get():
-            self.update_scores()
+            update_scores(self)
 
         fontsize = 8
         attn_cameras = []
 
+        # If all cameras are selected, generate their attentions and append them to a list
         if self.camera == 6:
             for i in range(6):
                 attn_cam = self.Attention.generate_rollout(self.bbox_idx, self.nms_idxs, i, self.head_fusion, self.discard_ratio, self.raw_attn.get())       
@@ -220,28 +203,35 @@ class UserInterface(tk.Tk):
             attn_max = torch.max(torch.cat(attn_cameras))
             self.Attention.camidx = self.camera
 
+        # If we want to visualize all layers or all cameras:
         if self.layer == 6 or self.camera == 6:
-            layer_grid = self.spec[1,grid_clm].subgridspec(2,3)
+            layer_grid = self.spec[1,grid_clm].subgridspec(2,3) # Select the center of the grid to plot the attentions
             for i in range(6):
                 if self.layer == 6:
-                    self.Attention.layer = i
+                    self.Attention.layer = i # Update attention layer
                 else: 
-                    self.camera = self.cam_idx[i]
+                    self.camera = self.cam_idx[i] # Update camera
+                
+                # Extract attention map
                 attn = self.Attention.generate_rollout(self.bbox_idx, self.nms_idxs, self.camera, self.head_fusion, self.discard_ratio, self.raw_attn.get())
-                # Normalization
+                # Attention normalization if option is selected
                 if attn_cameras and self.attn_norm.get():
                     attn /= attn_max
                 attn = attn.view(29, 50).cpu().numpy()
                 ax_attn = self.fig.add_subplot(layer_grid[i>2,i if i<3 else i-3])
+                ax_attn.axis('off')
+
                 if attn_cameras and self.attn_norm.get():
                     attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
                 else:
                     attmap = ax_attn.imshow(attn)
-                ax_attn.axis('off')
 
+                # Visualize attention bar scale if option is selected
                 if self.scale.get():
                     im_ratio = attn.shape[1]/attn.shape[0]
                     self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
+
+                # Set title accordinly
                 if self.attn_contr.get():
                     if self.layer == 6:
                         ax_attn.set_title(f'{list(self.cameras.keys())[self.camera]}, layer {self.Attention.layer}, {self.head_fusion}, {self.scores_perc[i]}%', fontsize=fontsize)
@@ -253,6 +243,7 @@ class UserInterface(tk.Tk):
             if self.layer != 6:
                 self.selected_camera.set(6)
 
+        # If we want to visualize attention map of only one layer and one camera :
         else:
             attn = self.Attention.generate_rollout(self.bbox_idx, self.nms_idxs, self.camera, self.head_fusion, self.discard_ratio, self.raw_attn.get())
             attn = attn.view(29, 50).cpu().numpy()
@@ -268,16 +259,7 @@ class UserInterface(tk.Tk):
                 im_ratio = attn.shape[1]/attn.shape[0]
                 self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
 
-
-
-    def single_bbox_select(self, idx):
-        if self.single_bbox.get():
-            for i in range(len(self.bboxes)):
-                if i != idx:
-                    self.bboxes[i].set(False)
-
-    def update_values(self):
-        
+    def update_values(self):     
         # Load selected data from dataloader, manual DataContainer fixes are needed
         data = self.data_loader.dataset[self.data_idx]
         metas = [[data['img_metas'][0].data]]
@@ -317,7 +299,7 @@ class UserInterface(tk.Tk):
             view_bbox = tk.BooleanVar()
             view_bbox.set(False)
             self.bboxes.append(view_bbox)
-            self.bbox_opt.add_checkbutton(label=f"{class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
+            self.bbox_opt.add_checkbutton(label=f"{class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: single_bbox_select(self, idx))
         
         # Default bbox for first visualization
         self.bboxes[0].set(True)
@@ -354,14 +336,40 @@ class UserInterface(tk.Tk):
         if self.layer != 6:
             self.Attention.layer = self.layer
 
+        # Extract Ground Truth bboxes if wanted
         if self.GT_bool.get():
             self.gt_bbox = self.data_loader.dataset.get_ann_info(self.data_idx)['gt_bboxes_3d']
-
         else:
             self.gt_bbox = None
 
+        # Show attention map 
+        if self.head_fusion not in ("all", "gradcam"):
+            self.show_attn_maps()
+
+        # Grad-cam attention visualization
+        elif self.head_fusion == "gradcam":   
+            self.Attention.extract_attentions(self.data, self.bbox_idx)
+            attn = self.Attention.generate_attn_gradcam(self.bbox_idx, self.nms_idxs, self.camera)
+            attn = attn.view(29, 50).cpu().numpy()
+            ax_attn = self.fig.add_subplot(self.spec[1,1])
+            attmap = ax_attn.imshow(attn)
+            ax_attn.axis('off')
+            ax_attn.set_title(f'{list(self.cameras.keys())[self.camera]}')  
+
+            if self.scale.get():  
+                im_ratio = attn.shape[1]/attn.shape[0]
+                norm = mpl.colors.Normalize(vmin=0, vmax=1)
+                self.fig.colorbar(attmap, norm=norm, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
+
+        # All head-fusions visualization
+        elif self.head_fusion == "all":
+            for k in range(len(self.head_types)):
+                self.head_fusion = self.head_types[k]
+                self.show_attn_maps(grid_clm=k)
+
+        # Generate images with bboxes on it
         self.imgs_bbox = []
-        for camidx in range(6):
+        for camidx in range(len(self.imgs)):
             img = draw_lidar_bbox3d_on_img(
                     self.pred_bboxes,
                     self.imgs[camidx],
@@ -385,29 +393,7 @@ class UserInterface(tk.Tk):
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.imgs_bbox.append(img)
 
-        if self.head_fusion not in ("all", "gradcam"):
-            self.show_attn_maps()
-
-        elif self.head_fusion == "gradcam":   
-            self.Attention.extract_attentions(self.data, self.bbox_idx)
-            attn = self.Attention.generate_attn_gradcam(self.bbox_idx, self.nms_idxs, self.camera)
-            attn = attn.view(29, 50).cpu().numpy()
-            ax_attn = self.fig.add_subplot(self.spec[1,1])
-            attmap = ax_attn.imshow(attn)
-            ax_attn.axis('off')
-            ax_attn.set_title(f'{list(self.cameras.keys())[self.camera]}')  
-
-            if self.scale.get():  
-                im_ratio = attn.shape[1]/attn.shape[0]
-                norm = mpl.colors.Normalize(vmin=0, vmax=1)
-                self.fig.colorbar(attmap, norm=norm, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
-
-        elif self.head_fusion == "all":
-            for k in range(len(self.head_types)):
-                self.head_fusion = self.head_types[k]
-                self.show_attn_maps(grid_clm=k)
-
-        for i in range(6):
+        for i in range(len(self.imgs)):
             if i < 3:
                 ax = self.fig.add_subplot(self.spec[0, i])
             else:

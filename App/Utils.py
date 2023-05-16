@@ -78,3 +78,30 @@ def capture(self):
 
     path += "_" + str(self.suffix) + ".png"
     im.save(path) # Can also say im.show() to display it
+
+
+def single_bbox_select(self, idx):
+    if self.single_bbox.get():
+        for i in range(len(self.bboxes)):
+            if i != idx:
+                self.bboxes[i].set(False)
+
+def update_scores(self):
+    self.all_attn = self.Attention.get_all_attn(self.bbox_idx, self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
+    self.scores = []
+    self.scores_perc = []
+    if self.layer == 6:
+        for layer in range(6):
+            attn = self.all_attn[layer][self.camera]
+            score = round(attn.sum().item(), 2)
+            self.scores.append(score)
+    else:
+        for cam in range(6):
+            attn = self.all_attn[self.layer][cam]
+            score = round(attn.sum().item(), 2)
+            self.scores.append(score)
+
+    sum_scores = sum(self.scores)
+    for i in range(len(self.scores)):
+        score_perc = round(((self.scores[i]/sum_scores)*100))
+        self.scores_perc.append(score_perc)
