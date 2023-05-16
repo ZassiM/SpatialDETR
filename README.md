@@ -27,33 +27,42 @@ To ease the setup of this project we provide a docker container and some conveni
 - (if not done alread) setup [Docker](https://docs.docker.com/engine/install/ubuntu/) and [Nvidia-Docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker)
 - Run 
 ```bash
-$ SpatialDETR
 ./docker/build.sh
 ```
 to build the container
-- If on a local machine, open `/docker/run_loc.sh`, otherwise run `/docker/run_cluster.sh` if on a remote server.
+- If on a local machine, open 'bash /docker/run_loc.sh', otherwise open `/docker/run_cluster.sh` if on a remote server.
 - Adapt the `nusc_data_dir` to the nuscenes directory and `work_dirs` to the direcory where model weights and pretrained weights directories are saved. Leave everything as it is if testing the project on the rhea3 cluster.
 
 ### Container Run and Setup
-1. Run `./docker/run_loc.sh` if on local machine, otherwise run `./docker/run_ssh.sh` on remote server. 
-2. Now the container is running, but some packages still need to be installed. Run `./docker/in_docker_setup.sh`, it will take about 5 minutes.
+1. If on local machine run:
+```bash
+./docker/run_loc.sh
+```
+Otherwise, if working on a remote server, run:
+```bash
+./docker/run_cluster.sh
+```
+2. Now the container is running, but some packages still need to be installed. Run 
+```bash
+./docker/in_docker_setup.sh
+```
 
 ### Application testing
-1. While being inside the container, run `python3 main.py`
+1. After the docker container is set-up, run the application:
+```bash 
+python3 main.py
+```
 2. A GUI will appear. Select **File-Load model** to load the model configuration, the checkpoints and the dataset. Otherwise, if the same configurations are used each time, modify the **config.toml** file accordinly and select **File-Load from config file**.
-3. Select the **data index** and the **bounding box** to visualize. 
+3. Select a data index from the **data** menu, and click visualize. You can select the bounding box from the **Bounding boxes** menu.
 4. Change the visualization settings with the drop-down menus. Then, click **Visualize**. 
 
 ### Train
 1. Use the configs in the **configs** folder to train SpatialDETR.  
 For a baseline on a single gpu use:
-
 ```bash
 python ./mmdetection3d/tools/train.py configs/submission/frozen_4/query_proj_value_proj.py
 ```
-
 or for multi-gpu e.g. 4 gpus:  
-
 ```bash
 ./mmdetection3d/tools/dist_train.sh configs/submission/frozen_4/query_proj_value_proj.py 4
 ```

@@ -45,7 +45,7 @@ def load_model(self, cfg_file=None, weights_file=None, gpu_id=None):
         self.gpu_id.set(gpu_id)
 
     def update_progress_label(message):
-        return f"{message}...{pb['value']}%"
+        return f"{message}...{int(pb['value'])}%"
 
     def progress(i, message="Finished"):
         if pb['value'] + i < 100:

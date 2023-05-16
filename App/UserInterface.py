@@ -182,7 +182,7 @@ class UserInterface(tk.Tk):
         self.add_separator("|")
         self.menubar.add_command(label="Visualize", command=self.visualize)
 
-    def add_separator(self, sep="|"):
+    def add_separator(self, sep="\u22EE"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
 
     def update_scores(self):
@@ -243,14 +243,11 @@ class UserInterface(tk.Tk):
                     self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
                 if self.attn_contr.get():
                     if self.selected_layer.get() == 6:
-                        ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, \
-                                          layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[i]}%', fontsize=fontsize)
+                        ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[i]}%', fontsize=fontsize)
                     else:
-                        ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, \
-                                          layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[self.cam_idx[i]]}%', fontsize=fontsize)
+                        ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[self.cam_idx[i]]}%', fontsize=fontsize)
                 else:
-                    ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, \
-                                      layer {self.gen.layer}, {self.head_fusion}', fontsize=fontsize)
+                    ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}', fontsize=fontsize)
 
             if self.selected_layer.get() != 6:
                 self.selected_camera.set(6)
