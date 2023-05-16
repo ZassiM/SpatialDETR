@@ -51,6 +51,7 @@ class Attention:
         self.dec_cross_attn_weights, self.dec_cross_attn_grads, self.dec_self_attn_weights, self.dec_self_attn_grads = [], [], [], []    
     
     def extract_attentions(self, data, target_index=None):
+        
         self.dec_self_attn_weights, self.dec_cross_attn_weights = [], []
         hooks = []
         for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
@@ -155,7 +156,6 @@ class Attention:
         return aggregated
 
     def gradcam(self, cam, grad):
-        # FIX
         cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
         grad = grad.reshape(-1, grad.shape[-2], grad.shape[-1])
         grad = grad.mean(dim=0, keepdim=True)
@@ -165,9 +165,8 @@ class Attention:
     def generate_attn_gradcam(self, target_index, indexes, camidx):
         self.camidx = camidx
 
-        # get cross attn cam from last decoder layer
-        cam_q_i = self.dec_cross_attn_weights[-1][self.camidx]
-        grad_q_i = self.dec_cross_attn_grads[-1][self.camidx]
+        cam_q_i = self.dec_cross_attn_weights[self.layer][self.camidx]
+        grad_q_i = self.dec_cross_attn_grads[self.layer][self.camidx]
         cam_q_i = self.gradcam(cam_q_i, grad_q_i)
         self.R_q_i = cam_q_i
 

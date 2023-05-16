@@ -87,17 +87,17 @@ def single_bbox_select(self, idx):
                 self.bboxes[i].set(False)
 
 def update_scores(self):
-    self.all_attn = self.Attention.get_all_attn(self.bbox_idx, self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
+    self.all_attn = self.Attention.get_all_attn(self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
     self.scores = []
     self.scores_perc = []
-    if self.layer == 6:
+    if self.selected_layer.get() == 6:
         for layer in range(6):
-            attn = self.all_attn[layer][self.camera]
+            attn = self.all_attn[layer][self.selected_camera.get()]
             score = round(attn.sum().item(), 2)
             self.scores.append(score)
     else:
         for cam in range(6):
-            attn = self.all_attn[self.layer][cam]
+            attn = self.all_attn[self.selected_layer.get()][cam]
             score = round(attn.sum().item(), 2)
             self.scores.append(score)
 

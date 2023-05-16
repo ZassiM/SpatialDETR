@@ -70,12 +70,10 @@ class UserInterface(tk.Tk):
 
     def start_app(self):
         self.thr_idxs, self.imgs_bbox = [], []
-        self.old_data_idx, self.old_bbox_idx, self.new_model, self.canvas, self.gt_bbox = \
-            None, None, None, None, None, 
+        self.old_data_idx, self.old_bbox_idx, self.old_expl_type, self.new_model, self.canvas, self.gt_bbox = \
+            None, None, None, None, None, None
 
-        self.old_thr = -1
-        self.head_fusion = "min"
-        self.discard_ratio = 0.9      
+        self.old_thr = -1  
         self.cam_idx = [2, 0, 1, 5, 3, 4]
         self.scores = []
 
@@ -110,26 +108,54 @@ class UserInterface(tk.Tk):
 
         # Attention
         attn_opt, attn_rollout, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
+        self.expl_options = ["Attention Rollout", "Grad-CAM", "Gradient Rollout"]
+
+        # Attention Rollout
+        attn_opt.add_cascade(label=self.expl_options[0], menu=attn_rollout)
         self.head_types = ["mean", "min", "max"]
         self.selected_head_fusion = tk.StringVar()
         self.selected_head_fusion.set(self.head_types[2])
         self.raw_attn = tk.BooleanVar()
         self.raw_attn.set(True)
-        attn_opt.add_cascade(label="Attention Rollout", menu=attn_rollout)
         for i in range(len(self.head_types)):
             attn_rollout.add_radiobutton(label=self.head_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_types[i])
         attn_rollout.add_radiobutton(label="All", variable=self.selected_head_fusion, value="all")
         attn_rollout.add_checkbutton(label="Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
-        attn_opt.add_radiobutton(label="Grad-CAM", variable=self.selected_head_fusion, value="gradcam")
-        attn_opt.add_separator()
+
+        # Grad-CAM
+        attn_opt.add_cascade(label=self.expl_options[1], menu=grad_cam)
+        self.grad_cam_types = ["default"]
+        self.selected_gradcam_type = tk.StringVar()
+        self.selected_gradcam_type.set(self.grad_cam_types[0])
+        for i in range(len(self.grad_cam_types)):
+            grad_cam.add_radiobutton(label=self.grad_cam_types[i].capitalize(), variable=self.selected_gradcam_type, value=self.grad_cam_types[i])
+
+        # Gradient Rollout
+        attn_opt.add_cascade(label=self.expl_options[2], menu=grad_rollout)
+        self.grad_roll_types = ["default"]
+        self.selected_gradroll_type = tk.StringVar()
+        self.selected_gradroll_type.set(self.grad_roll_types[0])
+        for i in range(len(self.grad_roll_types)):
+            grad_rollout.add_radiobutton(label=self.grad_roll_types[i].capitalize(), variable=self.selected_gradroll_type, value=self.grad_roll_types[i])
 
         attn_layer = tk.Menu(self.menubar)
+        attn_opt.add_cascade(label="Layer", menu=attn_layer)
         self.selected_layer = tk.IntVar()
         self.selected_layer.set(5)
         for i in range(len(self.model.module.pts_bbox_head.transformer.decoder.layers)):
             attn_layer.add_radiobutton(label=i, variable=self.selected_layer)
         attn_layer.add_radiobutton(label="All", variable=self.selected_layer, value=6)
-        attn_opt.add_cascade(label="Layer", menu=attn_layer)
+
+        attn_opt.add_separator()
+
+        expl_opt = tk.Menu(self.menubar)
+        attn_opt.add_cascade(label="Explainability mechanism", menu=expl_opt)
+        self.selected_expl_type = tk.StringVar()
+        self.selected_expl_type.set(self.expl_options[0])
+        self.old_expl_type = self.expl_options[0]
+        for i in range(len(self.expl_options)):
+            expl_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i])
+
 
         # Bounding boxes
         self.bbox_opt = tk.Menu(self.menubar)
@@ -186,7 +212,7 @@ class UserInterface(tk.Tk):
     def add_separator(self, sep="\u22EE"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
 
-    def show_attn_maps(self, grid_clm=1):
+    def show_attn_maps(self, grid_clm=1, ):
 
         # If attention contribution option is selected, the scores are updated
         if self.attn_contr.get():
@@ -196,27 +222,35 @@ class UserInterface(tk.Tk):
         attn_cameras = []
 
         # If all cameras are selected, generate their attentions and append them to a list
-        if self.camera == 6:
+        if self.selected_camera.get() == 6:
             for i in range(6):
-                attn_cam = self.Attention.generate_rollout(self.bbox_idx, self.nms_idxs, i, self.head_fusion, self.discard_ratio, self.raw_attn.get())       
+                attn_cam = self.Attention.generate_rollout(self.bbox_idx, self.nms_idxs, i, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())       
                 attn_cameras.append(attn_cam)
             attn_max = torch.max(torch.cat(attn_cameras))
-            self.Attention.camidx = self.camera
+            self.Attention.camidx = self.selected_camera.get()
 
         # If we want to visualize all layers or all cameras:
-        if self.layer == 6 or self.camera == 6:
+        if self.selected_layer.get() == 6 or self.selected_camera.get() == 6:
             layer_grid = self.spec[1,grid_clm].subgridspec(2,3) # Select the center of the grid to plot the attentions
             for i in range(6):
-                if self.layer == 6:
+                if self.selected_layer.get() == 6:
                     self.Attention.layer = i # Update attention layer
                 else: 
-                    self.camera = self.cam_idx[i] # Update camera
+                    self.selected_camera.set(self.cam_idx[i]) # Update camera
                 
                 # Extract attention map
-                attn = self.Attention.generate_rollout(self.bbox_idx, self.nms_idxs, self.camera, self.head_fusion, self.discard_ratio, self.raw_attn.get())
+                if self.selected_expl_type.get() == "Attention Rollout": 
+                    attn = self.Attention.generate_rollout(self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
+                elif self.selected_expl_type.get() == "Grad-CAM": 
+                    attn = self.Attention.generate_attn_gradcam(self.bbox_idx, self.nms_idxs, self.selected_camera.get())
+                elif self.selected_expl_type.get() == "Gradient Rollout": 
+                    attn = 0
+                    # TO-DO
+
                 # Attention normalization if option is selected
                 if attn_cameras and self.attn_norm.get():
                     attn /= attn_max
+
                 attn = attn.view(29, 50).cpu().numpy()
                 ax_attn = self.fig.add_subplot(layer_grid[i>2,i if i<3 else i-3])
                 ax_attn.axis('off')
@@ -233,19 +267,26 @@ class UserInterface(tk.Tk):
 
                 # Set title accordinly
                 if self.attn_contr.get():
-                    if self.layer == 6:
-                        ax_attn.set_title(f'{list(self.cameras.keys())[self.camera]}, layer {self.Attention.layer}, {self.head_fusion}, {self.scores_perc[i]}%', fontsize=fontsize)
+                    if self.selected_layer.get() == 6:
+                        ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.Attention.layer}, {self.selected_head_fusion.get()}, {self.scores_perc[i]}%', fontsize=fontsize)
                     else:
-                        ax_attn.set_title(f'{list(self.cameras.keys())[self.camera]}, layer {self.Attention.layer}, {self.head_fusion}, {self.scores_perc[self.cam_idx[i]]}%', fontsize=fontsize)
+                        ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.Attention.layer}, {self.selected_head_fusion.get()}, {self.scores_perc[self.cam_idx[i]]}%', fontsize=fontsize)
                 else:
-                    ax_attn.set_title(f'{list(self.cameras.keys())[self.camera]}, layer {self.Attention.layer}, {self.head_fusion}', fontsize=fontsize)
+                    ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.Attention.layer}, {self.selected_head_fusion.get()}', fontsize=fontsize)
 
-            if self.layer != 6:
+            if self.selected_layer.get() != 6:
                 self.selected_camera.set(6)
 
         # If we want to visualize attention map of only one layer and one camera :
         else:
-            attn = self.Attention.generate_rollout(self.bbox_idx, self.nms_idxs, self.camera, self.head_fusion, self.discard_ratio, self.raw_attn.get())
+            # Extract attention map
+            if self.selected_expl_type.get() == "Attention Rollout": 
+                attn = self.Attention.generate_rollout(self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
+            elif self.selected_expl_type.get() == "Grad-CAM": 
+                attn = self.Attention.generate_attn_gradcam(self.bbox_idx, self.nms_idxs, self.selected_camera.get())
+            elif self.selected_expl_type.get() == "Gradient Rollout": 
+                attn = 0
+                # TO-DO            
             attn = attn.view(29, 50).cpu().numpy()
             ax_attn = self.fig.add_subplot(self.spec[1,grid_clm])
             if self.attn_norm.get():
@@ -254,12 +295,12 @@ class UserInterface(tk.Tk):
             else:
                 attmap = ax_attn.imshow(attn)
             ax_attn.axis('off')
-            ax_attn.set_title(f'{list(self.cameras.keys())[self.camera]}, layer {self.Attention.layer}, {self.head_fusion}, {self.scores_perc[self.camera]}%')
+            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.Attention.layer}, {self.selected_head_fusion.get()}, {self.scores_perc[self.selected_camera.get()]}%')
             if self.scale.get():  
                 im_ratio = attn.shape[1]/attn.shape[0]
                 self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
 
-    def update_values(self):     
+    def update_data(self):     
         # Load selected data from dataloader, manual DataContainer fixes are needed
         data = self.data_loader.dataset[self.data_idx]
         metas = [[data['img_metas'][0].data]]
@@ -269,7 +310,7 @@ class UserInterface(tk.Tk):
         self.data = data
 
         # Attention scores are extracted, together with gradients if grad-CAM is selected
-        if self.selected_head_fusion.get() != "gradcam":
+        if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
             outputs = self.Attention.extract_attentions(self.data)
         else:
             outputs = self.Attention.extract_attentions(self.data, self.bbox_idx)
@@ -302,15 +343,10 @@ class UserInterface(tk.Tk):
             self.bbox_opt.add_checkbutton(label=f"{class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: single_bbox_select(self, idx))
         
         # Default bbox for first visualization
-        self.bboxes[0].set(True)
+        if self.bboxes:
+            self.bboxes[0].set(True)
 
     def visualize(self):
-
-        # Get selected options from menus
-        self.head_fusion = self.selected_head_fusion.get()
-        self.discard_ratio = self.selected_discard_ratio.get()
-        self.camera = self.selected_camera.get()
-        self.layer = self.selected_layer.get()
 
         # Create figure with a 3x3 grid if not existent, otherwise clear it for update
         if self.fig is None:
@@ -320,21 +356,23 @@ class UserInterface(tk.Tk):
             self.fig.clear()
 
         # Values are updated only when data idx, prediction threshold or the model is changed
-        if self.old_data_idx != self.data_idx or self.old_thr != self.selected_threshold.get() or self.new_model:
-            self.update_values()
+        if self.old_data_idx != self.data_idx or self.old_thr != self.selected_threshold.get() or self.old_expl_type != self.selected_expl_type.get() or self.new_model:
+            self.update_data()
             if self.new_model:
                 self.new_model = False
             if self.old_thr != self.selected_threshold.get():
                 self.old_thr = self.selected_threshold.get()
             if self.old_data_idx != self.data_idx:
                 self.old_data_idx = self.data_idx
-
+            if self.old_expl_type != self.selected_expl_type.get():
+                self.old_expl_type = self.selected_expl_type.get()
+            
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
         
         # Update the attention layer
-        if self.layer != 6:
-            self.Attention.layer = self.layer
+        if self.selected_layer.get() != 6:
+            self.Attention.layer = self.selected_layer.get()
 
         # Extract Ground Truth bboxes if wanted
         if self.GT_bool.get():
@@ -343,29 +381,13 @@ class UserInterface(tk.Tk):
             self.gt_bbox = None
 
         # Show attention map 
-        if self.head_fusion not in ("all", "gradcam"):
+        if self.selected_expl_type.get() == "Attention Rollout" and self.selected_head_fusion.get() == "all":
+            for k in range(len(self.head_types)):
+                self.selected_head_fusion.set(self.head_types[k])
+                self.show_attn_maps(grid_clm=k)
+        else:
             self.show_attn_maps()
 
-        # Grad-cam attention visualization
-        elif self.head_fusion == "gradcam":   
-            self.Attention.extract_attentions(self.data, self.bbox_idx)
-            attn = self.Attention.generate_attn_gradcam(self.bbox_idx, self.nms_idxs, self.camera)
-            attn = attn.view(29, 50).cpu().numpy()
-            ax_attn = self.fig.add_subplot(self.spec[1,1])
-            attmap = ax_attn.imshow(attn)
-            ax_attn.axis('off')
-            ax_attn.set_title(f'{list(self.cameras.keys())[self.camera]}')  
-
-            if self.scale.get():  
-                im_ratio = attn.shape[1]/attn.shape[0]
-                norm = mpl.colors.Normalize(vmin=0, vmax=1)
-                self.fig.colorbar(attmap, norm=norm, ax=ax_attn, orientation='horizontal', fraction=0.047*im_ratio)
-
-        # All head-fusions visualization
-        elif self.head_fusion == "all":
-            for k in range(len(self.head_types)):
-                self.head_fusion = self.head_types[k]
-                self.show_attn_maps(grid_clm=k)
 
         # Generate images with bboxes on it
         self.imgs_bbox = []
@@ -393,6 +415,7 @@ class UserInterface(tk.Tk):
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.imgs_bbox.append(img)
 
+        # Visualize them on the figure subplots
         for i in range(len(self.imgs)):
             if i < 3:
                 ax = self.fig.add_subplot(self.spec[0, i])
@@ -403,18 +426,20 @@ class UserInterface(tk.Tk):
             ax.axis('off')
 
             if self.attn_contr.get():
-                if self.layer == 6:
+                if self.selected_layer.get() == 6:
                     ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
                 else:
                     ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}, {self.scores_perc[self.cam_idx[i]]}%')
             else:
                 ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
 
+        # Create canvas with the figure embedded in it, and update it after each visualization
         if self.canvas is None:
             self.canvas = FigureCanvasTkAgg(self.fig, master=self)
             self.canvas.get_tk_widget().pack()
 
         self.canvas.draw()
 
+        # take a screenshot if the option is selected
         if self.capture_bool.get():
             capture(self)
