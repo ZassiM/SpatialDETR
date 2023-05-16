@@ -58,7 +58,6 @@ def update_data_label(self):
     info = f"Model name: {self.model_name} | GPU ID: {self.gpu_id.get()} | Data index: {idx}"
     self.info_text.set(info)
 
-
 def update_thr(self):
     self.BB_bool.set(True)
     self.show_labels.set(True)

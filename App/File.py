@@ -73,7 +73,7 @@ def load_model(self, cfg_file=None, weights_file=None, gpu_id=None):
             
     self.model = MMDataParallel(model, device_ids=[self.gpu_id.get()])
     self.data_loader = dataloader
-    self.gen = Attention(self.model)
+    self.Attention = Attention(self.model)
     self.new_model = True
     self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
     progress(30)

@@ -41,22 +41,11 @@ class UserInterface(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", lambda: (self.quit(), self.destroy()))
         self.font = cv2.FONT_HERSHEY_SIMPLEX
         self.font_scale = 1
-        self.suffix = 0 
+        self.suffix = 0
         self.canvas, self.fig, self.spec = None, None, None
 
-        self.model, self.data_loader, self.gt_bboxes = None, None, None
+        self.model, self.data_loader = None, None
         self.started_app = False
-
-        frame = tk.Frame(self)
-        frame.pack(fill=tk.Y)
-
-        self.info_text = tk.StringVar()
-        self.info_label = tk.Label(frame, textvariable=self.info_text, anchor=tk.CENTER)
-        self.info_label.pack(side=tk.TOP)
-
-        self.info_label.bind("<Button-1>", lambda event, k=self:show_model_info(self))
-        self.info_label.bind("<Enter>", lambda event, k=self:red_text(self))
-        self.info_label.bind("<Leave>", lambda event, k=self:black_text(self))
 
         self.menubar = tk.Menu(self)
         self.config(menu=self.menubar)
@@ -80,14 +69,25 @@ class UserInterface(tk.Tk):
 
     def start_app(self):
         self.thr_idxs, self.imgs_bbox = [], []
-        self.old_data_idx, self.old_bbox_idx, self.old_layer_idx, self.new_model, self.canvas, self.gt_bbox = \
-            None, None, None, None, None, None
+        self.old_data_idx, self.old_bbox_idx, self.new_model, self.canvas, self.gt_bbox = \
+            None, None, None, None, None, 
 
         self.old_thr = -1
         self.head_fusion = "min"
         self.discard_ratio = 0.9      
         self.cam_idx = [2, 0, 1, 5, 3, 4]
         self.scores = []
+
+        frame = tk.Frame(self)
+        frame.pack(fill=tk.Y)
+
+        self.info_text = tk.StringVar()
+        self.info_label = tk.Label(frame, textvariable=self.info_text, anchor=tk.CENTER)
+        self.info_label.pack(side=tk.TOP)
+
+        self.info_label.bind("<Button-1>", lambda event, k=self:show_model_info(self))
+        self.info_label.bind("<Enter>", lambda event, k=self:red_text(self))
+        self.info_label.bind("<Leave>", lambda event, k=self:black_text(self))
 
         # Prediction threshold + Discard ratio  
         thr_opt, dr_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
@@ -108,7 +108,7 @@ class UserInterface(tk.Tk):
             camera_opt.add_radiobutton(label=key, variable=self.selected_camera, value=value)
 
         # Attention
-        attn_opt, attn_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar)
+        attn_opt, attn_rollout, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.head_types = ["mean", "min", "max"]
         self.selected_head_fusion = tk.StringVar()
         self.selected_head_fusion.set(self.head_types[2])
@@ -186,17 +186,17 @@ class UserInterface(tk.Tk):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
 
     def update_scores(self):
-        self.all_attn = self.gen.get_all_attn(self.bbox_idx, self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
+        self.all_attn = self.Attention.get_all_attn(self.bbox_idx, self.nms_idxs, self.head_fusion, self.discard_ratio, self.raw_attn.get())
         self.scores = []
         self.scores_perc = []
-        if self.selected_layer.get() == 6:
+        if self.layer == 6:
             for layer in range(6):
-                attn = self.all_attn[layer][self.selected_camera.get()]
+                attn = self.all_attn[layer][self.camera]
                 score = round(attn.sum().item(), 2)
                 self.scores.append(score)
         else:
             for cam in range(6):
-                attn = self.all_attn[self.selected_layer.get()][cam]
+                attn = self.all_attn[self.layer][cam]
                 score = round(attn.sum().item(), 2)
                 self.scores.append(score)
 
@@ -212,21 +212,22 @@ class UserInterface(tk.Tk):
 
         fontsize = 8
         attn_cameras = []
-        if self.selected_camera.get() == 6:
+
+        if self.camera == 6:
             for i in range(6):
-                attn_cam = self.gen.generate_rollout(self.bbox_idx, self.nms_idxs, i, self.head_fusion, self.discard_ratio, self.raw_attn.get())       
+                attn_cam = self.Attention.generate_rollout(self.bbox_idx, self.nms_idxs, i, self.head_fusion, self.discard_ratio, self.raw_attn.get())       
                 attn_cameras.append(attn_cam)
             attn_max = torch.max(torch.cat(attn_cameras))
-            self.gen.camidx = self.selected_camera.get()
+            self.Attention.camidx = self.camera
 
-        if self.selected_layer.get() == 6 or self.selected_camera.get() == 6:
+        if self.layer == 6 or self.camera == 6:
             layer_grid = self.spec[1,grid_clm].subgridspec(2,3)
             for i in range(6):
-                if self.selected_layer.get() == 6:
-                    self.gen.layer = i
+                if self.layer == 6:
+                    self.Attention.layer = i
                 else: 
-                    self.selected_camera.set(self.cam_idx[i])
-                attn = self.gen.generate_rollout(self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
+                    self.camera = self.cam_idx[i]
+                attn = self.Attention.generate_rollout(self.bbox_idx, self.nms_idxs, self.camera, self.head_fusion, self.discard_ratio, self.raw_attn.get())
                 # Normalization
                 if attn_cameras and self.attn_norm.get():
                     attn /= attn_max
@@ -242,18 +243,18 @@ class UserInterface(tk.Tk):
                     im_ratio = attn.shape[1]/attn.shape[0]
                     self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
                 if self.attn_contr.get():
-                    if self.selected_layer.get() == 6:
-                        ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[i]}%', fontsize=fontsize)
+                    if self.layer == 6:
+                        ax_attn.set_title(f'{list(self.cameras.keys())[self.camera]}, layer {self.Attention.layer}, {self.head_fusion}, {self.scores_perc[i]}%', fontsize=fontsize)
                     else:
-                        ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[self.cam_idx[i]]}%', fontsize=fontsize)
+                        ax_attn.set_title(f'{list(self.cameras.keys())[self.camera]}, layer {self.Attention.layer}, {self.head_fusion}, {self.scores_perc[self.cam_idx[i]]}%', fontsize=fontsize)
                 else:
-                    ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}', fontsize=fontsize)
+                    ax_attn.set_title(f'{list(self.cameras.keys())[self.camera]}, layer {self.Attention.layer}, {self.head_fusion}', fontsize=fontsize)
 
-            if self.selected_layer.get() != 6:
+            if self.layer != 6:
                 self.selected_camera.set(6)
 
         else:
-            attn = self.gen.generate_rollout(self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.head_fusion, self.discard_ratio, self.raw_attn.get())
+            attn = self.Attention.generate_rollout(self.bbox_idx, self.nms_idxs, self.camera, self.head_fusion, self.discard_ratio, self.raw_attn.get())
             attn = attn.view(29, 50).cpu().numpy()
             ax_attn = self.fig.add_subplot(self.spec[1,grid_clm])
             if self.attn_norm.get():
@@ -262,19 +263,12 @@ class UserInterface(tk.Tk):
             else:
                 attmap = ax_attn.imshow(attn)
             ax_attn.axis('off')
-            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.gen.layer}, {self.head_fusion}, {self.scores_perc[self.selected_camera.get()]}%')
+            ax_attn.set_title(f'{list(self.cameras.keys())[self.camera]}, layer {self.Attention.layer}, {self.head_fusion}, {self.scores_perc[self.camera]}%')
             if self.scale.get():  
                 im_ratio = attn.shape[1]/attn.shape[0]
                 self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
 
-    def update_bbox(self):
-        self.bboxes = []
-        self.bbox_opt.delete(3, 'end')
-        for i in range(len(self.thr_idxs.nonzero())):
-            view_bbox = tk.BooleanVar()
-            view_bbox.set(False)
-            self.bboxes.append(view_bbox)
-            self.bbox_opt.add_checkbutton(label=f"{class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
+
 
     def single_bbox_select(self, idx):
         if self.single_bbox.get():
@@ -283,51 +277,69 @@ class UserInterface(tk.Tk):
                     self.bboxes[i].set(False)
 
     def update_values(self):
-        if isinstance(self.data_loader, list):
-            self.data = self.data_loader[self.data_idx]
-        else:
-            data = self.data_loader.dataset[self.data_idx]
-            metas = [[data['img_metas'][0].data]]
-            img = [data['img'][0].data.unsqueeze(0)]
-            data['img_metas'][0] = DC(metas, cpu_only=True)
-            data['img'][0] = DC(img)
-            self.data = data
+        
+        # Load selected data from dataloader, manual DataContainer fixes are needed
+        data = self.data_loader.dataset[self.data_idx]
+        metas = [[data['img_metas'][0].data]]
+        img = [data['img'][0].data.unsqueeze(0)]
+        data['img_metas'][0] = DC(metas, cpu_only=True)
+        data['img'][0] = DC(img)
+        self.data = data
 
+        # Attention scores are extracted, together with gradients if grad-CAM is selected
         if self.selected_head_fusion.get() != "gradcam":
-            outputs = self.gen.extract_attentions(self.data)
+            outputs = self.Attention.extract_attentions(self.data)
         else:
-            outputs = self.gen.extract_attentions(self.data, self.bbox_idx)
+            outputs = self.Attention.extract_attentions(self.data, self.bbox_idx)
 
-        self.nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes() 
+        # Those are needed to index the bboxes decoded by the NMS-Free decoder
+        self.nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes()
+
+        # Extract predicted bboxes and their labels
         self.outputs = outputs[0]["pts_bbox"]
-
         self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
         self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
         self.pred_bboxes.tensor.detach()
         self.labels = self.outputs['labels_3d'][self.thr_idxs]
 
+        # Extract the 6 camera images from the data and remove the padded pixels
         imgs = self.data["img"][0]._data[0].numpy()[0]
-        imgs = imgs.transpose(0,2,3,1)[:,:900,:,:]
+        imgs = imgs.transpose(0, 2, 3, 1)[:, :900, :, :]
         self.imgs = imgs.astype(np.uint8)
 
+        # Extract image metas which contain, for example, the lidar to camera projection matrices
         self.img_metas = self.data["img_metas"][0]._data[0][0]
 
+        # Update the Bounding box menu with the predicted labels
+        self.bboxes = []
+        self.bbox_opt.delete(3, 'end')
+        for i in range(len(self.thr_idxs.nonzero())):
+            view_bbox = tk.BooleanVar()
+            view_bbox.set(False)
+            self.bboxes.append(view_bbox)
+            self.bbox_opt.add_checkbutton(label=f"{class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
+        
+        # Default bbox for first visualization
+        self.bboxes[0].set(True)
+
     def visualize(self):
+
+        # Get selected options from menus
+        self.head_fusion = self.selected_head_fusion.get()
+        self.discard_ratio = self.selected_discard_ratio.get()
+        self.camera = self.selected_camera.get()
+        self.layer = self.selected_layer.get()
+
+        # Create figure with a 3x3 grid if not existent, otherwise clear it for update
         if self.fig is None:
             self.fig = plt.figure(figsize=(80, 60), layout="constrained")
             self.spec = self.fig.add_gridspec(3, 3)
         else:
             self.fig.clear()
 
-        # Avoiding to visualize all layers and all cameras at the same time
-        if self.selected_camera.get() == 6 and self.selected_layer.get() == 6:
-            self.selected_layer.set(5)
-
+        # Values are updated only when data idx, prediction threshold or the model is changed
         if self.old_data_idx != self.data_idx or self.old_thr != self.selected_threshold.get() or self.new_model:
             self.update_values()
-            self.update_bbox()
-            self.bboxes[0].set(True)  # Default bbox for first visualization
-
             if self.new_model:
                 self.new_model = False
             if self.old_thr != self.selected_threshold.get():
@@ -335,19 +347,18 @@ class UserInterface(tk.Tk):
             if self.old_data_idx != self.data_idx:
                 self.old_data_idx = self.data_idx
 
+        # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
-
-        if self.selected_layer.get() != 6:
-            self.gen.layer = self.selected_layer.get()
+        
+        # Update the attention layer
+        if self.layer != 6:
+            self.Attention.layer = self.layer
 
         if self.GT_bool.get():
             self.gt_bbox = self.data_loader.dataset.get_ann_info(self.data_idx)['gt_bboxes_3d']
 
         else:
             self.gt_bbox = None
-
-        self.head_fusion = self.selected_head_fusion.get()
-        self.discard_ratio = self.selected_discard_ratio.get()
 
         self.imgs_bbox = []
         for camidx in range(6):
@@ -368,7 +379,8 @@ class UserInterface(tk.Tk):
                         img,
                         self.img_metas['lidar2img'][camidx],
                         self.img_metas,
-                        color=(255, 0, 0))
+                        color=(255, 0, 0),
+                        mode_2d=self.bbox_2d.get())
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.imgs_bbox.append(img)
@@ -377,13 +389,13 @@ class UserInterface(tk.Tk):
             self.show_attn_maps()
 
         elif self.head_fusion == "gradcam":   
-            self.gen.extract_attentions(self.data, self.bbox_idx)
-            attn = self.gen.generate_attn_gradcam(self.bbox_idx, self.nms_idxs, self.selected_camera.get())
+            self.Attention.extract_attentions(self.data, self.bbox_idx)
+            attn = self.Attention.generate_attn_gradcam(self.bbox_idx, self.nms_idxs, self.camera)
             attn = attn.view(29, 50).cpu().numpy()
             ax_attn = self.fig.add_subplot(self.spec[1,1])
             attmap = ax_attn.imshow(attn)
             ax_attn.axis('off')
-            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}')  
+            ax_attn.set_title(f'{list(self.cameras.keys())[self.camera]}')  
 
             if self.scale.get():  
                 im_ratio = attn.shape[1]/attn.shape[0]
@@ -405,7 +417,7 @@ class UserInterface(tk.Tk):
             ax.axis('off')
 
             if self.attn_contr.get():
-                if self.selected_layer.get() == 6:
+                if self.layer == 6:
                     ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
                 else:
                     ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}, {self.scores_perc[self.cam_idx[i]]}%')
