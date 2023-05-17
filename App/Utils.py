@@ -5,6 +5,8 @@ import random
 import os
 from PIL import ImageGrab
 
+def add_separator(self, sep="\u22EE"):
+        self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
 
 def show_message(self, message):
     showinfo(title=None, message=message)
@@ -18,7 +20,7 @@ def black_text(self, event=None):
 def show_model_info(self, event=None):
     popup = tk.Toplevel(self)
     popup.geometry("700x1000")
-    popup.title(f"Model {self.model_name.capitalize()}")
+    popup.title(f"Model {self.model_name}")
 
     text = scrolledtext.ScrolledText(popup, wrap=tk.WORD)
     for k, v in self.model.module.__dict__["_modules"].items():
@@ -55,30 +57,12 @@ def random_data_idx(self):
 
 def update_data_label(self):
     idx = self.data_idx
-    info = f"Model name: {self.model_name} | GPU ID: {self.gpu_id.get()} | Data index: {idx}"
+    info = f"Model name: {self.model_name} | Dataloader name: {self.dataloader_name} | GPU ID: {self.gpu_id.get()} | Data index: {idx}"
     self.info_text.set(info)
 
 def update_thr(self):
     self.BB_bool.set(True)
     self.show_labels.set(True)
-    
-def capture(self):
-    x0 = self.winfo_rootx()
-    y0 = self.winfo_rooty()
-    x1 = x0 + self.canvas.get_width_height()[0]
-    y1 = y0 + self.canvas.get_width_height()[1]
-    
-    im = ImageGrab.grab((x0, y0, x1, y1))
-    path = f"screenshots/{self.model_name}_{self.data_idx}"
-
-    if os.path.exists(path+"_"+str(self.suffix)+".png"):
-        self.suffix += 1
-    else:
-        self.suffix = 0
-
-    path += "_" + str(self.suffix) + ".png"
-    im.save(path) # Can also say im.show() to display it
-
 
 def single_bbox_select(self, idx):
     if self.single_bbox.get():
@@ -105,3 +89,20 @@ def update_scores(self):
     for i in range(len(self.scores)):
         score_perc = round(((self.scores[i]/sum_scores)*100))
         self.scores_perc.append(score_perc)
+
+def capture(self):
+    x0 = self.winfo_rootx()
+    y0 = self.winfo_rooty()
+    x1 = x0 + self.canvas.get_width_height()[0]
+    y1 = y0 + self.canvas.get_width_height()[1]
+    
+    im = ImageGrab.grab((x0, y0, x1, y1))
+    path = f"screenshots/{self.model_name}_{self.data_idx}"
+
+    if os.path.exists(path+"_"+str(self.file_suffix)+".png"):
+        self.file_suffix += 1
+    else:
+        self.file_suffix = 0
+
+    path += "_" + str(self.file_suffix) + ".png"
+    im.save(path)

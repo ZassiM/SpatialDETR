@@ -36,6 +36,13 @@ def apply_self_attention_rules(R_ss, R_sq, attn_ss):
     R_ss_addition = torch.matmul(attn_ss, R_ss)
     return R_ss_addition, R_sq_addition
 
+def gradcam(cam, grad):
+    cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
+    grad = grad.reshape(-1, grad.shape[-2], grad.shape[-1])
+    grad = grad.mean(dim=0, keepdim=True)
+    cam = (cam * grad).mean(0).clamp(min=0)
+    return cam
+
 class Attention:
     """
     Short description - What is the purpose ?
@@ -51,7 +58,6 @@ class Attention:
         self.dec_cross_attn_weights, self.dec_cross_attn_grads, self.dec_self_attn_weights, self.dec_self_attn_grads = [], [], [], []    
     
     def extract_attentions(self, data, target_index=None):
-        
         self.dec_self_attn_weights, self.dec_cross_attn_weights = [], []
         hooks = []
         for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
@@ -99,9 +105,8 @@ class Attention:
             
         return outputs
 
-    def get_all_attn(self, target_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True):
+    def get_all_attn(self, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True):
         #self.dec_cross_attn_weights = 6x[6x8x900x1450] = layers x (cams x heads x queries x keys)
-
         all_attn_layers = []
         # loop through layers
         for i in range(self.layers):
@@ -109,11 +114,11 @@ class Attention:
             # loop through cameras
             for attn in self.dec_cross_attn_weights[i]:
                 attn_avg = avg_heads(attn, head_fusion=head_fusion, discard_ratio=discard_ratio)
-                if isinstance(target_idx, list):
-                    attn_avg = attn_avg[indexes[target_idx]].detach()
+                if isinstance(bbox_idx, list):
+                    attn_avg = attn_avg[indexes[bbox_idx]].detach()
                     attn_avg = attn_avg.sum(dim=0)
                 else:
-                    attn_avg = attn_avg[indexes[target_idx].item()].detach()     
+                    attn_avg = attn_avg[indexes[bbox_idx].item()].detach()     
                 all_attn.append(attn_avg)
             all_attn_layers.append(all_attn)    
             
@@ -121,7 +126,7 @@ class Attention:
         
 
     
-    def generate_rollout(self, target_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):
+    def generate_rollout(self, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):
         self.camidx = camidx
         self.head_fusion = head_fusion
         self.discard_ratio = discard_ratio
@@ -138,7 +143,7 @@ class Attention:
 
         cam_q_i = self.dec_cross_attn_weights[self.layer][self.camidx]
         
-        cam_q_i = avg_heads(cam_q_i, head_fusion = self.head_fusion, discard_ratio = self.discard_ratio)
+        cam_q_i = avg_heads(cam_q_i, head_fusion=self.head_fusion, discard_ratio=self.discard_ratio)
         
         if raw: 
             self.R_q_i = cam_q_i # Only one layer 
@@ -147,28 +152,37 @@ class Attention:
             #self.R_q_i = torch.matmul(self.R_q_q, torch.matmul(cam_q_i, self.R_i_i))[0]
             self.R_q_i = torch.matmul(self.R_q_q, cam_q_i)
         
-        if isinstance(target_idx, list):
-            aggregated = self.R_q_i[indexes[target_idx]].detach()
+        if isinstance(bbox_idx, list):
+            aggregated = self.R_q_i[indexes[bbox_idx]].detach()
             aggregated = aggregated.sum(dim=0)
         else:
-            aggregated = self.R_q_i[indexes[target_idx].item()].detach()
+            aggregated = self.R_q_i[indexes[bbox_idx].item()].detach()
                 
         return aggregated
 
-    def gradcam(self, cam, grad):
-        cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
-        grad = grad.reshape(-1, grad.shape[-2], grad.shape[-1])
-        grad = grad.mean(dim=0, keepdim=True)
-        cam = (cam * grad).mean(0).clamp(min=0)
-        return cam
 
     def generate_attn_gradcam(self, target_index, indexes, camidx):
         self.camidx = camidx
 
         cam_q_i = self.dec_cross_attn_weights[self.layer][self.camidx]
         grad_q_i = self.dec_cross_attn_grads[self.layer][self.camidx]
-        cam_q_i = self.gradcam(cam_q_i, grad_q_i)
+        cam_q_i = gradcam(cam_q_i, grad_q_i)
         self.R_q_i = cam_q_i
 
         aggregated = self.R_q_i[indexes[target_index].item()].detach()
         return aggregated
+    
+    def generate_explainability(self, expl_type, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):
+        
+        if expl_type == "Attention Rollout":
+            attn = self.generate_rollout(bbox_idx, indexes, camidx, head_fusion, discard_ratio, raw)
+        elif expl_type == "Grad-CAM":
+            attn = self.generate_attn_gradcam(bbox_idx, indexes, camidx)
+        elif expl_type == "Gradient Rollout":
+            attn = 0
+            # TO-DO
+        
+        return attn
+
+            
+

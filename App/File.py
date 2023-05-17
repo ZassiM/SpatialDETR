@@ -69,19 +69,19 @@ def load_model(self, cfg_file=None, weights_file=None, gpu_id=None):
     args["config"] = cfg_file
     args["checkpoint"] = weights_file
     model, dataloader, checkpoint = init_app(args)
-    progress(50, "Updating application")
+    progress(50, "Starting user interface")
             
     self.model = MMDataParallel(model, device_ids=[self.gpu_id.get()])
-    self.data_loader = dataloader
+    self.dataloader = dataloader
     self.Attention = Attention(self.model)
-    self.new_model = True
     self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
+    self.dataloader_name = self.dataloader.dataset.metadata['version']
+    self.class_names = self.dataloader.dataset.CLASSES
     progress(30)
-
-    if not self.started_app:
-        self.start_app()
-        random_data_idx(self)
-        self.started_app = True
-
-    update_data_label(self)
     print("Loading completed.")
+
+    self.start_app()
+    self.new_model = True
+
+    random_data_idx(self)
+    update_data_label(self)
