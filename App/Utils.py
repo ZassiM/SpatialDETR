@@ -33,7 +33,7 @@ def show_model_info(self, event=None):
 
 def select_data_idx(self):
     popup = tk.Toplevel(self)
-    popup.geometry("50x50")
+    popup.geometry("80x80")
 
     self.entry = tk.Entry(popup, width=20)
     self.entry.pack()
@@ -43,21 +43,21 @@ def select_data_idx(self):
 
 def close_entry(self, popup):
     idx = self.entry.get()
-    if idx.isnumeric() and int(idx) <= (len(self.data_loader)-1):
+    if idx.isnumeric() and int(idx) <= (len(self.dataloader)-1):
         self.data_idx = int(idx)
         update_data_label(self)
         popup.destroy()
     else:
-        show_message(self, f"Insert an integer between 0 and {len(self.data_loader)-1}")
+        show_message(self, f"Insert an integer between 0 and {len(self.dataloader)-1}")
 
 def random_data_idx(self):
-    idx = random.randint(0, len(self.data_loader)-1)
+    idx = random.randint(0, len(self.dataloader)-1)
     self.data_idx = idx
     update_data_label(self)
 
 def update_data_label(self):
     idx = self.data_idx
-    info = f"Model name: {self.model_name} | Dataloader name: {self.dataloader_name} | GPU ID: {self.gpu_id.get()} | Data index: {idx}"
+    info = f"Model: {self.model_name} | Dataloader: {self.dataloader_name} | GPU ID: {self.gpu_id.get()} | Data index: {idx}"
     self.info_text.set(info)
 
 def update_thr(self):

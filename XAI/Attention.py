@@ -54,7 +54,6 @@ class Attention:
         self.layers = 0
         for _ in self.model.module.pts_bbox_head.transformer.decoder.layers:
             self.layers += 1
-        self.layer = self.layers - 1
         self.dec_cross_attn_weights, self.dec_cross_attn_grads, self.dec_self_attn_weights, self.dec_self_attn_grads = [], [], [], []    
     
     def extract_attentions(self, data, target_index=None):
@@ -126,7 +125,7 @@ class Attention:
         
 
     
-    def generate_rollout(self, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):
+    def generate_rollout(self, layer, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):
         self.camidx = camidx
         self.head_fusion = head_fusion
         self.discard_ratio = discard_ratio
@@ -141,7 +140,7 @@ class Attention:
         # queries self attention matrix
         self.R_q_q = torch.eye(queries_num, queries_num).to(device)
 
-        cam_q_i = self.dec_cross_attn_weights[self.layer][self.camidx]
+        cam_q_i = self.dec_cross_attn_weights[layer][self.camidx]
         
         cam_q_i = avg_heads(cam_q_i, head_fusion=self.head_fusion, discard_ratio=self.discard_ratio)
         
@@ -161,23 +160,23 @@ class Attention:
         return aggregated
 
 
-    def generate_attn_gradcam(self, target_index, indexes, camidx):
+    def generate_attn_gradcam(self, layer, target_index, indexes, camidx):
         self.camidx = camidx
 
-        cam_q_i = self.dec_cross_attn_weights[self.layer][self.camidx]
-        grad_q_i = self.dec_cross_attn_grads[self.layer][self.camidx]
+        cam_q_i = self.dec_cross_attn_weights[layer][self.camidx]
+        grad_q_i = self.dec_cross_attn_grads[layer][self.camidx]
         cam_q_i = gradcam(cam_q_i, grad_q_i)
         self.R_q_i = cam_q_i
 
         aggregated = self.R_q_i[indexes[target_index].item()].detach()
         return aggregated
     
-    def generate_explainability(self, expl_type, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):
-        
+    def generate_explainability(self, expl_type, layer, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):
+
         if expl_type == "Attention Rollout":
-            attn = self.generate_rollout(bbox_idx, indexes, camidx, head_fusion, discard_ratio, raw)
+            attn = self.generate_rollout(layer, bbox_idx, indexes, camidx, head_fusion, discard_ratio, raw)
         elif expl_type == "Grad-CAM":
-            attn = self.generate_attn_gradcam(bbox_idx, indexes, camidx)
+            attn = self.generate_attn_gradcam(layer, bbox_idx, indexes, camidx)
         elif expl_type == "Gradient Rollout":
             attn = 0
             # TO-DO
