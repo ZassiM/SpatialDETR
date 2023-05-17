@@ -1,9 +1,11 @@
-from App.UserInterface import UserInterface
+from App.UserInterface import App
 
 
 def main():
-
-    app = UserInterface()
+    '''
+    Main script which creates the App class and runs it.
+    '''
+    app = App()
     app.mainloop()
 
 

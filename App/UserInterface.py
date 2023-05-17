@@ -1,7 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
 import matplotlib.pyplot as plt
-import matplotlib as mpl
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import torch
 import numpy as np
@@ -17,7 +16,7 @@ from App.Utils import show_message, show_model_info, red_text, black_text, \
                     select_all_bboxes
 
 
-class UserInterface(tk.Tk):
+class App(tk.Tk):
     '''
     Application User Interface for attention visualization
     '''
@@ -37,7 +36,8 @@ class UserInterface(tk.Tk):
 
         # Model and dataloader objects
         self.model, self.dataloader = None, None
-
+        self.started_app = False
+        
         # Main Tkinter menu in which all other cascade menus are added
         self.menubar = tk.Menu(self)
 
@@ -57,7 +57,7 @@ class UserInterface(tk.Tk):
         self.menubar.add_cascade(label=" File", menu=file_opt)
 
         # Speeding up the testing
-        load_from_config(self)
+        #load_from_config(self)
 
     def start_app(self):
         '''
@@ -143,7 +143,7 @@ class UserInterface(tk.Tk):
         self.selected_layer = tk.IntVar()
         for i in range(self.Attention.layers):
             attn_layer.add_radiobutton(label=i, variable=self.selected_layer)
-        attn_layer.add_radiobutton(label=" All", variable=self.selected_layer, value=-1)
+        attn_layer.add_radiobutton(label="All", variable=self.selected_layer, value=-1)
         self.selected_layer.set(self.Attention.layers - 1)
         attn_opt.add_separator()
 
@@ -169,7 +169,7 @@ class UserInterface(tk.Tk):
         self.GT_bool, self.BB_bool, self.points_bool, self.show_scale, self.attn_contr, self.attn_norm, self.overlay, self.show_labels, self.capture_bool, self.bbox_2d = \
             tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.BB_bool.set(True)
-        self.show_scale.set(True)
+        self.show_scale.set(False)
         self.show_labels.set(True)
         self.attn_norm.set(True)
         self.attn_contr.set(True)
@@ -194,9 +194,9 @@ class UserInterface(tk.Tk):
         add_separator(self)
         self.menubar.add_cascade(label=" Camera", menu=camera_opt)
         add_separator(self)
-        self.menubar.add_cascade(label=" Attention", menu=attn_opt)
-        add_separator(self)
         self.menubar.add_cascade(label=" Bounding boxes", menu=self.bbox_opt)
+        add_separator(self)
+        self.menubar.add_cascade(label=" Attention", menu=attn_opt)
         add_separator(self)
         self.menubar.add_cascade(label=" Options", menu=add_opt)
         add_separator(self, "|")
@@ -240,6 +240,7 @@ class UserInterface(tk.Tk):
                 ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
 
             attn = attn_list[i].view(29, 50).cpu().numpy()
+            attn[:, 0] = 0
             ax_attn.axis('off')
 
             # Attention normalization if option is selected
@@ -339,6 +340,7 @@ class UserInterface(tk.Tk):
             if self.old_expl_type != self.selected_expl_type.get():
                 self.old_expl_type = self.selected_expl_type.get()
 
+
         # Avoid selecting all layers and all cameras. Only the last layer will be visualized
         if self.selected_layer.get() == -1 and self.selected_camera.get() == -1:
             self.selected_layer.set(self.Attention.layers - 1)
@@ -397,14 +399,7 @@ class UserInterface(tk.Tk):
 
             ax.imshow(self.imgs_bbox[self.cam_idx[i]])
             ax.axis('off')
-
-            if self.attn_contr.get():
-                if self.selected_layer.get() == -1:
-                    ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
-                else:
-                    ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}, {self.scores_perc[self.cam_idx[i]]}%')
-            else:
-                ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
+            ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
 
         # Create canvas with the figure embedded in it, and update it after each visualization
         if self.canvas is None:

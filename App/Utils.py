@@ -57,7 +57,7 @@ def random_data_idx(self):
 
 def update_data_label(self):
     idx = self.data_idx
-    info = f"Model: {self.model_name} | Dataloader: {self.dataloader_name} | GPU ID: {self.gpu_id.get()} | Data index: {idx}"
+    info = f"Model: {self.model_name} | Dataloader: {self.dataloader_name} | Data index: {idx} | GPU ID: {self.gpu_id.get()}"
     self.info_text.set(info)
 
 def update_thr(self):
