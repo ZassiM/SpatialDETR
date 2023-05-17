@@ -70,25 +70,32 @@ def single_bbox_select(self, idx):
             if i != idx:
                 self.bboxes[i].set(False)
 
+def select_all_bboxes(self):
+    if hasattr(self, "bboxes"):
+        for i in range(len(self.bboxes)):
+            self.bboxes[i].set(True)
+
 def update_scores(self):
-    self.all_attn = self.Attention.get_all_attn(self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
+    all_attentions = self.Attention.get_all_attn(self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
     self.scores = []
     self.scores_perc = []
-    if self.selected_layer.get() == 6:
-        for layer in range(6):
-            attn = self.all_attn[layer][self.selected_camera.get()]
+    if self.selected_layer.get() == -1:
+        for layer in range(self.Attention.layers):
+            attn = all_attentions[layer][self.selected_camera.get()]
             score = round(attn.sum().item(), 2)
             self.scores.append(score)
     else:
-        for cam in range(6):
-            attn = self.all_attn[self.selected_layer.get()][cam]
+        for cam in range(len(all_attentions[self.selected_layer.get()])):
+            attn = all_attentions[self.selected_layer.get()][cam]
             score = round(attn.sum().item(), 2)
             self.scores.append(score)
 
     sum_scores = sum(self.scores)
-    for i in range(len(self.scores)):
-        score_perc = round(((self.scores[i]/sum_scores)*100))
-        self.scores_perc.append(score_perc)
+    if sum_scores > 0:
+        for i in range(len(self.scores)):
+            score_perc = round(((self.scores[i]/sum_scores)*100))
+            self.scores_perc.append(score_perc)
+
 
 def capture(self):
     x0 = self.winfo_rootx()

@@ -44,9 +44,9 @@ def gradcam(cam, grad):
     return cam
 
 class Attention:
-    """
-    Short description - What is the purpose ?
-    """
+    '''
+    Generates attention maps and different explainability features
+    '''
     def __init__(self, model):
         self.model = model
         self.model.eval()
@@ -136,7 +136,7 @@ class Attention:
 
         device = self.dec_cross_attn_weights[0].device
         # image self attention matrix
-        self.R_i_i = torch.eye(image_bboxes, image_bboxes).to(device)
+        #self.R_i_i = torch.eye(image_bboxes, image_bboxes).to(device)
         # queries self attention matrix
         self.R_q_q = torch.eye(queries_num, queries_num).to(device)
 

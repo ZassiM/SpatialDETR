@@ -13,12 +13,14 @@ from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 from App.File import load_from_config, load_model
 from App.Utils import show_message, show_model_info, red_text, black_text, \
                     select_data_idx, random_data_idx, update_thr, capture, \
-                    single_bbox_select, update_scores, add_separator
-
+                    single_bbox_select, update_scores, add_separator, \
+                    select_all_bboxes
 
 
 class UserInterface(tk.Tk):
-
+    '''
+    Application User Interface for attention visualization
+    '''
     def __init__(self):
         '''
         Tkinter initialization with model loading option.
@@ -44,15 +46,15 @@ class UserInterface(tk.Tk):
         file_opt, gpu_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.gpu_id = tk.IntVar()
         self.gpu_id.set(0)
-        file_opt.add_command(label="Load model", command=lambda:load_model(self))
-        file_opt.add_command(label="Load from config file", command=lambda:load_from_config(self))
+        file_opt.add_command(label=" Load model", command=lambda:load_model(self))
+        file_opt.add_command(label=" Load from config file", command=lambda:load_from_config(self))
         file_opt.add_separator()
-        file_opt.add_cascade(label="Gpu", menu=gpu_opt)
+        file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
         message = "You need to reload the model to apply GPU change."
         for i in range(torch.cuda.device_count()):
             gpu_opt.add_radiobutton(label=f"GPU {i}", variable=self.gpu_id, value=i, command=lambda: show_message(self, message))
 
-        self.menubar.add_cascade(label="File", menu=file_opt)
+        self.menubar.add_cascade(label=" File", menu=file_opt)
 
         # Speeding up the testing
         load_from_config(self)
@@ -61,7 +63,6 @@ class UserInterface(tk.Tk):
         '''
         It starts the UI after loading the model. Variables are initialized.
         '''
-
         # Booleans used for avoiding reloading same data so that the UI is speed up
         self.old_data_idx, self.old_thr, self.old_bbox_idx, self.old_expl_type, self.new_model = \
             None, None, None, None, None
@@ -81,8 +82,8 @@ class UserInterface(tk.Tk):
 
         # Cascade menu for Data index
         dataidx_opt = tk.Menu(self.menubar)
-        dataidx_opt.add_command(label="Select data index", command=lambda: select_data_idx(self))
-        dataidx_opt.add_command(label="Select random data", command=lambda: random_data_idx(self))
+        dataidx_opt.add_command(label=" Select data index", command=lambda: select_data_idx(self))
+        dataidx_opt.add_command(label=" Select random data", command=lambda: random_data_idx(self))
 
         # Cascade menus for Prediction threshold and Discard ratio
         thr_opt, dr_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
@@ -96,12 +97,13 @@ class UserInterface(tk.Tk):
 
         # Cascade menu for Camera
         camera_opt = tk.Menu(self.menubar)
-        self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5, 'All': 6}
-        self.cam_idx = [2, 0, 1, 5, 3, 4]
+        self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
+        self.cam_idx = [2, 0, 1, 5, 3, 4] # Used for visualizing camera outputs properly
         self.selected_camera = tk.IntVar()
         self.selected_camera.set(0)
         for value, key in enumerate(self.cameras):
             camera_opt.add_radiobutton(label=key, variable=self.selected_camera, value=value)
+        camera_opt.add_radiobutton(label="All", variable=self.selected_camera, value=-1)
 
         # Cascade menus for Explainable options
         attn_opt, attn_rollout, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
@@ -117,7 +119,7 @@ class UserInterface(tk.Tk):
         for i in range(len(self.head_types)):
             attn_rollout.add_radiobutton(label=self.head_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_types[i])
         attn_rollout.add_radiobutton(label="All", variable=self.selected_head_fusion, value="all")
-        attn_rollout.add_checkbutton(label="Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
+        attn_rollout.add_checkbutton(label=" Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
 
         # Grad-CAM
         attn_opt.add_cascade(label=self.expl_options[1], menu=grad_cam)
@@ -139,11 +141,10 @@ class UserInterface(tk.Tk):
         attn_layer = tk.Menu(self.menubar)
         attn_opt.add_cascade(label="Layer", menu=attn_layer)
         self.selected_layer = tk.IntVar()
-        self.selected_layer.set(5)
-        for i in range(len(self.model.module.pts_bbox_head.transformer.decoder.layers)):
+        for i in range(self.Attention.layers):
             attn_layer.add_radiobutton(label=i, variable=self.selected_layer)
-        attn_layer.add_radiobutton(label="All", variable=self.selected_layer, value=6)
-
+        attn_layer.add_radiobutton(label=" All", variable=self.selected_layer, value=-1)
+        self.selected_layer.set(self.Attention.layers - 1)
         attn_opt.add_separator()
 
         # Explainable mechanism selection
@@ -159,7 +160,8 @@ class UserInterface(tk.Tk):
         self.bbox_opt = tk.Menu(self.menubar)
         self.single_bbox = tk.BooleanVar()
         self.single_bbox.set(True)
-        self.bbox_opt.add_checkbutton(label="Single bounding box", onvalue=1, offvalue=0, variable=self.single_bbox)
+        self.bbox_opt.add_checkbutton(label=" Single bounding box", onvalue=1, offvalue=0, variable=self.single_bbox)
+        self.bbox_opt.add_command(label=" Select all", command=lambda: select_all_bboxes(self))
         self.bbox_opt.add_separator()
 
         # Cascade menus for Additional options
@@ -172,35 +174,35 @@ class UserInterface(tk.Tk):
         self.attn_norm.set(True)
         self.attn_contr.set(True)
         self.capture_bool.set(False)
-        add_opt.add_checkbutton(label="Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
-        add_opt.add_checkbutton(label="Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
-        add_opt.add_checkbutton(label="Show attention scale", onvalue=1, offvalue=0, variable=self.show_scale)
-        add_opt.add_checkbutton(label="Show attention camera contributions", onvalue=1, offvalue=0, variable=self.attn_contr)
-        add_opt.add_checkbutton(label="Normalize attention", onvalue=1, offvalue=0, variable=self.attn_norm)
-        add_opt.add_checkbutton(label="Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
-        add_opt.add_checkbutton(label="Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
-        add_opt.add_checkbutton(label="Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
-        add_opt.add_checkbutton(label="2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
+        add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
+        add_opt.add_checkbutton(label=" Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
+        add_opt.add_checkbutton(label=" Show attention scale", onvalue=1, offvalue=0, variable=self.show_scale)
+        add_opt.add_checkbutton(label=" Show attention camera contributions", onvalue=1, offvalue=0, variable=self.attn_contr)
+        add_opt.add_checkbutton(label=" Normalize attention", onvalue=1, offvalue=0, variable=self.attn_norm)
+        add_opt.add_checkbutton(label=" Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
+        add_opt.add_checkbutton(label=" Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
+        add_opt.add_checkbutton(label=" Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
+        add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
 
         # Adding all cascade menus ro the main menubar menu
         add_separator(self)
-        self.menubar.add_cascade(label="Data", menu=dataidx_opt)
+        self.menubar.add_cascade(label=" Data", menu=dataidx_opt)
         add_separator(self)
-        self.menubar.add_cascade(label="Prediction threshold", menu=thr_opt)
+        self.menubar.add_cascade(label=" Prediction threshold", menu=thr_opt)
         add_separator(self)
-        self.menubar.add_cascade(label="Discard ratio", menu=dr_opt)
+        self.menubar.add_cascade(label=" Discard ratio", menu=dr_opt)
         add_separator(self)
-        self.menubar.add_cascade(label="Camera", menu=camera_opt)
+        self.menubar.add_cascade(label=" Camera", menu=camera_opt)
         add_separator(self)
-        self.menubar.add_cascade(label="Attention", menu=attn_opt)
+        self.menubar.add_cascade(label=" Attention", menu=attn_opt)
         add_separator(self)
-        self.menubar.add_cascade(label="Bounding boxes", menu=self.bbox_opt)
+        self.menubar.add_cascade(label=" Bounding boxes", menu=self.bbox_opt)
         add_separator(self)
-        self.menubar.add_cascade(label="Options", menu=add_opt)
+        self.menubar.add_cascade(label=" Options", menu=add_opt)
         add_separator(self, "|")
-        self.menubar.add_command(label="Visualize", command=self.visualize)
+        self.menubar.add_command(label=" Visualize", command=self.visualize)
 
-    def show_attn_maps(self, grid_clm=1, ):
+    def show_attention_maps(self, grid_clm=1):
         '''
         Shows the attention map for explainability.
         '''
@@ -211,9 +213,9 @@ class UserInterface(tk.Tk):
         # If all cameras are selected, generate their attentions and append them to a list
         attn_list = []
         for i in range(6):
-            if self.selected_camera.get() == 6:
+            if self.selected_camera.get() == -1:
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.cam_idx[i], self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
-            elif self.selected_layer.get() == 6:
+            elif self.selected_layer.get() == -1:
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), i, self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
             else:
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
@@ -221,15 +223,15 @@ class UserInterface(tk.Tk):
                 break
             attn_list.append(attn)     
 
+        attn_max = torch.max(torch.cat(attn_list)).cpu().numpy()
+
         # If we want to visualize all layers or all cameras:
-        if self.selected_layer.get() == 6 or self.selected_camera.get() == 6:
+        if self.selected_layer.get() == -1 or self.selected_camera.get() == -1:
             # Select the center of the grid to plot the attentions and add 2x2 subgrid
             layer_grid = self.spec[1, grid_clm].subgridspec(2, 3) 
             fontsize = 8
         else:
             fontsize = 12
-        
-        attn_max = torch.max(torch.cat(attn_list)).cpu().numpy()
 
         for i in range(len(attn_list)):
             if len(attn_list) > 1:
@@ -240,8 +242,8 @@ class UserInterface(tk.Tk):
             attn = attn_list[i].view(29, 50).cpu().numpy()
             ax_attn.axis('off')
 
-            #Attention normalization if option is selected
-            if self.attn_norm.get():
+            # Attention normalization if option is selected
+            if self.attn_norm.get() and attn_max > 0 and self.selected_layer.get() != -1:
                 attn /= attn_max
                 attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
             else:
@@ -253,14 +255,14 @@ class UserInterface(tk.Tk):
                 self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
 
             # Set title accordinly
-            if self.selected_layer.get() == 6:
+            if self.selected_layer.get() == -1:
                 title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {i}, {self.selected_head_fusion.get()}'
-            elif self.selected_camera.get() == 6:
+            elif self.selected_camera.get() == -1:
                 title = f'{list(self.cameras.keys())[self.cam_idx[i]]}, layer {self.selected_layer.get()}, {self.selected_head_fusion.get()}'
                 if self.attn_contr.get():
                     title += f', {self.scores_perc[self.cam_idx[i]]}%'
             else:
-                title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.Attention.layer}, {self.selected_head_fusion.get()}, {self.scores_perc[self.selected_camera.get()]}%'
+                title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.selected_layer.get()}, {self.selected_head_fusion.get()}'
 
             ax_attn.set_title(title, fontsize=fontsize)
 
@@ -302,12 +304,12 @@ class UserInterface(tk.Tk):
 
         # Update the Bounding box menu with the predicted labels
         self.bboxes = []
-        self.bbox_opt.delete(3, 'end')
+        self.bbox_opt.delete(4, 'end')
         for i in range(len(self.thr_idxs.nonzero())):
             view_bbox = tk.BooleanVar()
             view_bbox.set(False)
             self.bboxes.append(view_bbox)
-            self.bbox_opt.add_checkbutton(label=f"{self.class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: single_bbox_select(self, idx))
+            self.bbox_opt.add_checkbutton(label=f" {self.class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: single_bbox_select(self, idx))
         
         # Default bbox for first visualization
         if self.bboxes:
@@ -318,7 +320,6 @@ class UserInterface(tk.Tk):
         Visualizes predicted bounding boxes on all the cameras and shows
         the attention map in the middle of the plot.
         '''
-
         # Create figure with a 3x3 grid if not existent
         if self.fig is None:
             self.fig = plt.figure(figsize=(80, 60), layout="constrained")
@@ -337,13 +338,14 @@ class UserInterface(tk.Tk):
                 self.old_data_idx = self.data_idx
             if self.old_expl_type != self.selected_expl_type.get():
                 self.old_expl_type = self.selected_expl_type.get()
-            
+
+        # Avoid selecting all layers and all cameras. Only the last layer will be visualized
+        if self.selected_layer.get() == -1 and self.selected_camera.get() == -1:
+            self.selected_layer.set(self.Attention.layers - 1)
+
+
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
-        
-        # Update the attention layer
-        if self.selected_layer.get() != 6:
-            self.Attention.layer = self.selected_layer.get()
 
         # Extract Ground Truth bboxes if wanted
         if self.GT_bool.get():
@@ -355,10 +357,10 @@ class UserInterface(tk.Tk):
         if self.selected_expl_type.get() == "Attention Rollout" and self.selected_head_fusion.get() == "all":
             for k in range(len(self.head_types)):
                 self.selected_head_fusion.set(self.head_types[k])
-                self.show_attn_maps(grid_clm=k)
+                self.show_attention_maps(grid_clm=k)
             self.selected_head_fusion.set("all")
         else:
-            self.show_attn_maps()
+            self.show_attention_maps()
 
         # Generate images with bboxes on it
         self.imgs_bbox = []
@@ -397,7 +399,7 @@ class UserInterface(tk.Tk):
             ax.axis('off')
 
             if self.attn_contr.get():
-                if self.selected_layer.get() == 6:
+                if self.selected_layer.get() == -1:
                     ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
                 else:
                     ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}, {self.scores_perc[self.cam_idx[i]]}%')
@@ -414,3 +416,4 @@ class UserInterface(tk.Tk):
         # take a screenshot if the option is selected
         if self.capture_bool.get():
             capture(self)
+
