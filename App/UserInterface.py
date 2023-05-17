@@ -164,17 +164,17 @@ class UserInterface(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.BB_bool, self.points_bool, self.scale, self.attn_contr, self.attn_norm, self.overlay, self.show_labels, self.capture_bool, self.bbox_2d = \
+        self.GT_bool, self.BB_bool, self.points_bool, self.show_scale, self.attn_contr, self.attn_norm, self.overlay, self.show_labels, self.capture_bool, self.bbox_2d = \
             tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.BB_bool.set(True)
-        self.scale.set(True)
+        self.show_scale.set(True)
         self.show_labels.set(True)
         self.attn_norm.set(True)
         self.attn_contr.set(True)
         self.capture_bool.set(False)
         add_opt.add_checkbutton(label="Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label="Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
-        add_opt.add_checkbutton(label="Show attention scale", onvalue=1, offvalue=0, variable=self.scale)
+        add_opt.add_checkbutton(label="Show attention scale", onvalue=1, offvalue=0, variable=self.show_scale)
         add_opt.add_checkbutton(label="Show attention camera contributions", onvalue=1, offvalue=0, variable=self.attn_contr)
         add_opt.add_checkbutton(label="Normalize attention", onvalue=1, offvalue=0, variable=self.attn_norm)
         add_opt.add_checkbutton(label="Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
@@ -208,71 +208,61 @@ class UserInterface(tk.Tk):
         if self.attn_contr.get():
             update_scores(self)
 
-        fontsize = 8
-        attn_cameras = []
-
         # If all cameras are selected, generate their attentions and append them to a list
-        if self.selected_camera.get() == 6:
-            for i in range(6):
+        attn_list = []
+        for i in range(6):
+            if self.selected_camera.get() == 6:
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.cam_idx[i], self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
-                attn_cameras.append(attn)
-            attn_max = torch.max(torch.cat(attn_cameras)).cpu().numpy()
+            elif self.selected_layer.get() == 6:
+                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), i, self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
+            else:
+                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
+                attn_list.append(attn)
+                break
+            attn_list.append(attn)     
 
         # If we want to visualize all layers or all cameras:
         if self.selected_layer.get() == 6 or self.selected_camera.get() == 6:
-            layer_grid = self.spec[1,grid_clm].subgridspec(2,3) # Select the center of the grid to plot the attentions
-
-            for i in range(6):
-                if self.selected_camera.get() == 6:
-                    attn = attn_cameras[i]
-                elif self.selected_layer.get() == 6:
-                    attn = self.Attention.generate_explainability(self.selected_expl_type.get(), i, self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
-
-                attn = attn.view(29, 50).cpu().numpy()
-                ax_attn = self.fig.add_subplot(layer_grid[i>2,i if i<3 else i-3])
-                ax_attn.axis('off')
-
-                #Attention normalization if option is selected
-                if attn_cameras and self.attn_norm.get():
-                    attn /= attn_max
-                    attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
-                else:
-                    attmap = ax_attn.imshow(attn)
-
-                # Visualize attention bar scale if option is selected
-                if self.scale.get():
-                    im_ratio = attn.shape[1]/attn.shape[0]
-                    self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
-
-                # Set title accordinly
-                if self.selected_layer.get() == 6:
-                    title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {i}, {self.selected_head_fusion.get()}'
-                elif self.selected_camera.get() == 6:
-                    title = f'{list(self.cameras.keys())[self.cam_idx[i]]}, layer {self.selected_layer.get()}, {self.selected_head_fusion.get()}'
-                    if self.attn_contr.get():
-                        title += f', {self.scores_perc[self.cam_idx[i]]}%'
-
-                ax_attn.set_title(title, fontsize=fontsize)
-
-
-        # If we want to visualize attention map of only one layer and one camera :
+            # Select the center of the grid to plot the attentions and add 2x2 subgrid
+            layer_grid = self.spec[1, grid_clm].subgridspec(2, 3) 
+            fontsize = 8
         else:
-            # Extract attention map
-            attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
-         
-            attn = attn.view(29, 50).cpu().numpy()
-            ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
+            fontsize = 12
+        
+        attn_max = torch.max(torch.cat(attn_list)).cpu().numpy()
 
+        for i in range(len(attn_list)):
+            if len(attn_list) > 1:
+                ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
+            else:
+                ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
+
+            attn = attn_list[i].view(29, 50).cpu().numpy()
+            ax_attn.axis('off')
+
+            #Attention normalization if option is selected
             if self.attn_norm.get():
-                if attn.max() != 0: attn /= attn.max()
+                attn /= attn_max
                 attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
             else:
                 attmap = ax_attn.imshow(attn)
-            ax_attn.axis('off')
-            ax_attn.set_title(f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.Attention.layer}, {self.selected_head_fusion.get()}, {self.scores_perc[self.selected_camera.get()]}%')
-            if self.scale.get():  
+
+            # Visualize attention bar scale if option is selected
+            if self.show_scale.get():  
                 im_ratio = attn.shape[1]/attn.shape[0]
                 self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
+
+            # Set title accordinly
+            if self.selected_layer.get() == 6:
+                title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {i}, {self.selected_head_fusion.get()}'
+            elif self.selected_camera.get() == 6:
+                title = f'{list(self.cameras.keys())[self.cam_idx[i]]}, layer {self.selected_layer.get()}, {self.selected_head_fusion.get()}'
+                if self.attn_contr.get():
+                    title += f', {self.scores_perc[self.cam_idx[i]]}%'
+            else:
+                title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.Attention.layer}, {self.selected_head_fusion.get()}, {self.scores_perc[self.selected_camera.get()]}%'
+
+            ax_attn.set_title(title, fontsize=fontsize)
 
     def update_data(self):
         '''
@@ -336,7 +326,7 @@ class UserInterface(tk.Tk):
         else: 
             self.fig.clear()
 
-        # Values are updated only when data idx, prediction threshold or the model is changed
+        # Data is updated only when data idx, prediction threshold or the model is changed
         if self.old_data_idx != self.data_idx or self.old_thr != self.selected_threshold.get() or self.old_expl_type != self.selected_expl_type.get() or self.new_model:
             self.update_data()
             if self.new_model:
