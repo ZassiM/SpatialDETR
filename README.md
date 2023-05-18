@@ -1,4 +1,4 @@
-# Explainable Transformer-based 3D Object Detection from multiple cameras
+# Explainable Transformer-based 3D Object Detector from multiple cameras
 
 
 ## Setup
@@ -47,7 +47,7 @@ Otherwise, if working on a remote server, run:
 ./docker/in_docker_setup.sh
 ```
 
-### Application testing
+## Application testing
 1. After the docker container is set-up, run the application:
 ```bash 
 python3 main.py
@@ -56,7 +56,7 @@ python3 main.py
 3. Select a data index from the **data** menu, and click visualize. You can select the bounding box from the **Bounding boxes** menu.
 4. Change the visualization settings with the drop-down menus. Then, click **Visualize**. 
 
-### Train
+## Model Training
 1. Use the configs in the **configs** folder to train SpatialDETR.  
 For a baseline on a single gpu use:
 ```bash
@@ -72,7 +72,7 @@ or for multi-gpu e.g. 4 gpus:
 ./mmdetection3d/tools/dist_test.sh configs/submission/frozen_4/query_proj_value_proj.py /path/to/.pth 4 --eval=bbox
 ```
 
-### Issues and To-Do
+## Issues and To-Do
 - The shell for running the docker container makes sure that the display environment is correctly forwarded to the docker and ssh server. However, some display errors still can be faced reported while trying to run the GUI application. For testing the GUI inside the Docker container, run `xclock` and see if a window opens. The following guides are useful: https://www.baeldung.com/linux/forward-x-over-ssh, https://x410.dev/cookbook/enabling-ssh-x11-forwarding-in-visual-studio-code-for-remote-development/
 - The application works both on Windows and Linux, but for now this README description is adapted only for Linux. I will describe how to configure the application for Windows too.
 - The application works only with SpatialDETR for now. Other models will be supported.

@@ -15,6 +15,12 @@ from App.Utils import show_message, show_model_info, red_text, black_text, \
                     single_bbox_select, update_scores, add_separator, \
                     select_all_bboxes
 
+def show_cam_on_image(img, mask):
+    heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
+    heatmap = np.float32(heatmap) / 255
+    cam = heatmap + np.float32(img)
+    cam = cam / np.max(cam)
+    return cam
 
 class App(tk.Tk):
     '''
@@ -165,7 +171,7 @@ class App(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.BB_bool, self.points_bool, self.show_scale, self.attn_contr, self.attn_norm, self.overlay, self.show_labels, self.capture_bool, self.bbox_2d = \
+        self.GT_bool, self.BB_bool, self.points_bool, self.show_scale, self.attn_contr, self.attn_norm, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d = \
             tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.BB_bool.set(True)
         self.show_scale.set(False)
@@ -173,12 +179,13 @@ class App(tk.Tk):
         self.attn_norm.set(True)
         self.attn_contr.set(True)
         self.capture_bool.set(False)
+        #self.overlay_bool.set(True)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
         add_opt.add_checkbutton(label=" Show attention scale", onvalue=1, offvalue=0, variable=self.show_scale)
         add_opt.add_checkbutton(label=" Show attention camera contributions", onvalue=1, offvalue=0, variable=self.attn_contr)
         add_opt.add_checkbutton(label=" Normalize attention", onvalue=1, offvalue=0, variable=self.attn_norm)
-        add_opt.add_checkbutton(label=" Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay)
+        add_opt.add_checkbutton(label=" Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay_bool)
         add_opt.add_checkbutton(label=" Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
         add_opt.add_checkbutton(label=" Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
@@ -201,6 +208,14 @@ class App(tk.Tk):
         add_separator(self, "|")
         self.menubar.add_command(label=" Visualize", command=self.visualize)
 
+        # Create figure with a 3x3 grid
+        self.fig = plt.figure(figsize=(80, 60), layout="constrained")
+        self.spec = self.fig.add_gridspec(3, 3)
+        
+        # Create canvas with the figure embedded in it, and update it after each visualization
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self)
+        self.canvas.get_tk_widget().pack()
+
     def show_attention_maps(self, grid_clm=1):
         '''
         Shows the attention map for explainability.
@@ -210,19 +225,30 @@ class App(tk.Tk):
             update_scores(self)
 
         # If all cameras are selected, generate their attentions and append them to a list
-        attn_list = []
+        self.attn_list = []
         for i in range(6):
+            # All cameras option
             if self.selected_camera.get() == -1:
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.cam_idx[i], self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
+            
+            # All layers option
             elif self.selected_layer.get() == -1:
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), i, self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
+            
+            # Single camera and single layer option
             else:
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
-                attn_list.append(attn)
-                break
-            attn_list.append(attn)     
 
-        attn_max = torch.max(torch.cat(attn_list)).cpu().numpy()
+            attn = attn.view(29, 50).cpu().numpy()
+            attn[:, 0] = 0
+
+            self.attn_list.append(attn)   
+
+            if self.selected_camera.get() != -1 and self.selected_layer.get() != -1:
+                break
+        
+        # Extract maximum score for normalization
+        attn_max = np.max(np.concatenate(self.attn_list))
 
         # If we want to visualize all layers or all cameras:
         if self.selected_layer.get() == -1 or self.selected_camera.get() == -1:
@@ -232,14 +258,15 @@ class App(tk.Tk):
         else:
             fontsize = 12
 
-        for i in range(len(attn_list)):
-            if len(attn_list) > 1:
+        for i in range(len(self.attn_list)):
+            if len(self.attn_list) > 1:
                 ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
             else:
                 ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
 
-            attn = attn_list[i].view(29, 50).cpu().numpy()
-            attn[:, 0] = 0
+            # attn = self.attn_list[i].view(29, 50).cpu().numpy()
+            # attn[:, 0] = 0
+            attn = self.attn_list[i]
             ax_attn.axis('off')
 
             # Attention normalization if option is selected
@@ -320,12 +347,7 @@ class App(tk.Tk):
         Visualizes predicted bounding boxes on all the cameras and shows
         the attention map in the middle of the plot.
         '''
-        # Create figure with a 3x3 grid if not existent
-        if self.fig is None:
-            self.fig = plt.figure(figsize=(80, 60), layout="constrained")
-            self.spec = self.fig.add_gridspec(3, 3)
-        else: 
-            self.fig.clear()
+        self.fig.clear()
 
         # Data is updated only when data idx, prediction threshold or the model is changed
         if self.old_data_idx != self.data_idx or self.old_thr != self.selected_threshold.get() or self.old_expl_type != self.selected_expl_type.get() or self.new_model:
@@ -363,7 +385,7 @@ class App(tk.Tk):
         else:
             self.show_attention_maps()
 
-        # Generate images with bboxes on it
+        # Generate images list with bboxes on it
         self.imgs_bbox = []
         for camidx in range(len(self.imgs)):
             img = draw_lidar_bbox3d_on_img(
@@ -377,7 +399,7 @@ class App(tk.Tk):
                     bbx_idx=self.bbox_idx,
                     mode_2d=self.bbox_2d.get())  
 
-            if self.gt_bbox:
+            if self.GT_bool.get():
                 img = draw_lidar_bbox3d_on_img(
                         self.gt_bbox,
                         img,
@@ -389,21 +411,28 @@ class App(tk.Tk):
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.imgs_bbox.append(img)
 
-        # Visualize them on the figure subplots
+        # Visualize the generated images list on the figure subplots
         for i in range(len(self.imgs)):
             if i < 3:
                 ax = self.fig.add_subplot(self.spec[0, i])
             else:
                 ax = self.fig.add_subplot(self.spec[2,i-3])
+            
+            if self.overlay_bool.get():
+                if self.selected_camera.get() == -1:
+                    attn = self.attn_list[i]
+                    img = self.imgs_bbox[self.cam_idx[i]]
+                else:
+                    attn = self.attn_list[0]
+                attn = cv2.applyColorMap(np.uint8(255 * attn), cv2.COLORMAP_JET)
+                attn = np.float32(attn) 
+                attn = cv2.resize(attn, (1600, 900), interpolation = cv2.INTER_AREA)
+                img = attn + np.float32(img)
+                self.imgs_bbox[self.cam_idx[i]] = img / np.max(img)
 
             ax.imshow(self.imgs_bbox[self.cam_idx[i]])
             ax.axis('off')
             ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
-
-        # Create canvas with the figure embedded in it, and update it after each visualization
-        if self.canvas is None:
-            self.canvas = FigureCanvasTkAgg(self.fig, master=self)
-            self.canvas.get_tk_widget().pack()
 
         self.canvas.draw()
 
