@@ -1,10 +1,7 @@
 from App.UserInterface import App
 
-
 def main():
-    '''
-    Main script which creates the App class and runs it.
-    '''
+    ''' Main script which creates the App class interface and runs it. '''
     app = App()
     app.mainloop()
 

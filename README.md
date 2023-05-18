@@ -1,4 +1,4 @@
-# Explainable ViT for 3D Object Detection from Multiple Cameras
+# Explainable Transformer-based 3D Object Detection from multiple cameras
 
 
 ## Setup

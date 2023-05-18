@@ -1,3 +1,4 @@
+''' Functions for loading the model. '''
 import tomli
 import os
 import tkinter as tk

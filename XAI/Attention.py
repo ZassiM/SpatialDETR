@@ -38,7 +38,7 @@ def gradcam(cam, grad):
 
 class Attention:
     '''
-    Generates attention maps and different explainability features
+    Generates attention maps and different explainability features.
     '''
     def __init__(self, model):
         self.model = model

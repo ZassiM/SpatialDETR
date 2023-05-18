@@ -1,3 +1,4 @@
+''' Functions used by the App interface. '''
 import tkinter as tk
 from tkinter.messagebox import showinfo
 from tkinter import scrolledtext
@@ -5,8 +6,9 @@ import random
 import os
 from PIL import ImageGrab
 
-def add_separator(self, sep="\u22EE"):
+def add_separator(self, sep="|"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
+        # sep="\u22EE"
 
 def show_message(self, message):
     showinfo(title=None, message=message)

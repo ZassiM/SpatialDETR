@@ -18,7 +18,7 @@ from App.Utils import show_message, show_model_info, red_text, black_text, \
 
 class App(tk.Tk):
     '''
-    Application User Interface for attention visualization
+    Application User Interface
     '''
     def __init__(self):
         '''
@@ -29,9 +29,8 @@ class App(tk.Tk):
         # Tkinter-related settings
         style = ttk.Style(self)
         style.theme_use("alt")
-        self.title('Attention Visualization')
+        self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
-        self.protocol("WM_DELETE_WINDOW", lambda: (self.quit(), self.destroy())) # Terminate debug session after closing window
         self.canvas, self.fig, self.spec = None, None, None
 
         # Model and dataloader objects
@@ -57,7 +56,7 @@ class App(tk.Tk):
         self.menubar.add_cascade(label=" File", menu=file_opt)
 
         # Speeding up the testing
-        #load_from_config(self)
+        load_from_config(self)
 
     def start_app(self):
         '''
@@ -106,11 +105,11 @@ class App(tk.Tk):
         camera_opt.add_radiobutton(label="All", variable=self.selected_camera, value=-1)
 
         # Cascade menus for Explainable options
-        attn_opt, attn_rollout, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
+        expl_opt, attn_rollout, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.expl_options = ["Attention Rollout", "Grad-CAM", "Gradient Rollout"]
 
         # Attention Rollout
-        attn_opt.add_cascade(label=self.expl_options[0], menu=attn_rollout)
+        expl_opt.add_cascade(label=self.expl_options[0], menu=attn_rollout)
         self.head_types = ["mean", "min", "max"]
         self.selected_head_fusion = tk.StringVar()
         self.selected_head_fusion.set(self.head_types[2])
@@ -122,7 +121,7 @@ class App(tk.Tk):
         attn_rollout.add_checkbutton(label=" Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
 
         # Grad-CAM
-        attn_opt.add_cascade(label=self.expl_options[1], menu=grad_cam)
+        expl_opt.add_cascade(label=self.expl_options[1], menu=grad_cam)
         self.grad_cam_types = ["default"]
         self.selected_gradcam_type = tk.StringVar()
         self.selected_gradcam_type.set(self.grad_cam_types[0])
@@ -130,7 +129,7 @@ class App(tk.Tk):
             grad_cam.add_radiobutton(label=self.grad_cam_types[i].capitalize(), variable=self.selected_gradcam_type, value=self.grad_cam_types[i])
 
         # Gradient Rollout
-        attn_opt.add_cascade(label=self.expl_options[2], menu=grad_rollout)
+        expl_opt.add_cascade(label=self.expl_options[2], menu=grad_rollout)
         self.grad_roll_types = ["default"]
         self.selected_gradroll_type = tk.StringVar()
         self.selected_gradroll_type.set(self.grad_roll_types[0])
@@ -139,22 +138,22 @@ class App(tk.Tk):
 
         # Attention layer
         attn_layer = tk.Menu(self.menubar)
-        attn_opt.add_cascade(label="Layer", menu=attn_layer)
+        expl_opt.add_cascade(label="Layer", menu=attn_layer)
         self.selected_layer = tk.IntVar()
         for i in range(self.Attention.layers):
             attn_layer.add_radiobutton(label=i, variable=self.selected_layer)
         attn_layer.add_radiobutton(label="All", variable=self.selected_layer, value=-1)
         self.selected_layer.set(self.Attention.layers - 1)
-        attn_opt.add_separator()
+        expl_opt.add_separator()
 
         # Explainable mechanism selection
-        expl_opt = tk.Menu(self.menubar)
-        attn_opt.add_cascade(label="Explainability mechanism", menu=expl_opt)
+        expl_type_opt = tk.Menu(self.menubar)
+        expl_opt.add_cascade(label="Mechanism", menu=expl_type_opt)
         self.selected_expl_type = tk.StringVar()
         self.selected_expl_type.set(self.expl_options[0])
         self.old_expl_type = self.expl_options[0]
         for i in range(len(self.expl_options)):
-            expl_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i])
+            expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i])
 
         # Cascade menus for Bounding boxes
         self.bbox_opt = tk.Menu(self.menubar)
@@ -196,7 +195,7 @@ class App(tk.Tk):
         add_separator(self)
         self.menubar.add_cascade(label=" Bounding boxes", menu=self.bbox_opt)
         add_separator(self)
-        self.menubar.add_cascade(label=" Attention", menu=attn_opt)
+        self.menubar.add_cascade(label=" Explainability", menu=expl_opt)
         add_separator(self)
         self.menubar.add_cascade(label=" Options", menu=add_opt)
         add_separator(self, "|")
