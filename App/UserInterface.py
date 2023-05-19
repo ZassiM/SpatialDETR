@@ -13,7 +13,7 @@ from App.File import load_from_config, load_model
 from App.Utils import show_message, show_model_info, red_text, black_text, \
                     select_data_idx, random_data_idx, update_thr, capture, \
                     single_bbox_select, update_scores, add_separator, \
-                    select_all_bboxes
+                    select_all_bboxes, update_data_label
 
 def show_cam_on_image(img, mask):
     heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
@@ -159,7 +159,7 @@ class App(tk.Tk):
         self.selected_expl_type.set(self.expl_options[0])
         self.old_expl_type = self.expl_options[0]
         for i in range(len(self.expl_options)):
-            expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i])
+            expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i], command=lambda: update_data_label(self))
 
         # Cascade menus for Bounding boxes
         self.bbox_opt = tk.Menu(self.menubar)
@@ -211,7 +211,7 @@ class App(tk.Tk):
         # Create figure with a 3x3 grid
         self.fig = plt.figure(figsize=(80, 60), layout="constrained")
         self.spec = self.fig.add_gridspec(3, 3)
-        
+
         # Create canvas with the figure embedded in it, and update it after each visualization
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
         self.canvas.get_tk_widget().pack()
@@ -228,7 +228,7 @@ class App(tk.Tk):
         self.attn_list = []
         for i in range(6):
             # All cameras option
-            if self.selected_camera.get() == -1:
+            if self.selected_camera.get() == -1 or self.overlay_bool.get():
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.cam_idx[i], self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
             
             # All layers option
@@ -244,7 +244,7 @@ class App(tk.Tk):
 
             self.attn_list.append(attn)   
 
-            if self.selected_camera.get() != -1 and self.selected_layer.get() != -1:
+            if self.selected_camera.get() != -1 and self.selected_layer.get() != -1 and not self.overlay_bool.get():
                 break
         
         # Extract maximum score for normalization
@@ -259,7 +259,7 @@ class App(tk.Tk):
             fontsize = 12
 
         for i in range(len(self.attn_list)):
-            if len(self.attn_list) > 1:
+            if self.selected_layer.get() == -1 or self.selected_camera.get() == -1:
                 ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
             else:
                 ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
@@ -267,10 +267,12 @@ class App(tk.Tk):
             # attn = self.attn_list[i].view(29, 50).cpu().numpy()
             # attn[:, 0] = 0
             attn = self.attn_list[i]
+            # if self.selected_layer.get() != -1 and self.selected_camera.get() != -1 and self.overlay_bool.get():
+            #     attn = self.attn_list[self.selected_camera.get()]
             ax_attn.axis('off')
 
-            # Attention normalization if option is selected
-            if self.attn_norm.get() and attn_max > 0 and self.selected_layer.get() != -1:
+            # Attention normalization if option is selected, only for all cameras view
+            if self.attn_norm.get() and self.selected_layer.get() != -1 and attn_max > 0:
                 attn /= attn_max
                 attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
             else:
@@ -366,7 +368,6 @@ class App(tk.Tk):
         if self.selected_layer.get() == -1 and self.selected_camera.get() == -1:
             self.selected_layer.set(self.Attention.layers - 1)
 
-
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
@@ -419,11 +420,8 @@ class App(tk.Tk):
                 ax = self.fig.add_subplot(self.spec[2,i-3])
             
             if self.overlay_bool.get():
-                if self.selected_camera.get() == -1:
-                    attn = self.attn_list[i]
-                    img = self.imgs_bbox[self.cam_idx[i]]
-                else:
-                    attn = self.attn_list[0]
+                attn = self.attn_list[i]
+                img = self.imgs_bbox[self.cam_idx[i]]
                 attn = cv2.applyColorMap(np.uint8(255 * attn), cv2.COLORMAP_JET)
                 attn = np.float32(attn) 
                 attn = cv2.resize(attn, (1600, 900), interpolation = cv2.INTER_AREA)

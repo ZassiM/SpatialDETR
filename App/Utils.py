@@ -35,7 +35,7 @@ def show_model_info(self, event=None):
 
 def select_data_idx(self):
     popup = tk.Toplevel(self)
-    popup.geometry("80x80")
+    popup.geometry("80x50")
 
     self.entry = tk.Entry(popup, width=20)
     self.entry.pack()
@@ -59,7 +59,7 @@ def random_data_idx(self):
 
 def update_data_label(self):
     idx = self.data_idx
-    info = f"Model: {self.model_name} | Dataloader: {self.dataloader_name} | Data index: {idx} | GPU ID: {self.gpu_id.get()}"
+    info = f"Model: {self.model_name} | Dataloader: {self.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()} | GPU ID: {self.gpu_id.get()}"
     self.info_text.set(info)
 
 def update_thr(self):
