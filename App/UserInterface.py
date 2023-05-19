@@ -228,8 +228,8 @@ class App(tk.Tk):
         self.attn_list = []
         for i in range(6):
             # All cameras option
-            if self.selected_camera.get() == -1 or self.overlay_bool.get():
-                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.cam_idx[i], self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
+            if self.selected_camera.get() == -1:
+                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, i, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
             
             # All layers option
             elif self.selected_layer.get() == -1:
@@ -244,7 +244,7 @@ class App(tk.Tk):
 
             self.attn_list.append(attn)   
 
-            if self.selected_camera.get() != -1 and self.selected_layer.get() != -1 and not self.overlay_bool.get():
+            if self.selected_camera.get() != -1 and self.selected_layer.get() != -1:
                 break
         
         # Extract maximum score for normalization
@@ -261,14 +261,12 @@ class App(tk.Tk):
         for i in range(len(self.attn_list)):
             if self.selected_layer.get() == -1 or self.selected_camera.get() == -1:
                 ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
+                attn = self.attn_list[self.cam_idx[i]]
             else:
                 ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
+                attn = self.attn_list[i]
 
-            # attn = self.attn_list[i].view(29, 50).cpu().numpy()
-            # attn[:, 0] = 0
-            attn = self.attn_list[i]
-            # if self.selected_layer.get() != -1 and self.selected_camera.get() != -1 and self.overlay_bool.get():
-            #     attn = self.attn_list[self.selected_camera.get()]
+            #attn = self.attn_list[self.cam_idx[i]]
             ax_attn.axis('off')
 
             # Attention normalization if option is selected, only for all cameras view
@@ -410,6 +408,22 @@ class App(tk.Tk):
                         mode_2d=self.bbox_2d.get())
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+            # self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
+            # self.cam_idx = [2, 0, 1, 5, 3, 4] # Used for visualizing camera outputs properly
+            if self.overlay_bool.get():
+                if self.selected_camera.get() == -1:
+                    attn = self.attn_list[camidx]
+                else:
+                    attn = self.attn_list[0]
+
+                if (self.selected_camera.get() != -1 and camidx == self.selected_camera.get()) or (self.selected_camera.get() == -1):
+                    attn = cv2.applyColorMap(np.uint8(255 * attn), cv2.COLORMAP_JET)
+                    attn = np.float32(attn) 
+                    attn = cv2.resize(attn, (1600, 900), interpolation = cv2.INTER_AREA)
+                    img = attn + np.float32(img)
+                    img = img / np.max(img)
+
             self.imgs_bbox.append(img)
 
         # Visualize the generated images list on the figure subplots
@@ -418,17 +432,8 @@ class App(tk.Tk):
                 ax = self.fig.add_subplot(self.spec[0, i])
             else:
                 ax = self.fig.add_subplot(self.spec[2,i-3])
-            
-            if self.overlay_bool.get():
-                attn = self.attn_list[i]
-                img = self.imgs_bbox[self.cam_idx[i]]
-                attn = cv2.applyColorMap(np.uint8(255 * attn), cv2.COLORMAP_JET)
-                attn = np.float32(attn) 
-                attn = cv2.resize(attn, (1600, 900), interpolation = cv2.INTER_AREA)
-                img = attn + np.float32(img)
-                self.imgs_bbox[self.cam_idx[i]] = img / np.max(img)
 
-            ax.imshow(self.imgs_bbox[self.cam_idx[i]])
+            ax.imshow(self.imgs_bbox[self.cam_idx[i]])#0->2(fr), 1->0(front)
             ax.axis('off')
             ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
 
