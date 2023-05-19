@@ -2,6 +2,8 @@
 import tkinter as tk
 from tkinter.messagebox import showinfo
 from tkinter import scrolledtext
+import cv2
+import numpy as np
 import random
 import os
 from PIL import ImageGrab
@@ -79,25 +81,32 @@ def select_all_bboxes(self):
 
 def update_scores(self):
     all_attentions = self.Attention.get_all_attn(self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
-    self.scores = []
+    scores = []
     self.scores_perc = []
     if self.selected_layer.get() == -1:
         for layer in range(self.Attention.layers):
             attn = all_attentions[layer][self.selected_camera.get()]
             score = round(attn.sum().item(), 2)
-            self.scores.append(score)
+            scores.append(score)
     else:
         for cam in range(len(all_attentions[self.selected_layer.get()])):
             attn = all_attentions[self.selected_layer.get()][cam]
             score = round(attn.sum().item(), 2)
-            self.scores.append(score)
+            scores.append(score)
 
-    sum_scores = sum(self.scores)
+    sum_scores = sum(scores)
     if sum_scores > 0:
-        for i in range(len(self.scores)):
-            score_perc = round(((self.scores[i]/sum_scores)*100))
+        for i in range(len(scores)):
+            score_perc = round(((scores[i]/sum_scores)*100))
             self.scores_perc.append(score_perc)
 
+def overlay_attention_on_image(img, attn):
+    attn = cv2.applyColorMap(np.uint8(255 * attn), cv2.COLORMAP_JET)
+    attn = np.float32(attn) 
+    attn = cv2.resize(attn, (1600, 900), interpolation = cv2.INTER_AREA)
+    img = attn + np.float32(img)
+    img = img / np.max(img)
+    return img
 
 def capture(self):
     x0 = self.winfo_rootx()

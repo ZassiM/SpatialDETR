@@ -7,7 +7,7 @@ from tkinter import ttk
 from mmcv.parallel import MMDataParallel
 
 from App.Utils import random_data_idx, update_data_label
-from XAI.Attention import Attention
+from Explainability.Attention import Attention
 from App.Model_init import init_app
 
 

@@ -1,20 +1,5 @@
 import torch
 
-
-def compute_rollout_attention(all_layer_matrices, start_layer=0):
-    # adding residual consideration
-    num_tokens = all_layer_matrices[0].shape[1]
-    eye = torch.eye(num_tokens).to(all_layer_matrices[0].device)
-    all_layer_matrices = [all_layer_matrices[i] + eye for i in range(len(all_layer_matrices))]
-    all_layer_matrices = [all_layer_matrices[i] / all_layer_matrices[i].sum(dim=-1, keepdim=True)
-                          for i in range(len(all_layer_matrices))]
-    matrices_aug = all_layer_matrices
-    joint_attention = matrices_aug[start_layer]
-    for i in range(start_layer+1, len(matrices_aug)):
-        joint_attention = matrices_aug[i].matmul(joint_attention)
-    return joint_attention
-
-
 def avg_heads(attn, head_fusion="min", discard_ratio=0.9):
     if head_fusion == "mean":
         attn = attn.mean(dim=0)
@@ -28,6 +13,19 @@ def avg_heads(attn, head_fusion="min", discard_ratio=0.9):
     for i in range(len(indices)):
         flat[i, indices[i]] = 0
     return attn
+
+def compute_rollout_attention(all_layer_matrices, start_layer=0):
+    # adding residual consideration
+    num_tokens = all_layer_matrices[0].shape[1]
+    eye = torch.eye(num_tokens).to(all_layer_matrices[0].device)
+    all_layer_matrices = [all_layer_matrices[i] + eye for i in range(len(all_layer_matrices))]
+    all_layer_matrices = [all_layer_matrices[i] / all_layer_matrices[i].sum(dim=-1, keepdim=True)
+                          for i in range(len(all_layer_matrices))]
+    matrices_aug = all_layer_matrices
+    joint_attention = matrices_aug[start_layer]
+    for i in range(start_layer+1, len(matrices_aug)):
+        joint_attention = matrices_aug[i].matmul(joint_attention)
+    return joint_attention
 
 def gradcam(cam, grad):
     cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
@@ -116,30 +114,23 @@ class Attention:
         return all_attn_layers
         
 
-    
-    def generate_rollout(self, layer, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):
-        self.head_fusion = head_fusion
-        self.discard_ratio = discard_ratio
-        
-        # initialize relevancy matrices
-        image_bboxes = self.dec_cross_attn_weights[0].shape[-1]
-        queries_num = self.dec_self_attn_weights[0].shape[-1]
+    def generate_rollout(self, layer, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):  
+        ''' Generates Attention Rollout for XAI. '''      
 
+        # initialize relevancy matrices
+        queries_num = self.dec_self_attn_weights[0].shape[-1]
         device = self.dec_cross_attn_weights[0].device
-        # image self attention matrix
-        #self.R_i_i = torch.eye(image_bboxes, image_bboxes).to(device)
+
         # queries self attention matrix
         self.R_q_q = torch.eye(queries_num, queries_num).to(device)
 
         cam_q_i = self.dec_cross_attn_weights[layer][camidx]
-        
-        cam_q_i = avg_heads(cam_q_i, head_fusion=self.head_fusion, discard_ratio=self.discard_ratio)
+        cam_q_i = avg_heads(cam_q_i, head_fusion, discard_ratio)
         
         if raw:
             self.R_q_i = cam_q_i # Only one layer
         else: 
             self.R_q_q = compute_rollout_attention(self.dec_self_attn_weights)
-            #self.R_q_i = torch.matmul(self.R_q_q, torch.matmul(cam_q_i, self.R_i_i))[0]
             self.R_q_i = torch.matmul(self.R_q_q, cam_q_i)
         
         if isinstance(bbox_idx, list):
@@ -151,6 +142,7 @@ class Attention:
         return aggregated
 
     def generate_attn_gradcam(self, layer, bbox_idx, indexes, camidx):
+        ''' Generates Grad-CAM for XAI. '''      
 
         cam_q_i = self.dec_cross_attn_weights[layer][camidx]
         grad_q_i = self.dec_cross_attn_grads[layer][camidx]

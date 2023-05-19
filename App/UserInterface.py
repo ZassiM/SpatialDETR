@@ -13,14 +13,8 @@ from App.File import load_from_config, load_model
 from App.Utils import show_message, show_model_info, red_text, black_text, \
                     select_data_idx, random_data_idx, update_thr, capture, \
                     single_bbox_select, update_scores, add_separator, \
-                    select_all_bboxes, update_data_label
+                    select_all_bboxes, update_data_label, overlay_attention_on_image
 
-def show_cam_on_image(img, mask):
-    heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
-    heatmap = np.float32(heatmap) / 255
-    cam = heatmap + np.float32(img)
-    cam = cam / np.max(cam)
-    return cam
 
 class App(tk.Tk):
     '''
@@ -161,11 +155,11 @@ class App(tk.Tk):
         for i in range(len(self.expl_options)):
             expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i], command=lambda: update_data_label(self))
 
-        # Cascade menus for Bounding boxes
+        # Cascade menus for object selection
         self.bbox_opt = tk.Menu(self.menubar)
         self.single_bbox = tk.BooleanVar()
         self.single_bbox.set(True)
-        self.bbox_opt.add_checkbutton(label=" Single bounding box", onvalue=1, offvalue=0, variable=self.single_bbox)
+        self.bbox_opt.add_checkbutton(label=" Single object", onvalue=1, offvalue=0, variable=self.single_bbox)
         self.bbox_opt.add_command(label=" Select all", command=lambda: select_all_bboxes(self))
         self.bbox_opt.add_separator()
 
@@ -179,7 +173,6 @@ class App(tk.Tk):
         self.attn_norm.set(True)
         self.attn_contr.set(True)
         self.capture_bool.set(False)
-        #self.overlay_bool.set(True)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
         add_opt.add_checkbutton(label=" Show attention scale", onvalue=1, offvalue=0, variable=self.show_scale)
@@ -200,7 +193,7 @@ class App(tk.Tk):
         add_separator(self)
         self.menubar.add_cascade(label=" Camera", menu=camera_opt)
         add_separator(self)
-        self.menubar.add_cascade(label=" Bounding boxes", menu=self.bbox_opt)
+        self.menubar.add_cascade(label=" Objects", menu=self.bbox_opt)
         add_separator(self)
         self.menubar.add_cascade(label=" Explainability", menu=expl_opt)
         add_separator(self)
@@ -224,8 +217,10 @@ class App(tk.Tk):
         if self.attn_contr.get():
             update_scores(self)
 
-        # If all cameras are selected, generate their attentions and append them to a list
+        # List to which attention maps are appended
         self.attn_list = []
+
+        # Explainable attention maps generation
         for i in range(6):
             # All cameras option
             if self.selected_camera.get() == -1:
@@ -283,13 +278,16 @@ class App(tk.Tk):
 
             # Set title accordinly
             if self.selected_layer.get() == -1:
-                title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {i}, {self.selected_head_fusion.get()}'
+                title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {i}'
             elif self.selected_camera.get() == -1:
-                title = f'{list(self.cameras.keys())[self.cam_idx[i]]}, layer {self.selected_layer.get()}, {self.selected_head_fusion.get()}'
-                if self.attn_contr.get():
-                    title += f', {self.scores_perc[self.cam_idx[i]]}%'
+                title = f'{list(self.cameras.keys())[self.cam_idx[i]]}, layer {self.selected_layer.get()}'
             else:
-                title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.selected_layer.get()}, {self.selected_head_fusion.get()}'
+                title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.selected_layer.get()}'
+
+            if self.selected_expl_type.get() == "Attention Rollout":
+                title += f', {self.selected_head_fusion.get()}'
+            if self.attn_contr.get() and self.selected_camera.get() == -1:
+                title += f', {self.scores_perc[self.cam_idx[i]]}%'
 
             ax_attn.set_title(title, fontsize=fontsize)
 
@@ -407,10 +405,6 @@ class App(tk.Tk):
                         color=(255, 0, 0),
                         mode_2d=self.bbox_2d.get())
 
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-            # self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
-            # self.cam_idx = [2, 0, 1, 5, 3, 4] # Used for visualizing camera outputs properly
             if self.overlay_bool.get():
                 if self.selected_camera.get() == -1:
                     attn = self.attn_list[camidx]
@@ -418,12 +412,9 @@ class App(tk.Tk):
                     attn = self.attn_list[0]
 
                 if (self.selected_camera.get() != -1 and camidx == self.selected_camera.get()) or (self.selected_camera.get() == -1):
-                    attn = cv2.applyColorMap(np.uint8(255 * attn), cv2.COLORMAP_JET)
-                    attn = np.float32(attn) 
-                    attn = cv2.resize(attn, (1600, 900), interpolation = cv2.INTER_AREA)
-                    img = attn + np.float32(img)
-                    img = img / np.max(img)
+                    img = overlay_attention_on_image(img, attn)
 
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.imgs_bbox.append(img)
 
         # Visualize the generated images list on the figure subplots
