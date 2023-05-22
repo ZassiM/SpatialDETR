@@ -213,9 +213,6 @@ class App(tk.Tk):
         '''
         Shows the attention map for explainability.
         '''
-        # If attention contribution option is selected, the scores are updated
-        if self.attn_contr.get():
-            update_scores(self)
 
         # List to which attention maps are appended
         self.attn_list = []
@@ -235,6 +232,8 @@ class App(tk.Tk):
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
 
             attn = attn.view(29, 50).cpu().numpy()
+            # transformer_attribution = torch.nn.functional.interpolate(transformer_attribution, scale_factor=16, mode='bilinear')
+
             attn[:, 0] = 0
 
             self.attn_list.append(attn)   
@@ -284,9 +283,13 @@ class App(tk.Tk):
             else:
                 title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.selected_layer.get()}'
 
+            # If doing Attention Rollout, visualize head fusion type
             if self.selected_expl_type.get() == "Attention Rollout":
                 title += f', {self.selected_head_fusion.get()}'
-            if self.attn_contr.get() and self.selected_camera.get() == -1:
+
+            # Show attention camera contributon for one object
+            if self.attn_contr.get() and self.selected_camera.get() == -1 and self.single_bbox.get():
+                update_scores(self)
                 title += f', {self.scores_perc[self.cam_idx[i]]}%'
 
             ax_attn.set_title(title, fontsize=fontsize)

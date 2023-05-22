@@ -15,7 +15,6 @@ def avg_heads(attn, head_fusion="min", discard_ratio=0.9):
     return attn
 
 def compute_rollout_attention(all_layer_matrices, start_layer=0):
-    # adding residual consideration
     num_tokens = all_layer_matrices[0].shape[1]
     eye = torch.eye(num_tokens).to(all_layer_matrices[0].device)
     all_layer_matrices = [all_layer_matrices[i] + eye for i in range(len(all_layer_matrices))]
@@ -44,31 +43,20 @@ class Attention:
         self.layers = 0
         for _ in self.model.module.pts_bbox_head.transformer.decoder.layers:
             self.layers += 1
-        self.dec_cross_attn_weights, self.dec_cross_attn_grads, self.dec_self_attn_weights, self.dec_self_attn_grads = [], [], [], []    
     
     def extract_attentions(self, data, target_index=None):
-        self.dec_self_attn_weights, self.dec_cross_attn_weights = [], []
+        self.dec_cross_attn_weights, self.dec_cross_attn_grads, self.dec_self_attn_weights, self.dec_self_attn_grads = [], [], [], [] 
+
         hooks = []
         for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
             hooks.append(
             layer.attentions[0].attn.register_forward_hook(
                 lambda _, input, output: self.dec_self_attn_weights.append(output[1][0])
             ))
-            # SpatialDETR
-            if hasattr(layer.attentions[1], "attn"):
-                hooks.append(
-                layer.attentions[1].attn.register_forward_hook(
-                    lambda _, input, output: self.dec_cross_attn_weights.append(output[1])
-                ))
-            # DETR3D
-            else:
-                hooks.append(
-                layer.attentions[1].attention_weights.register_forward_hook(
-                    lambda _, input, output: self.dec_cross_attn_weights.append(output)
-                ))
-
-        if "points" in data.keys():
-            data.pop("points")
+            hooks.append(
+            layer.attentions[1].attn.register_forward_hook(
+                lambda _, input, output: self.dec_cross_attn_weights.append(output[1])
+            ))
             
         if target_index is None:
             with torch.no_grad():
@@ -95,7 +83,8 @@ class Attention:
         return outputs
 
     def get_all_attn(self, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True):
-        #self.dec_cross_attn_weights = 6x[6x8x900x1450] = layers x (cams x heads x queries x keys)
+
+        # self.dec_cross_attn_weights = 6x[6x8x900x1450] = layers x (cams x heads x queries x keys)
         all_attn_layers = []
         # loop through layers
         for i in range(self.layers):
@@ -134,12 +123,12 @@ class Attention:
             self.R_q_i = torch.matmul(self.R_q_q, cam_q_i)
         
         if isinstance(bbox_idx, list):
-            aggregated = self.R_q_i[indexes[bbox_idx]].detach()
-            aggregated = aggregated.sum(dim=0)
+            attention_map = self.R_q_i[indexes[bbox_idx]].detach()
+            attention_map = attention_map.sum(dim=0)
         else:
-            aggregated = self.R_q_i[indexes[bbox_idx].item()].detach()
+            attention_map = self.R_q_i[indexes[bbox_idx].item()].detach()
                 
-        return aggregated
+        return attention_map
 
     def generate_attn_gradcam(self, layer, bbox_idx, indexes, camidx):
         ''' Generates Grad-CAM for XAI. '''      
@@ -150,12 +139,12 @@ class Attention:
         self.R_q_i = cam_q_i
 
         if isinstance(bbox_idx, list):
-            aggregated = self.R_q_i[indexes[bbox_idx]].detach()
-            aggregated = aggregated.sum(dim=0)
+            attention_map = self.R_q_i[indexes[bbox_idx]].detach()
+            attention_map = attention_map.sum(dim=0)
         else:
-            aggregated = self.R_q_i[indexes[bbox_idx].item()].detach()
+            attention_map = self.R_q_i[indexes[bbox_idx].item()].detach()
 
-        return aggregated
+        return attention_map
     
     def generate_explainability(self, expl_type, layer, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):
         if expl_type == "Attention Rollout":

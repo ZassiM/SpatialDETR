@@ -8,7 +8,7 @@ import random
 import os
 from PIL import ImageGrab
 
-def add_separator(self, sep="|"):
+def add_separator(self, sep="\u22EE"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
         # sep="\u22EE"
 
@@ -103,7 +103,7 @@ def update_scores(self):
 def overlay_attention_on_image(img, attn):
     attn = cv2.applyColorMap(np.uint8(255 * attn), cv2.COLORMAP_JET)
     attn = np.float32(attn) 
-    attn = cv2.resize(attn, (1600, 900), interpolation = cv2.INTER_AREA)
+    attn = cv2.resize(attn, (img.shape[1], img.shape[0]), interpolation = cv2.INTER_AREA)
     img = attn + np.float32(img)
     img = img / np.max(img)
     return img
