@@ -140,11 +140,11 @@ class App(tk.Tk):
 
         # Gradient Rollout
         expl_opt.add_cascade(label=self.expl_options[3], menu=grad_rollout)
-        self.grad_roll_types = ["default"]
-        self.selected_gradroll_type = tk.StringVar()
-        self.selected_gradroll_type.set(self.grad_roll_types[0])
-        for i in range(len(self.grad_roll_types)):
-            grad_rollout.add_radiobutton(label=self.grad_roll_types[i].capitalize(), variable=self.selected_gradroll_type, value=self.grad_roll_types[i])
+        self.handle_residual, self.apply_rule = tk.BooleanVar(),tk.BooleanVar()
+        self.handle_residual.set(True)
+        self.apply_rule.set(True)
+        grad_rollout.add_checkbutton(label=" Handle residual", variable=self.handle_residual, onvalue=1, offvalue=0)
+        grad_rollout.add_checkbutton(label=" Apply rule 10", variable=self.apply_rule, onvalue=1, offvalue=0)
         
         # Attention layer
         attn_layer = tk.Menu(self.menubar)
@@ -230,15 +230,15 @@ class App(tk.Tk):
         for i in range(6):
             # All cameras option
             if self.selected_camera.get() == -1:
-                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, i, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
+                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, i, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
             
             # All layers option
             elif self.selected_layer.get() == -1:
-                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), i, self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
+                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), i, self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
             
             # Single camera and single layer option
             else:
-                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
+                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
 
             attn = attn.reshape(1,1,29,50)
             attn = torch.nn.functional.interpolate(attn, scale_factor=16, mode='bilinear')
@@ -369,7 +369,6 @@ class App(tk.Tk):
                 self.old_data_idx = self.data_idx
             if self.old_expl_type != self.selected_expl_type.get():
                 self.old_expl_type = self.selected_expl_type.get()
-
 
         # Avoid selecting all layers and all cameras. Only the last layer will be visualized
         if self.selected_layer.get() == -1 and self.selected_camera.get() == -1:

@@ -30,14 +30,12 @@ def apply_self_attention_rules(R_ss, R_sq, cam_ss):
     return R_ss_addition, R_sq_addition
 
 # rule 10 from paper
-def apply_mm_attention_rules(R_ss, R_qq, cam_sq, apply_normalization=True, apply_self_in_rule_10=True):
+def apply_mm_attention_rules(R_ss, cam_sq, handle_residual_bool=True, apply_rule=True):
     R_ss_normalized = R_ss
-    R_qq_normalized = R_qq
-    if apply_normalization:
+    if handle_residual_bool:
         R_ss_normalized = handle_residual(R_ss)
-        R_qq_normalized = handle_residual(R_qq)
-    R_sq_addition = torch.matmul(R_ss_normalized.t(), torch.matmul(cam_sq, R_qq_normalized))
-    if not apply_self_in_rule_10:
+    R_sq_addition = torch.matmul(R_ss_normalized.t(), cam_sq)
+    if not apply_rule:
         R_sq_addition = cam_sq
     R_sq_addition[torch.isnan(R_sq_addition)] = 0
     return R_sq_addition
@@ -82,21 +80,19 @@ class Attention:
         for _ in self.model.module.pts_bbox_head.transformer.decoder.layers:
             self.layers += 1
             
-    def handle_co_attn_self_query(self, layer, camidx):
-        grad = self.dec_self_attn_grads[layer][camidx]
-        cam = self.dec_self_attn_weights[layer][camidx]
-        cam = avg_heads_og(cam, grad)
+    def handle_co_attn_self_query(self, layer):
+        # grad = self.dec_self_attn_grads[layer]
+        cam = self.dec_self_attn_weights[layer]
+        # cam = avg_heads_og(cam, grad)
         R_q_q_add, R_q_i_add = apply_self_attention_rules(self.R_q_q, self.R_q_i, cam)
         self.R_q_q += R_q_q_add
         self.R_q_i += R_q_i_add
 
-    def handle_co_attn_query(self, layer, camidx):
+    def handle_co_attn_query(self, layer, camidx, handle_residual, apply_rule):
         cam_q_i = self.dec_cross_attn_weights[layer][camidx]
         grad_q_i = self.dec_cross_attn_grads[layer][camidx]
         cam_q_i = avg_heads_og(cam_q_i, grad_q_i)
-        self.R_q_i += apply_mm_attention_rules(self.R_q_q, self.R_i_i, cam_q_i,
-                                               apply_normalization=self.normalize_self_attention,
-                                               apply_self_in_rule_10=self.apply_self_in_rule_10)
+        self.R_q_i += apply_mm_attention_rules(self.R_q_q, cam_q_i, handle_residual, apply_rule)
     
     def extract_attentions(self, data, target_index=None):
         self.dec_cross_attn_weights, self.dec_cross_attn_grads, self.dec_self_attn_weights, self.dec_self_attn_grads = [], [], [], [] 
@@ -111,12 +107,17 @@ class Attention:
             layer.attentions[1].attn.register_forward_hook(
                 lambda _, input, output: self.dec_cross_attn_weights.append(output[1])
             ))
-            
+
         if target_index is None:
             with torch.no_grad():
                 outputs = self.model(return_loss=False, rescale=True, **data)
         
         else:
+            for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
+                hooks.append(
+                layer.attentions[0].attn.register_backward_hook(
+                    lambda _, grad_input, grad_output: self.dec_self_attn_grads.append(grad_input[0].permute(1,0,2)[0])
+                ))
             outputs = self.model(return_loss=False, rescale=True, **data)
             
             output_scores = outputs[0]["pts_bbox"]["scores_3d"]
@@ -133,11 +134,10 @@ class Attention:
         
         for hook in hooks:
             hook.remove()
-            
+        
         return outputs
 
     def get_all_attn(self, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True):
-
         # self.dec_cross_attn_weights = 6x[6x8x900x1450] = layers x (cams x heads x queries x keys)
         all_attn_layers = []
         # loop through layers
@@ -156,7 +156,6 @@ class Attention:
             
         return all_attn_layers
         
-
     def generate_rollout(self, layer, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):  
         ''' Generates Attention Rollout for XAI. '''      
 
@@ -200,8 +199,7 @@ class Attention:
 
         return attention_map
     
-    def generate_grad_roll(self, layer, bbox_idx, indexes, camidx):
-        
+    def generate_grad_roll(self, layer, bbox_idx, indexes, camidx, handle_residual, apply_rule):
         # initialize relevancy matrices
         queries_num = self.dec_self_attn_weights[0].shape[-1]
         image_bboxes = self.dec_cross_attn_weights[0].shape[-1]
@@ -214,12 +212,12 @@ class Attention:
         self.R_q_i = torch.zeros(queries_num, image_bboxes).to(device)
 
         # decoder self attention of queries followd by multi-modal attention
-        for layer in self.layers:
+        for layer in range(self.layers):
             # decoder self attention
-            self.handle_co_attn_self_query(layer, camidx)
+            self.handle_co_attn_self_query(layer)
 
             # encoder decoder attention
-            self.handle_co_attn_query(layer, camidx)
+            self.handle_co_attn_query(layer, camidx, handle_residual, apply_rule)
             
         if isinstance(bbox_idx, list):
             attention_map = self.R_q_i[indexes[bbox_idx]].detach()
@@ -229,7 +227,7 @@ class Attention:
                 
         return attention_map
     
-    def generate_explainability(self, expl_type, layer, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):
+    def generate_explainability(self, expl_type, layer, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
         if expl_type == "Attention Rollout":
             attn = self.generate_rollout(layer, bbox_idx, indexes, camidx, head_fusion, discard_ratio, raw)
         elif expl_type == "Grad-CAM":
@@ -238,7 +236,7 @@ class Attention:
             attn = 0
             # TO-DO
         elif expl_type == "Gradient Rollout":
-            attn = self.generate_grad_roll(layer, bbox_idx, indexes, camidx)
+            attn = self.generate_grad_roll(layer, bbox_idx, indexes, camidx, handle_residual, apply_rule)
             # TO-DO
         
         return attn

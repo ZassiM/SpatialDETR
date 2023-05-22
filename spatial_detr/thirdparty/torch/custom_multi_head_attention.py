@@ -63,7 +63,7 @@ class CustomMultiheadAttention(nn.MultiheadAttention):
                 attn_func=attn_func,
                 **kwargs)
 
-        if attn_output_weights.requires_grad == True:
+        if attn_output_weights.requires_grad:
             attn_output_weights.register_hook(self.save_attn_gradients) # FOR EXTRACTING GRADIENT DURING BACKWARD
         
         return attn_output, attn_output_weights
