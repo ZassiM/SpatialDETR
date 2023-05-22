@@ -5,6 +5,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import torch
 import numpy as np
 import cv2
+import time
 
 from mmcv.parallel import DataContainer as DC
 from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
@@ -105,8 +106,9 @@ class App(tk.Tk):
         camera_opt.add_radiobutton(label="All", variable=self.selected_camera, value=-1)
 
         # Cascade menus for Explainable options
-        expl_opt, attn_rollout, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
-        self.expl_options = ["Attention Rollout", "Grad-CAM", "Gradient Rollout"]
+        expl_opt = tk.Menu(self.menubar)
+        attn_rollout, grad_cam, partial_lrp, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
+        self.expl_options = ["Attention Rollout", "Grad-CAM", "Partial-LRP", "Gradient Rollout"]
 
         # Attention Rollout
         expl_opt.add_cascade(label=self.expl_options[0], menu=attn_rollout)
@@ -128,14 +130,22 @@ class App(tk.Tk):
         for i in range(len(self.grad_cam_types)):
             grad_cam.add_radiobutton(label=self.grad_cam_types[i].capitalize(), variable=self.selected_gradcam_type, value=self.grad_cam_types[i])
 
-        # Gradient Rollout
+        # Partial-LRP
         expl_opt.add_cascade(label=self.expl_options[2], menu=grad_rollout)
+        self.partial_lrp_types = ["default"]
+        self.selected_partial_lrp_type = tk.StringVar()
+        self.selected_partial_lrp_type.set(self.partial_lrp_types[0])
+        for i in range(len(self.partial_lrp_types)):
+            partial_lrp.add_radiobutton(label=self.partial_lrp_types[i].capitalize(), variable=self.selected_partial_lrp_type, value=self.partial_lrp_types[i])
+
+        # Gradient Rollout
+        expl_opt.add_cascade(label=self.expl_options[3], menu=grad_rollout)
         self.grad_roll_types = ["default"]
         self.selected_gradroll_type = tk.StringVar()
         self.selected_gradroll_type.set(self.grad_roll_types[0])
         for i in range(len(self.grad_roll_types)):
             grad_rollout.add_radiobutton(label=self.grad_roll_types[i].capitalize(), variable=self.selected_gradroll_type, value=self.grad_roll_types[i])
-
+        
         # Attention layer
         attn_layer = tk.Menu(self.menubar)
         expl_opt.add_cascade(label="Layer", menu=attn_layer)
@@ -168,11 +178,10 @@ class App(tk.Tk):
         self.GT_bool, self.BB_bool, self.points_bool, self.show_scale, self.attn_contr, self.attn_norm, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d = \
             tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.BB_bool.set(True)
-        self.show_scale.set(False)
         self.show_labels.set(True)
         self.attn_norm.set(True)
         self.attn_contr.set(True)
-        self.capture_bool.set(False)
+        self.bbox_2d.set(True)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
         add_opt.add_checkbutton(label=" Show attention scale", onvalue=1, offvalue=0, variable=self.show_scale)
@@ -200,7 +209,7 @@ class App(tk.Tk):
         self.menubar.add_cascade(label=" Options", menu=add_opt)
         add_separator(self, "|")
         self.menubar.add_command(label=" Visualize", command=self.visualize)
-
+        
         # Create figure with a 3x3 grid
         self.fig = plt.figure(figsize=(80, 60), layout="constrained")
         self.spec = self.fig.add_gridspec(3, 3)
@@ -231,9 +240,9 @@ class App(tk.Tk):
             else:
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
 
-            attn = attn.view(29, 50).cpu().numpy()
-            # transformer_attribution = torch.nn.functional.interpolate(transformer_attribution, scale_factor=16, mode='bilinear')
-
+            attn = attn.reshape(1,1,29,50)
+            attn = torch.nn.functional.interpolate(attn, scale_factor=16, mode='bilinear')
+            attn = attn.reshape(464, 800).cpu().numpy()
             attn[:, 0] = 0
 
             self.attn_list.append(attn)   
@@ -262,7 +271,6 @@ class App(tk.Tk):
 
             #attn = self.attn_list[self.cam_idx[i]]
             ax_attn.axis('off')
-
             # Attention normalization if option is selected, only for all cameras view
             if self.attn_norm.get() and self.selected_layer.get() != -1 and attn_max > 0:
                 attn /= attn_max
@@ -427,7 +435,7 @@ class App(tk.Tk):
             else:
                 ax = self.fig.add_subplot(self.spec[2,i-3])
 
-            ax.imshow(self.imgs_bbox[self.cam_idx[i]])#0->2(fr), 1->0(front)
+            ax.imshow(self.imgs_bbox[self.cam_idx[i]])
             ax.axis('off')
             ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
 
@@ -436,4 +444,3 @@ class App(tk.Tk):
         # take a screenshot if the option is selected
         if self.capture_bool.get():
             capture(self)
-
