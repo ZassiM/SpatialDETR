@@ -100,26 +100,27 @@ class Attention:
         hooks = []
         for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
             hooks.append(
-            layer.attentions[0].attn.register_forward_hook(
-                lambda _, input, output: self.dec_self_attn_weights.append(output[1][0])
-            ))
+                layer.attentions[0].attn.register_forward_hook(
+                    lambda _, input, output: self.dec_self_attn_weights.append(output[1][0])
+                ))
             hooks.append(
-            layer.attentions[1].attn.register_forward_hook(
-                lambda _, input, output: self.dec_cross_attn_weights.append(output[1])
-            ))
+                layer.attentions[1].attn.register_forward_hook(
+                    lambda _, input, output: self.dec_cross_attn_weights.append(output[1])
+                ))
 
         if target_index is None:
             with torch.no_grad():
                 outputs = self.model(return_loss=False, rescale=True, **data)
-        
+
         else:
             for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
                 hooks.append(
-                layer.attentions[0].attn.register_backward_hook(
-                    lambda _, grad_input, grad_output: self.dec_self_attn_grads.append(grad_input[0].permute(1,0,2)[0])
-                ))
+                    layer.attentions[0].attn.register_backward_hook(
+                        lambda _, grad_input, grad_output: self.dec_self_attn_grads.append(grad_input[0].permute(1, 0, 2)[0])
+                    ))
+
             outputs = self.model(return_loss=False, rescale=True, **data)
-            
+   
             output_scores = outputs[0]["pts_bbox"]["scores_3d"]
             one_hot = torch.zeros_like(output_scores).to(output_scores.device)
             one_hot[target_index] = 1
@@ -156,7 +157,7 @@ class Attention:
             
         return all_attn_layers
         
-    def generate_rollout(self, layer, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True):  
+    def generate_rollout(self, layer, camidx, head_fusion="min", discard_ratio=0.9, raw=True):  
         ''' Generates Attention Rollout for XAI. '''      
 
         # initialize relevancy matrices
@@ -170,36 +171,20 @@ class Attention:
         cam_q_i = avg_heads(cam_q_i, head_fusion, discard_ratio)
         
         if raw:
-            self.R_q_i = cam_q_i # Only one layer
-        else: 
+            self.R_q_i = cam_q_i  # Only one layer
+        else:
             self.R_q_q = compute_rollout_attention(self.dec_self_attn_weights)
             self.R_q_i = torch.matmul(self.R_q_q, cam_q_i)
-        
-        if isinstance(bbox_idx, list):
-            attention_map = self.R_q_i[indexes[bbox_idx]].detach()
-            attention_map = attention_map.sum(dim=0)
-        else:
-            attention_map = self.R_q_i[indexes[bbox_idx].item()].detach()
-                
-        return attention_map
 
-    def generate_attn_gradcam(self, layer, bbox_idx, indexes, camidx):
+    def generate_gradcam(self, layer, camidx):
         ''' Generates Grad-CAM for XAI. '''      
 
         cam_q_i = self.dec_cross_attn_weights[layer][camidx]
         grad_q_i = self.dec_cross_attn_grads[layer][camidx]
         cam_q_i = gradcam(cam_q_i, grad_q_i)
         self.R_q_i = cam_q_i
-
-        if isinstance(bbox_idx, list):
-            attention_map = self.R_q_i[indexes[bbox_idx]].detach()
-            attention_map = attention_map.sum(dim=0)
-        else:
-            attention_map = self.R_q_i[indexes[bbox_idx].item()].detach()
-
-        return attention_map
     
-    def generate_grad_roll(self, layer, bbox_idx, indexes, camidx, handle_residual, apply_rule):
+    def generate_gradroll(self, layer, camidx, handle_residual, apply_rule):
         # initialize relevancy matrices
         queries_num = self.dec_self_attn_weights[0].shape[-1]
         image_bboxes = self.dec_cross_attn_weights[0].shape[-1]
@@ -218,28 +203,19 @@ class Attention:
 
             # encoder decoder attention
             self.handle_co_attn_query(layer, camidx, handle_residual, apply_rule)
-            
-        if isinstance(bbox_idx, list):
-            attention_map = self.R_q_i[indexes[bbox_idx]].detach()
-            attention_map = attention_map.sum(dim=0)
-        else:
-            attention_map = self.R_q_i[indexes[bbox_idx].item()].detach()
-                
-        return attention_map
     
     def generate_explainability(self, expl_type, layer, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
         if expl_type == "Attention Rollout":
-            attn = self.generate_rollout(layer, bbox_idx, indexes, camidx, head_fusion, discard_ratio, raw)
+            self.generate_rollout(layer, camidx, head_fusion, discard_ratio, raw)
         elif expl_type == "Grad-CAM":
-            attn = self.generate_attn_gradcam(layer, bbox_idx, indexes, camidx)
-        elif expl_type == "Partial-LRP":
-            attn = 0
-            # TO-DO
+            self.generate_gradcam(layer, camidx)
         elif expl_type == "Gradient Rollout":
-            attn = self.generate_grad_roll(layer, bbox_idx, indexes, camidx, handle_residual, apply_rule)
+            self.generate_gradroll(layer, camidx, handle_residual, apply_rule)
+        elif expl_type == "Partial-LRP":
+            attention_map = 0
             # TO-DO
-        
-        return attn
 
-            
+        attention_map = self.R_q_i[indexes[bbox_idx]].detach()
+        attention_map = attention_map.sum(dim=0)
 
+        return attention_map
