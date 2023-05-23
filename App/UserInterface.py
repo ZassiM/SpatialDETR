@@ -21,11 +21,12 @@ class App(tk.Tk):
     '''
     Application User Interface
     '''
-    def __init__(self):
+    def __init__(self, usermode="dev"):
         '''
         Tkinter initialization with model loading option.
         '''
         super().__init__()
+        self.usermode = usermode
 
         # Tkinter-related settings
         self.tk.call("source", "theme/azure.tcl")
@@ -60,6 +61,16 @@ class App(tk.Tk):
         load_from_config(self)
 
     def start_app(self):
+        if self.usermode == "dev":
+            self.start_app_dev()
+        elif self.usermode == "user":
+            self.start_app_usr()
+
+    def start_app_usr(self):
+        # TBD: User-mode application with pre-defined settings and continuous prediction with live XAI visualization
+        tbd = 1
+
+    def start_app_dev(self):
         '''
         It starts the UI after loading the model. Variables are initialized.
         '''
@@ -123,17 +134,19 @@ class App(tk.Tk):
         self.selected_head_fusion.set(self.head_types[2])
         self.raw_attn = tk.BooleanVar()
         self.raw_attn.set(True)
-        for i in range(len(self.head_types)):
-            attn_rollout.add_radiobutton(label=self.head_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_types[i])
-        attn_rollout.add_radiobutton(label="All", variable=self.selected_head_fusion, value="all")
-        attn_rollout.add_checkbutton(label=" Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
-        dr_opt = tk.Menu(self.menubar)
+        dr_opt, hf_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.selected_discard_ratio = tk.DoubleVar()
         self.selected_discard_ratio.set(0.5)
         values = np.arange(0.0, 1, 0.1).round(1)
         for i in values:
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_ratio)
+        for i in range(len(self.head_types)):
+            hf_opt.add_radiobutton(label=self.head_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_types[i])
+        hf_opt.add_radiobutton(label="All", variable=self.selected_head_fusion, value="all")
+        attn_rollout.add_cascade(label=" Head fusion", menu=hf_opt)
         attn_rollout.add_cascade(label=" Discard ratio", menu=dr_opt)
+        attn_rollout.add_checkbutton(label=" Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
+
 
         # Grad-CAM
         expl_opt.add_cascade(label=self.expl_options[1], menu=grad_cam)
@@ -340,15 +353,12 @@ class App(tk.Tk):
 
         # Extract the 6 camera images from the data and remove the padded pixels
         imgs = self.data["img"][0]._data[0].numpy()[0]
-        # img_norm_cfg = dict(
-        mean = [103.530, 116.280, 123.675]
-        std = [57.375, 57.120, 58.395]
-        mean = np.array(mean, dtype=np.float32)
-        std = np.array(std, dtype=np.float32)
         imgs = imgs.transpose(0, 2, 3, 1)[:, :900, :, :]
+        mean = np.array(self.img_norm_cfg["mean"], dtype=np.float32)
+        std = np.array(self.img_norm_cfg["std"], dtype=np.float32)
 
         for i in range(len(imgs)):
-            imgs[i] = mmcv.imdenormalize(imgs[i], mean, std)
+            imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
         self.imgs = imgs.astype(np.uint8)
 
         # Extract image metas which contain, for example, the lidar to camera projection matrices

@@ -5,7 +5,7 @@ import warnings
 def main():
     ''' Main script which creates the App class interface and runs it. '''
     warnings.filterwarnings("ignore")
-    app = App()
+    app = App(usermode="dev")
     app.mainloop()
 
 

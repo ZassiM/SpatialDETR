@@ -47,11 +47,12 @@ def load_model(self, cfg_file=None, weights_file=None, gpu_id=None):
     args = {}
     args["config"] = cfg_file
     args["checkpoint"] = weights_file
-    model, dataloader, checkpoint = init_app(args)
+    model, dataloader, img_norm_cfg = init_app(args)
             
     self.model = MMDataParallel(model, device_ids=[self.gpu_id.get()])
     self.dataloader = dataloader
     self.Attention = Attention(self.model)
+    self.img_norm_cfg = img_norm_cfg  # Used for image de-normalization
     self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
     self.dataloader_name = self.dataloader.dataset.metadata['version']
     self.class_names = self.dataloader.dataset.CLASSES
