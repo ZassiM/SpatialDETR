@@ -11,7 +11,7 @@ from PIL import ImageGrab
 def add_separator(self, sep="\u22EE"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
         # sep="\u22EE"
-
+        
 def show_message(self, message):
     showinfo(title=None, message=message)
 
@@ -124,3 +124,11 @@ def capture(self):
 
     path += "_" + str(self.file_suffix) + ".png"
     im.save(path)
+
+def change_theme(self):
+    if self.dark_theme.get():
+        # Set light theme
+        self.tk.call("set_theme", "dark")
+    else:
+        # Set dark theme
+        self.tk.call("set_theme", "light")

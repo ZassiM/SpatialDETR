@@ -32,7 +32,7 @@ class CustomMultiheadAttention(nn.MultiheadAttention):
         """
         self.attn_gradients = None
         # TODO refactor currently only batch_last is supported
-        assert self.batch_first == False
+        assert not self.batch_first
 
         if not self._qkv_same_embed_dim:
             attn_output, attn_output_weights = F_custom.multi_head_attention_forward(
@@ -64,6 +64,6 @@ class CustomMultiheadAttention(nn.MultiheadAttention):
                 **kwargs)
 
         if attn_output_weights.requires_grad:
-            attn_output_weights.register_hook(self.save_attn_gradients) # FOR EXTRACTING GRADIENT DURING BACKWARD
-        
+            attn_output_weights.register_hook(self.save_attn_gradients)  # Extracts gradients during backpropagation
+
         return attn_output, attn_output_weights

@@ -14,7 +14,8 @@ from App.File import load_from_config, load_model
 from App.Utils import show_message, show_model_info, red_text, black_text, \
                     select_data_idx, random_data_idx, update_thr, capture, \
                     single_bbox_select, update_scores, add_separator, \
-                    select_all_bboxes, update_data_label, overlay_attention_on_image
+                    select_all_bboxes, update_data_label, overlay_attention_on_image, \
+                    change_theme
 
 
 class App(tk.Tk):
@@ -28,8 +29,8 @@ class App(tk.Tk):
         super().__init__()
 
         # Tkinter-related settings
-        style = ttk.Style(self)
-        style.theme_use("alt")
+        self.tk.call("source", "theme/azure.tcl")
+        self.tk.call("set_theme", "light")
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
         self.canvas, self.fig, self.spec = None, None, None
@@ -175,8 +176,8 @@ class App(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.BB_bool, self.points_bool, self.show_scale, self.attn_contr, self.attn_norm, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d = \
-            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.GT_bool, self.BB_bool, self.points_bool, self.show_scale, self.attn_contr, self.attn_norm, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d, self.dark_theme = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.BB_bool.set(True)
         self.show_labels.set(True)
         self.attn_norm.set(True)
@@ -191,6 +192,7 @@ class App(tk.Tk):
         add_opt.add_checkbutton(label=" Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
         add_opt.add_checkbutton(label=" Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
+        add_opt.add_checkbutton(label=" Dark theme", onvalue=1, offvalue=0, variable=self.dark_theme, command=lambda: change_theme(self))
 
         # Adding all cascade menus ro the main menubar menu
         add_separator(self)
