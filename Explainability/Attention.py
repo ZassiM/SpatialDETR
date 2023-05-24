@@ -130,6 +130,9 @@ class Attention:
             self.model.zero_grad()
             one_hot.backward(retain_graph=True)
 
+            for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
+                self.dec_cross_attn_grads.append(layer.attentions[1].attn.get_attn_gradients())
+
         for hook in hooks:
             hook.remove()
         
@@ -187,6 +190,8 @@ class Attention:
     
     def generate_gradroll(self, layer, camidx, handle_residual, apply_rule):
         # initialize relevancy matrices
+
+        #self.extract_attentions(bbox_idx)
         queries_num = self.dec_self_attn_weights[0].shape[-1]
         image_bboxes = self.dec_cross_attn_weights[0].shape[-1]
         

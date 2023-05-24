@@ -88,9 +88,9 @@ class App(tk.Tk):
         frame.pack(fill=tk.Y)
         self.info_text = tk.StringVar()
         self.info_label = tk.Label(frame, textvariable=self.info_text, anchor=tk.CENTER)
-        self.info_label.bind("<Button-1>", lambda event, k=self:show_model_info(self))
-        self.info_label.bind("<Enter>", lambda event, k=self:red_text(self))
-        self.info_label.bind("<Leave>", lambda event, k=self:black_text(self))
+        self.info_label.bind("<Button-1>", lambda event, k=self: show_model_info(self))
+        self.info_label.bind("<Enter>", lambda event, k=self: red_text(self))
+        self.info_label.bind("<Leave>", lambda event, k=self: black_text(self))
         self.info_label.pack(side=tk.TOP)
 
         # Cascade menu for Data index
@@ -113,21 +113,21 @@ class App(tk.Tk):
         self.selected_camera = tk.IntVar()
         self.selected_camera.set(0)
         for value, key in enumerate(self.cameras):
-            camera_opt.add_radiobutton(label=key, variable=self.selected_camera, value=value)
-        camera_opt.add_radiobutton(label="All", variable=self.selected_camera, value=-1)
+            camera_opt.add_radiobutton(label=key, variable=self.selected_camera, value=value, command=lambda k=self: update_info_label(k))
+        camera_opt.add_radiobutton(label="All", variable=self.selected_camera, value=-1, command=lambda k=self: update_info_label(k))
 
         # Cascade menu for Attention layer
         layer_opt = tk.Menu(self.menubar)
         self.selected_layer = tk.IntVar()
         for i in range(self.Attention.layers):
-            layer_opt.add_radiobutton(label=i, variable=self.selected_layer)
-        layer_opt.add_radiobutton(label="All", variable=self.selected_layer, value=-1)
+            layer_opt.add_radiobutton(label=i, variable=self.selected_layer, command=lambda k=self: update_info_label(k))
+        layer_opt.add_radiobutton(label="All", variable=self.selected_layer, value=-1, command=lambda k=self: update_info_label(k))
         self.selected_layer.set(self.Attention.layers - 1)
 
         # Cascade menus for Explainable options
         expl_opt = tk.Menu(self.menubar)
         attn_rollout, grad_cam, partial_lrp, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
-        self.expl_options = ["Attention Rollout", "Grad-CAM", "Partial-LRP", "Gradient Rollout"]
+        self.expl_options = ["Attention Rollout", "Grad-CAM", "Gradient Rollout", "Partial-LRP"]
 
         # Attention Rollout
         expl_opt.add_cascade(label=self.expl_options[0], menu=attn_rollout)
@@ -143,12 +143,11 @@ class App(tk.Tk):
         for i in values:
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_ratio)
         for i in range(len(self.head_types)):
-            hf_opt.add_radiobutton(label=self.head_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_types[i])
-        hf_opt.add_radiobutton(label="All", variable=self.selected_head_fusion, value="all")
+            hf_opt.add_radiobutton(label=self.head_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_types[i], command=lambda k=self: update_info_label(k))
+        hf_opt.add_radiobutton(label="All", variable=self.selected_head_fusion, value="all", command=lambda k=self: update_info_label(k))
         attn_rollout.add_cascade(label=" Head fusion", menu=hf_opt)
         attn_rollout.add_cascade(label=" Discard ratio", menu=dr_opt)
         attn_rollout.add_checkbutton(label=" Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
-
 
         # Grad-CAM
         expl_opt.add_cascade(label=self.expl_options[1], menu=grad_cam)
@@ -158,22 +157,22 @@ class App(tk.Tk):
         for i in range(len(self.grad_cam_types)):
             grad_cam.add_radiobutton(label=self.grad_cam_types[i].capitalize(), variable=self.selected_gradcam_type, value=self.grad_cam_types[i])
 
-        # Partial-LRP
-        expl_opt.add_cascade(label=self.expl_options[2], menu=grad_rollout)
-        self.partial_lrp_types = ["default"]
-        self.selected_partial_lrp_type = tk.StringVar()
-        self.selected_partial_lrp_type.set(self.partial_lrp_types[0])
-        for i in range(len(self.partial_lrp_types)):
-            partial_lrp.add_radiobutton(label=self.partial_lrp_types[i].capitalize(), variable=self.selected_partial_lrp_type, value=self.partial_lrp_types[i])
-
         # Gradient Rollout
-        expl_opt.add_cascade(label=self.expl_options[3], menu=grad_rollout)
+        expl_opt.add_cascade(label=self.expl_options[2], menu=grad_rollout)
         self.handle_residual, self.apply_rule = tk.BooleanVar(),tk.BooleanVar()
         self.handle_residual.set(True)
         self.apply_rule.set(True)
         grad_rollout.add_checkbutton(label=" Handle residual", variable=self.handle_residual, onvalue=1, offvalue=0)
         grad_rollout.add_checkbutton(label=" Apply rule 10", variable=self.apply_rule, onvalue=1, offvalue=0)
         expl_opt.add_separator()
+
+        # Partial-LRP
+        expl_opt.add_cascade(label=self.expl_options[3], menu=grad_rollout)
+        self.partial_lrp_types = ["default"]
+        self.selected_partial_lrp_type = tk.StringVar()
+        self.selected_partial_lrp_type.set(self.partial_lrp_types[0])
+        for i in range(len(self.partial_lrp_types)):
+            partial_lrp.add_radiobutton(label=self.partial_lrp_types[i].capitalize(), variable=self.selected_partial_lrp_type, value=self.partial_lrp_types[i])
 
         # Explainable mechanism selection
         expl_type_opt = tk.Menu(self.menubar)
@@ -199,7 +198,6 @@ class App(tk.Tk):
         self.BB_bool.set(True)
         self.show_labels.set(True)
         self.attn_norm.set(True)
-        self.attn_contr.set(True)
         self.bbox_2d.set(True)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
@@ -300,6 +298,8 @@ class App(tk.Tk):
 
         # Explainable attention maps generation
         for i in range(6):
+            if self.selected_expl_type.get() == "Gradient Rollout":
+                self.Attention.extract_attentions(self.data, self.bbox_idx)
             # All cameras option
             if self.selected_camera.get() == -1:
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, i, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
@@ -313,9 +313,9 @@ class App(tk.Tk):
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
 
             attn = attn.view(1, 1, 29, 50)
+            attn[0, 0, :, 0] = 0
             attn = torch.nn.functional.interpolate(attn, scale_factor=16, mode='bilinear')
             attn = attn.view(attn.shape[2], attn.shape[3]).cpu().numpy()
-            attn[:, 0] = 0
 
             self.attn_list.append(attn)
 
@@ -362,10 +362,10 @@ class App(tk.Tk):
             elif self.selected_camera.get() == -1:
                 title = f'{list(self.cameras.keys())[self.cam_idx[i]]}, layer {self.selected_layer.get()}'
             else:
-                title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {self.selected_layer.get()}'
+                title = None
 
             # If doing Attention Rollout, visualize head fusion type
-            if self.selected_expl_type.get() == "Attention Rollout":
+            if self.selected_layer.get() == -1 or self.selected_camera.get() == -1 and self.selected_expl_type.get() == "Attention Rollout":
                 title += f', {self.selected_head_fusion.get()}'
 
             # Show attention camera contributon for one object
@@ -516,7 +516,6 @@ class App(tk.Tk):
                 ax = self.fig.add_subplot(self.spec[2, i-3])
 
             ax.imshow(self.imgs_bbox[self.cam_idx[i]])
-            ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
             ax.axis('off')
         
         self.fig.tight_layout(pad=0)

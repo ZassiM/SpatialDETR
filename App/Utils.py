@@ -71,7 +71,11 @@ def random_data_idx(self):
 def update_info_label(self, info=None):
     idx = self.data_idx
     if info is None:
-        info = f"Model: {self.model_name} | Dataloader: {self.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()} | GPU ID: {self.gpu_id.get()}"
+        info = f"Model: {self.model_name} | Dataloader: {self.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
+        if self.selected_camera.get() != -1 and self.selected_layer.get() != -1:
+            info += f" | Camera {list(self.cameras.keys())[self.selected_camera.get()]} | Layer {self.selected_layer.get()}"
+            if self.selected_expl_type.get() == "Attention Rollout":
+                info += f'| {self.selected_head_fusion.get().capitalize()} Head fusion'
     self.info_text.set(info)
 
 
