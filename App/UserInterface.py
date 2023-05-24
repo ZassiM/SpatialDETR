@@ -164,7 +164,6 @@ class App(tk.Tk):
         self.apply_rule.set(True)
         grad_rollout.add_checkbutton(label=" Handle residual", variable=self.handle_residual, onvalue=1, offvalue=0)
         grad_rollout.add_checkbutton(label=" Apply rule 10", variable=self.apply_rule, onvalue=1, offvalue=0)
-        expl_opt.add_separator()
 
         # Partial-LRP
         expl_opt.add_cascade(label=self.expl_options[3], menu=grad_rollout)
@@ -173,6 +172,8 @@ class App(tk.Tk):
         self.selected_partial_lrp_type.set(self.partial_lrp_types[0])
         for i in range(len(self.partial_lrp_types)):
             partial_lrp.add_radiobutton(label=self.partial_lrp_types[i].capitalize(), variable=self.selected_partial_lrp_type, value=self.partial_lrp_types[i])
+
+        expl_opt.add_separator()
 
         # Explainable mechanism selection
         expl_type_opt = tk.Menu(self.menubar)
@@ -295,11 +296,11 @@ class App(tk.Tk):
         print("Generating attention maps...")
         # List to which attention maps are appended
         self.attn_list = []
+        if self.selected_expl_type.get() == "Gradient Rollout":
+            self.update_data()
 
         # Explainable attention maps generation
         for i in range(6):
-            if self.selected_expl_type.get() == "Gradient Rollout":
-                self.Attention.extract_attentions(self.data, self.bbox_idx)
             # All cameras option
             if self.selected_camera.get() == -1:
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, i, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
@@ -337,16 +338,22 @@ class App(tk.Tk):
         for i in range(len(self.attn_list)):
             if self.selected_layer.get() == -1 or self.selected_camera.get() == -1:
                 ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
-                attn = self.attn_list[self.cam_idx[i]]
             else:
                 ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
+            
+            if self.selected_camera.get() == -1:
+                attn = self.attn_list[self.cam_idx[i]]
+            else:
                 attn = self.attn_list[i]
-
-            #attn = self.attn_list[self.cam_idx[i]]
+            
             ax_attn.axis('off')
             # Attention normalization if option is selected, only for all cameras view
-            if self.attn_norm.get() and self.selected_layer.get() != -1 and attn_max > 0:
-                attn /= attn_max
+            if self.attn_norm.get():
+                if self.selected_camera.get() == -1:
+                    attn /= attn_max
+                else:
+                    attn -= attn.min()
+                    attn /= attn.max()
                 attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
             else:
                 attmap = ax_attn.imshow(attn)
@@ -381,7 +388,6 @@ class App(tk.Tk):
         '''
         print("Detecting bounding boxes...")
         # Load selected data from dataloader, manual DataContainer fixes are needed
-        # Interesting data indices: 956
         data = self.dataloader.dataset[self.data_idx]
         metas = [[data['img_metas'][0].data]]
         img = [data['img'][0].data.unsqueeze(0)]
@@ -499,6 +505,8 @@ class App(tk.Tk):
             if self.overlay_bool.get():
                 if self.selected_camera.get() == -1:
                     attn = self.attn_list[camidx]
+                elif self.selected_layer.get() == -1:
+                    attn = self.attn_list[-1]
                 else:
                     attn = self.attn_list[0]
 
