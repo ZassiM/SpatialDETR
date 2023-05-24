@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DOCKER_NAME=spatial_detr_ma_zahr
+DOCKER_NAME=spatial_detr
 
 # path to directory where nusenes data is stored
 nusc_data_dir="/home/zahr/Documents/datasets/nuscenes"
@@ -12,7 +12,6 @@ repo_dir=$PWD
 xhost +
 
 docker run \
---user $(id -u):$(id -g) \
 --name $DOCKER_NAME \
 --rm \
 --gpus 'all,"capabilities=compute,utility,graphics"' \

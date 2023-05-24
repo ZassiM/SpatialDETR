@@ -56,11 +56,12 @@ def load_model(self, cfg_file=None, weights_file=None, gpu_id=None):
     self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
     self.dataloader_name = self.dataloader.dataset.metadata['version']
     self.class_names = self.dataloader.dataset.CLASSES
-    print("Loading completed.\n")
+    print("\nModel loaded.")
     
     self.new_model = True
 
     if not self.started_app:
+        print("Starting app...\n")
         self.start_app()
         self.started_app = True
         random_data_idx(self)

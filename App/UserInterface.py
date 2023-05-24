@@ -233,12 +233,12 @@ class App(tk.Tk):
         self.menubar.add_command(label=" Generate video", command=self.gen_video)
 
         # Create figure with a 3x3 grid
-        self.fig = plt.figure(figsize=(80, 60), layout="constrained")
+        self.fig = plt.figure()
         self.spec = self.fig.add_gridspec(3, 3)
-
+        self.spec.update(wspace=0, hspace=0)
         # Create canvas with the figure embedded in it, and update it after each visualization
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
-        self.canvas.get_tk_widget().pack()
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
     def extract_data(self):
 
@@ -271,7 +271,8 @@ class App(tk.Tk):
         self.img_metas = img_metas
 
     def gen_video(self):
-        for i in range(100):
+        
+        for i in range(10):
             self.data_idx = i
             self.extract_data()
             show_multi_modality_result(
@@ -517,7 +518,8 @@ class App(tk.Tk):
             ax.imshow(self.imgs_bbox[self.cam_idx[i]])
             ax.set_title(f'{list(self.cameras.keys())[self.cam_idx[i]]}')
             ax.axis('off')
-
+        
+        self.fig.tight_layout(pad=0)
         self.canvas.draw()
 
         # take a screenshot if the option is selected
