@@ -118,9 +118,9 @@ class Attention:
                     layer.attentions[0].attn.register_backward_hook(
                         lambda _, grad_input, grad_output: self.dec_self_attn_grads.append(grad_input[0].permute(1, 0, 2)[0])
                     ))
-
+     
             outputs = self.model(return_loss=False, rescale=True, **data)
-   
+
             output_scores = outputs[0]["pts_bbox"]["scores_3d"]
             one_hot = torch.zeros_like(output_scores).to(output_scores.device)
             one_hot[target_index] = 1
@@ -129,14 +129,15 @@ class Attention:
 
             self.model.zero_grad()
             one_hot.backward(retain_graph=True)
-            
-            for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
-                self.dec_cross_attn_grads.append(layer.attentions[1].attn.get_attn_gradients())
-        
+
         for hook in hooks:
             hook.remove()
         
         return outputs
+    
+    def save_attn_gradients(self, attn_gradients):
+        self.attn_gradients = attn_gradients
+        
 
     def get_all_attn(self, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True):
         # self.dec_cross_attn_weights = 6x[6x8x900x1450] = layers x (cams x heads x queries x keys)

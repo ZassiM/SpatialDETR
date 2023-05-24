@@ -16,6 +16,8 @@ from App.Utils import show_message, show_model_info, red_text, black_text, \
                     select_all_bboxes, update_info_label, overlay_attention_on_image, \
                     change_theme
 
+from mmdet3d.core.visualizer import show_multi_modality_result
+
 
 class App(tk.Tk):
     '''
@@ -227,6 +229,8 @@ class App(tk.Tk):
         self.menubar.add_cascade(label=" Options", menu=add_opt)
         add_separator(self, "|")
         self.menubar.add_command(label=" Visualize", command=self.visualize)
+        add_separator(self, "|")
+        self.menubar.add_command(label=" Generate video", command=self.gen_video)
 
         # Create figure with a 3x3 grid
         self.fig = plt.figure(figsize=(80, 60), layout="constrained")
@@ -236,6 +240,55 @@ class App(tk.Tk):
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
         self.canvas.get_tk_widget().pack()
 
+    def extract_data(self):
+
+        data = self.dataloader.dataset[self.data_idx]
+        metas = [[data['img_metas'][0].data]]
+        img = [data['img'][0].data.unsqueeze(0)]
+        data['img_metas'][0] = DC(metas, cpu_only=True)
+        data['img'][0] = DC(img)
+
+        with torch.no_grad():
+            outputs = self.model(return_loss=False, rescale=True, **data)
+            
+        # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
+        score_thr = 0.5
+        
+        inds = outputs[0]["pts_bbox"]['scores_3d'] > score_thr      
+        pred_bboxes = outputs[0]["pts_bbox"]["boxes_3d"][inds]
+        img_metas = data["img_metas"][0]._data[0][0]
+
+        imgs = data["img"][0]._data[0].numpy()[0]
+                
+        imgs = imgs.transpose(0, 2, 3, 1)[:, :900, :, :]
+        mean = np.array(self.img_norm_cfg["mean"], dtype=np.float32)
+        std = np.array(self.img_norm_cfg["std"], dtype=np.float32)
+        for i in range(len(imgs)):
+            imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
+
+        self.imgs = imgs
+        self.pred_bboxes = pred_bboxes
+        self.img_metas = img_metas
+
+    def gen_video(self):
+        for i in range(100):
+            self.data_idx = i
+            self.extract_data()
+            show_multi_modality_result(
+                self.imgs,
+                None,
+                self.pred_bboxes,
+                self.img_metas['lidar2img'],
+                "out_dir",
+                filename="file_video",
+                box_mode='lidar',
+                img_metas=None,
+                gt_bbox_color=(0, 0, 255),
+                pred_bbox_color=(0, 255, 0),
+                show=True,
+                index=i,
+                save=False)
+            
     def show_attention_maps(self, grid_clm=1):
         '''
         Shows the attention map for explainability.

@@ -9,6 +9,8 @@ from mmdet.datasets import replace_ImageToTensor
 
 
 def init_app(args):
+    ''' Loads the model from a config file and loads the weights from a trained checkpoint
+        Returns the model and the dataloader '''
 
     cfg = Config.fromfile(args["config"])
 

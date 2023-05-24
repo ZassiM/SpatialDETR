@@ -14,7 +14,7 @@ repo_dir=$PWD
 xhost +
 
 docker run \
---name spatial_detr_container \
+--name $DOCKER_NAME \
 --rm \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
 --env DISPLAY=${DISPLAY} \

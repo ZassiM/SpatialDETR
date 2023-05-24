@@ -1,36 +1,23 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-
-import argparse
 import os
 import tomli
-import warnings
 
 import mmcv
 import torch
-from mmcv import Config, DictAction
+from mmcv import Config
 from mmcv.cnn import fuse_conv_bn
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
                          wrap_fp16_model)
 
-from mmdet3d.apis import single_gpu_test
 from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_model
-from mmdet.apis import multi_gpu_test, set_random_seed
+from mmdet.apis import multi_gpu_test
 from mmdet.datasets import replace_ImageToTensor
+from mmdet3d.core.visualizer import show_multi_modality_result
 
-from mmdetection3d.tools.misc.browse_dataset import show_proj_bbox_img
-
-from PIL import Image
-import numpy as np
-import cv2
-import matplotlib.pyplot as plt
-
-from mmdet3d.core.visualizer import (show_multi_modality_result,show_result,
-                                     show_seg_result)
 from pathlib import Path
-from mmcv import Config, DictAction, mkdir_or_exist, track_iter_progress
-
+import numpy as np
 
 
 def init(args):
@@ -61,7 +48,6 @@ def init(args):
                 for m in _module_dir[1:]:
                     _module_path = _module_path + '.' + m
                 print(_module_path)
-                plg_lib = importlib.import_module(_module_path)
             else:
                 # import dir is the dirpath for the config file
                 _module_dir = os.path.dirname(args.config)
@@ -70,7 +56,6 @@ def init(args):
                 for m in _module_dir[1:]:
                     _module_path = _module_path + '.' + m
                 print(_module_path)
-                plg_lib = importlib.import_module(_module_path)
                 
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
@@ -144,20 +129,17 @@ def init(args):
         model.PALETTE = dataset.PALETTE
     
     return model, dataset, data_loader, gpu_ids, cfg, distributed
-    # DataLoader_filename = args["dataloader_filename"]
-    # print(f"Saving DataLoader in {DataLoader_filename}...")
-    # torch.save(list(data_loader), DataLoader_filename)
 
 def main():
     
-    with open("other_scripts/args.toml", mode = "rb") as argsF:
+    with open("misc/args.toml", mode = "rb") as argsF:
         args = tomli.load(argsF)
     
     model, dataset, data_loader, gpu_ids, cfg, distributed = init(args)
 
     
     if not distributed:
-        model = MMDataParallel(model, device_ids = gpu_ids)
+        model = MMDataParallel(model, device_ids=gpu_ids)
 
         model.eval()
         outputs = []
@@ -166,12 +148,10 @@ def main():
         for i, data in enumerate(data_loader):  
               
             if "points" in data.keys():
-                points = data.pop("points")
+                data.pop("points")
             
             with torch.no_grad():
                 result = model(return_loss=False, rescale=True, **data)
-            
-            #data["points"] = points
             
             # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
             camidx = 0
@@ -181,16 +161,16 @@ def main():
             
             gt_bboxes = dataset.get_ann_info(i)['gt_bboxes_3d']
             pred_bboxes = result[0]["pts_bbox"]["boxes_3d"][inds]
-            #[cx, cy, cz, l, w, h, rot, vx, vy]
-            bbox_test = [50,50,50,0.5,0.5,0.5,1.5,0,0]
-            bbox_test = torch.Tensor(bbox_test).unsqueeze(0)
-            pred_bboxes.tensor = torch.cat((pred_bboxes.tensor, bbox_test))
-            
             img_metas = data["img_metas"][0]._data[0][0]
 
-            img = data["img"][0]._data[0].numpy()[0]
+            imgs = data["img"][0]._data[0].numpy()[0]
                     
-            img = img.transpose(0,2,3,1)
+            imgs = imgs.transpose(0, 2, 3, 1)[:, :900, :, :]
+
+            mean = np.array(cfg["img_norm_cfg"]["mean"], dtype=np.float32)
+            std = np.array(cfg["img_norm_cfg"]["std"], dtype=np.float32)
+            for i in range(len(imgs)):
+                imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
             
             if gt_bboxes.tensor.shape[0] == 0:
                 gt_bboxes = None
@@ -198,20 +178,20 @@ def main():
             filename = Path(img_metas['filename'][camidx]).name
             filename = filename.split('.')[0]
 
-            # show_multi_modality_result(
-            #     img,
-            #     None,
-            #     pred_bboxes,
-            #     img_metas['lidar2img'],
-            #     args["show_dir"],
-            #     filename,
-            #     box_mode='lidar',
-            #     img_metas=None,
-            #     gt_bbox_color = (0,0,255),
-            #     pred_bbox_color = (0,255,0),
-            #     show = True, index = i, save = False)
-
-            dataset.show(result, points[0]._data[0][0], gt_bboxes.tensor.numpy(), args["show_dir"], show=True, pipeline=None, score_thr = score_thr)
+            show_multi_modality_result(
+                imgs,
+                None,
+                pred_bboxes,
+                img_metas['lidar2img'],
+                args["show_dir"],
+                filename,
+                box_mode='lidar',
+                img_metas=None,
+                gt_bbox_color=(0, 0, 255),
+                pred_bbox_color=(0, 255, 0),
+                show=True,
+                index=i,
+                save=False)
         
             outputs.extend(result)
             batch_size = len(result)

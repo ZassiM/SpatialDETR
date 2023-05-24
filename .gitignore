@@ -139,3 +139,4 @@ screenshots/
 training_logs/*
 model_info/*
 Explainability/Expl_og.py
+config.toml

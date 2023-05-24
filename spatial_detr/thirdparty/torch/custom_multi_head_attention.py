@@ -15,6 +15,7 @@ Tensor = torch.Tensor
 Code is modified from torch MultiheadAttention and adapted to allow to pass a custom attention function. All credits belong to the original authors.
 """
 
+
 class CustomMultiheadAttention(nn.MultiheadAttention):
     """Wrapper around torch MHA.
     This allows to use a custom attn_func

@@ -9,7 +9,7 @@ checkpoint_sdetr = "work_dirs/checkpoints/query_proj_value_proj.pth"
 
 skip_type = "NormalizeMultiviewImage"
 eval = "mAP"
-gpu_id = 0
+gpu_id = 1
 launcher = "none"
 fuse_conv_bn = false
 tmpdir = "none"
