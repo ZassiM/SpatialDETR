@@ -79,6 +79,7 @@ class Attention:
         self.layers = 0
         for _ in self.model.module.pts_bbox_head.transformer.decoder.layers:
             self.layers += 1
+        
             
     def handle_co_attn_self_query(self, layer):
         # grad = self.dec_self_attn_grads[layer]
@@ -222,6 +223,6 @@ class Attention:
             # TO-DO
 
         attention_map = self.R_q_i[indexes[bbox_idx]].detach()
-        attention_map = attention_map.sum(dim=0)
+        attention_map = attention_map.max(dim=0)[0]
 
         return attention_map

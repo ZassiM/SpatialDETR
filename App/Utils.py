@@ -23,7 +23,10 @@ def red_text(self, event=None):
 
 
 def black_text(self, event=None):
-    self.info_label.config(fg="black")
+    if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
+        self.info_label.config(fg="white")
+    else:
+        self.info_label.config(fg="black")
 
 
 def show_model_info(self, event=None):

@@ -111,10 +111,10 @@ class App(tk.Tk):
         self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
         self.cam_idx = [2, 0, 1, 5, 3, 4]  # Used for visualizing camera outputs properly
         self.selected_camera = tk.IntVar()
-        self.selected_camera.set(0)
         for value, key in enumerate(self.cameras):
             camera_opt.add_radiobutton(label=key, variable=self.selected_camera, value=value, command=lambda k=self: update_info_label(k))
         camera_opt.add_radiobutton(label="All", variable=self.selected_camera, value=-1, command=lambda k=self: update_info_label(k))
+        self.selected_camera.set(-1) # Default: visualize all cameras
 
         # Cascade menu for Attention layer
         layer_opt = tk.Menu(self.menubar)
@@ -188,23 +188,22 @@ class App(tk.Tk):
         self.bbox_opt = tk.Menu(self.menubar)
         self.single_bbox = tk.BooleanVar()
         self.single_bbox.set(True)
-        self.bbox_opt.add_checkbutton(label=" Single object", onvalue=1, offvalue=0, variable=self.single_bbox)
+        self.bbox_opt.add_checkbutton(label=" Single object", onvalue=1, offvalue=0, variable=self.single_bbox) 
         self.bbox_opt.add_command(label=" Select all", command=lambda: select_all_bboxes(self))
         self.bbox_opt.add_separator()
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.BB_bool, self.points_bool, self.show_scale, self.attn_contr, self.attn_norm, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d, self.dark_theme = \
-            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.GT_bool, self.BB_bool, self.points_bool, self.show_scale, self.attn_contr, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d, self.dark_theme = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.BB_bool.set(True)
         self.show_labels.set(True)
-        self.attn_norm.set(True)
+        self.overlay_bool.set(True)
         self.bbox_2d.set(True)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
         add_opt.add_checkbutton(label=" Show attention scale", onvalue=1, offvalue=0, variable=self.show_scale)
         add_opt.add_checkbutton(label=" Show attention camera contributions", onvalue=1, offvalue=0, variable=self.attn_contr)
-        add_opt.add_checkbutton(label=" Normalize attention", onvalue=1, offvalue=0, variable=self.attn_norm)
         add_opt.add_checkbutton(label=" Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay_bool)
         add_opt.add_checkbutton(label=" Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
         add_opt.add_checkbutton(label=" Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
@@ -296,6 +295,7 @@ class App(tk.Tk):
         print("Generating attention maps...")
         # List to which attention maps are appended
         self.attn_list = []
+
         if self.selected_expl_type.get() == "Gradient Rollout":
             self.update_data()
 
@@ -315,6 +315,7 @@ class App(tk.Tk):
 
             attn = attn.view(1, 1, 29, 50)
             attn[0, 0, :, 0] = 0
+            attn[0, 0, :, -1] = 0
             attn = torch.nn.functional.interpolate(attn, scale_factor=16, mode='bilinear')
             attn = attn.view(attn.shape[2], attn.shape[3]).cpu().numpy()
 
@@ -329,7 +330,7 @@ class App(tk.Tk):
         # If we want to visualize all layers or all cameras:
         if self.selected_layer.get() == -1 or self.selected_camera.get() == -1:
             # Select the center of the grid to plot the attentions and add 2x2 subgrid
-            layer_grid = self.spec[1, grid_clm].subgridspec(2, 3) 
+            layer_grid = self.spec[1, grid_clm].subgridspec(2, 3)
             fontsize = 8
         else:
             fontsize = 12
@@ -347,17 +348,16 @@ class App(tk.Tk):
                 attn = self.attn_list[i]
             
             ax_attn.axis('off')
-            # Attention normalization if option is selected, only for all cameras view
-            if self.attn_norm.get():
-                if self.selected_camera.get() == -1:
-                    attn /= attn_max
-                else:
-                    attn -= attn.min()
-                    attn /= attn.max()
+
+            # Attention map normalization
+            if self.selected_camera.get() == -1:
+                attn /= attn_max
                 attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
             else:
+                attn -= attn.min()
+                attn /= attn.max()
                 attmap = ax_attn.imshow(attn)
-
+                
             # Visualize attention bar scale if option is selected
             if self.show_scale.get():  
                 im_ratio = attn.shape[1]/attn.shape[0]
