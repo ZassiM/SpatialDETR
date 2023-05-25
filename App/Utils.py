@@ -9,7 +9,7 @@ import os
 from PIL import ImageGrab
 
 
-def add_separator(self, sep="\u22EE"):
+def add_separator(self, sep="|"):
     self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
     # sep="\u22EE"
 

@@ -269,7 +269,12 @@ class App(tk.Tk):
         self.img_metas = img_metas
 
     def gen_video(self):
-        
+
+        # for i in range(10):
+        # self.canvas = None
+        height, width = 720, 1920
+        video_canvas = tk.Canvas(self, width=width, height=height)
+        video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         for i in range(10):
             self.data_idx = i
             self.extract_data()
@@ -285,8 +290,9 @@ class App(tk.Tk):
                 gt_bbox_color=(0, 0, 255),
                 pred_bbox_color=(0, 255, 0),
                 show=True,
-                index=i,
-                save=False)
+                index=0,
+                save=False,
+                window=video_canvas)
             
     def show_attention_maps(self, grid_clm=1):
         '''
@@ -357,7 +363,7 @@ class App(tk.Tk):
                 attn -= attn.min()
                 attn /= attn.max()
                 attmap = ax_attn.imshow(attn)
-                
+
             # Visualize attention bar scale if option is selected
             if self.show_scale.get():  
                 im_ratio = attn.shape[1]/attn.shape[0]

@@ -152,11 +152,8 @@ class Attention:
             # loop through cameras
             for attn in self.dec_cross_attn_weights[i]:
                 attn_avg = avg_heads(attn, head_fusion=head_fusion, discard_ratio=discard_ratio)
-                if isinstance(bbox_idx, list):
-                    attn_avg = attn_avg[indexes[bbox_idx]].detach()
-                    attn_avg = attn_avg.sum(dim=0)
-                else:
-                    attn_avg = attn_avg[indexes[bbox_idx].item()].detach()     
+                attn_avg = attn_avg[indexes[bbox_idx]].detach()
+                attn_avg = attn_avg.sum(dim=0)
                 all_attn.append(attn_avg)
             all_attn_layers.append(all_attn)    
             
