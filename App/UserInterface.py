@@ -118,11 +118,15 @@ class App(tk.Tk):
 
         # Cascade menu for Attention layer
         layer_opt = tk.Menu(self.menubar)
-        self.selected_layer = tk.IntVar()
+        overlay_layer_opt = tk.Menu(self.menubar)
+        self.selected_layer, self.selected_overlay_layer = tk.IntVar(), tk.IntVar()
         for i in range(self.Attention.layers):
             layer_opt.add_radiobutton(label=i, variable=self.selected_layer, command=lambda k=self: update_info_label(k))
+            overlay_layer_opt.add_radiobutton(label=i, variable=self.selected_overlay_layer)
         layer_opt.add_radiobutton(label="All", variable=self.selected_layer, value=-1, command=lambda k=self: update_info_label(k))
         self.selected_layer.set(self.Attention.layers - 1)
+        self.selected_overlay_layer.set(self.Attention.layers - 1)
+        layer_opt.add_cascade(label="Layer on image", menu=overlay_layer_opt)
 
         # Cascade menus for Explainable options
         expl_opt = tk.Menu(self.menubar)
@@ -512,7 +516,7 @@ class App(tk.Tk):
                 if self.selected_camera.get() == -1:
                     attn = self.attn_list[camidx]
                 elif self.selected_layer.get() == -1:
-                    attn = self.attn_list[-1]
+                    attn = self.attn_list[self.selected_overlay_layer.get()]
                 else:
                     attn = self.attn_list[0]
 
