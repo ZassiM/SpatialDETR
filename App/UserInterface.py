@@ -118,15 +118,12 @@ class App(tk.Tk):
 
         # Cascade menu for Attention layer
         layer_opt = tk.Menu(self.menubar)
-        overlay_layer_opt = tk.Menu(self.menubar)
-        self.selected_layer, self.selected_overlay_layer = tk.IntVar(), tk.IntVar()
+        self.selected_layer = tk.IntVar()
+        self.show_all_layers= tk.BooleanVar()
         for i in range(self.Attention.layers):
             layer_opt.add_radiobutton(label=i, variable=self.selected_layer, command=lambda k=self: update_info_label(k))
-            overlay_layer_opt.add_radiobutton(label=i, variable=self.selected_overlay_layer)
-        layer_opt.add_radiobutton(label="All", variable=self.selected_layer, value=-1, command=lambda k=self: update_info_label(k))
+        layer_opt.add_checkbutton(label="All", onvalue=1, offvalue=0, variable=self.show_all_layers)
         self.selected_layer.set(self.Attention.layers - 1)
-        self.selected_overlay_layer.set(self.Attention.layers - 1)
-        layer_opt.add_cascade(label="Layer on image", menu=overlay_layer_opt)
 
         # Cascade menus for Explainable options
         expl_opt = tk.Menu(self.menubar)
@@ -316,7 +313,7 @@ class App(tk.Tk):
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, i, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
             
             # All layers option
-            elif self.selected_layer.get() == -1:
+            elif self.show_all_layers.get():
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), i, self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
             
             # Single camera and single layer option
@@ -331,14 +328,14 @@ class App(tk.Tk):
 
             self.attn_list.append(attn)
 
-            if self.selected_camera.get() != -1 and self.selected_layer.get() != -1:
+            if self.selected_camera.get() != -1 and not self.show_all_layers.get():
                 break
         
         # Extract maximum score for normalization
         attn_max = np.max(np.concatenate(self.attn_list))
 
         # If we want to visualize all layers or all cameras:
-        if self.selected_layer.get() == -1 or self.selected_camera.get() == -1:
+        if self.show_all_layers.get() or self.selected_camera.get() == -1:
             # Select the center of the grid to plot the attentions and add 2x2 subgrid
             layer_grid = self.spec[1, grid_clm].subgridspec(2, 3)
             fontsize = 8
@@ -347,7 +344,7 @@ class App(tk.Tk):
 
         # View attention maps
         for i in range(len(self.attn_list)):
-            if self.selected_layer.get() == -1 or self.selected_camera.get() == -1:
+            if self.show_all_layers.get() or self.selected_camera.get() == -1:
                 ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
             else:
                 ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
@@ -374,7 +371,7 @@ class App(tk.Tk):
                 self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
 
             # Set title accordinly
-            if self.selected_layer.get() == -1:
+            if self.show_all_layers.get():
                 title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {i}'
             elif self.selected_camera.get() == -1:
                 title = f'{list(self.cameras.keys())[self.cam_idx[i]]}, layer {self.selected_layer.get()}'
@@ -382,7 +379,7 @@ class App(tk.Tk):
                 title = None
 
             # If doing Attention Rollout, visualize head fusion type
-            if self.selected_layer.get() == -1 or self.selected_camera.get() == -1 and self.selected_expl_type.get() == "Attention Rollout":
+            if self.show_all_layers.get() or self.selected_camera.get() == -1 and self.selected_expl_type.get() == "Attention Rollout":
                 title += f', {self.selected_head_fusion.get()}'
 
             # Show attention camera contributon for one object
@@ -467,7 +464,7 @@ class App(tk.Tk):
                 self.old_expl_type = self.selected_expl_type.get()
 
         # Avoid selecting all layers and all cameras. Only the last layer will be visualized
-        if self.selected_layer.get() == -1 and self.selected_camera.get() == -1:
+        if self.show_all_layers.get() and self.selected_camera.get() == -1:
             self.selected_layer.set(self.Attention.layers - 1)
 
         # Extract the selected bounding box indexes from the menu
@@ -515,8 +512,8 @@ class App(tk.Tk):
             if self.overlay_bool.get():
                 if self.selected_camera.get() == -1:
                     attn = self.attn_list[camidx]
-                elif self.selected_layer.get() == -1:
-                    attn = self.attn_list[self.selected_overlay_layer.get()]
+                elif self.show_all_layers.get():
+                    attn = self.attn_list[self.selected_layer.get()]
                 else:
                     attn = self.attn_list[0]
 
