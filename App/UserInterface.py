@@ -15,10 +15,8 @@ from App.Utils import show_message, show_model_info, red_text, black_text, \
                     single_bbox_select, update_scores, add_separator, \
                     select_all_bboxes, update_info_label, overlay_attention_on_image, \
                     change_theme
-
-from mmdet3d.core.visualizer import show_multi_modality_result
-from PIL import Image, ImageGrab, ImageTk
-
+from PIL import Image
+import os
 
 
 class App(tk.Tk):
@@ -42,6 +40,7 @@ class App(tk.Tk):
         # Model and dataloader objects
         self.model, self.dataloader = None, None
         self.started_app = False
+        self.gen_video_bool = False
         
         # Main Tkinter menu in which all other cascade menus are added
         self.menubar = tk.Menu(self)
@@ -84,6 +83,7 @@ class App(tk.Tk):
 
         # Suffix used for saving screenshot of same model with different numbering
         self.file_suffix = 0
+        self.video_file_suffix = 0
 
         # Tkinter frame for visualizing model and GPU info
         frame = tk.Frame(self)
@@ -239,7 +239,7 @@ class App(tk.Tk):
         self.spec.update(wspace=0, hspace=0)
         # Create canvas with the figure embedded in it, and update it after each visualization
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
-        #self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
     def extract_data(self):
 
@@ -272,26 +272,29 @@ class App(tk.Tk):
         self.img_metas = img_metas
 
     def gen_video(self):
-        self.video_canvas = tk.Canvas(self)
-        self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        self.thsObj = self.video_canvas.create_image(0, 0, anchor='nw', image=None)
-        self.after("idle", self.snapS)
 
-    def snapS(self):
+        self.gen_video_bool = True
 
-        self.data_idx += 1
-        imgs_video = self.visualize(gen_video_bool=True)
+        for i in range(self.data_idx, self.data_idx + 10):
+            self.data_idx = i
+            imgs = self.visualize()
 
-        hori = np.concatenate((imgs_video[2], imgs_video[0], imgs_video[1]), axis=1)
-        ver = np.concatenate((imgs_video[5], imgs_video[3], imgs_video[4]), axis=1)  
-        full = np.concatenate((hori, ver), axis=0)
+            hori = np.concatenate((imgs[2], imgs[0], imgs[1]), axis=1)
+            ver = np.concatenate((imgs[5], imgs[3], imgs[4]), axis=1)  
+            full = np.concatenate((hori, ver), axis=0)
 
-        w, h = self.video_canvas.winfo_width(), self.video_canvas.winfo_height()
-        self.image = ImageTk.PhotoImage(Image.fromarray((full * 255).astype(np.uint8)).resize((w, h)))
-        self.video_canvas.itemconfig(self.thsObj, image=self.image)
+            img_frame = Image.fromarray((full * 255).astype(np.uint8))
 
-        self.after(1000, self.snapS)
-            
+            path = f"video_gen/{self.model_name}_{self.selected_expl_type.get()}_{self.data_idx}"
+
+            if os.path.exists(path+"_"+str(self.file_suffix)+".png"):
+                self.video_file_suffix += 1
+            else:
+                self.video_file_suffix = 0
+
+            path += "_" + str(self.video_file_suffix) + ".png"
+            img_frame.save(path)
+
     def show_attention_maps(self, grid_clm=1):
         '''
         Shows the attention map for explainability.
@@ -340,51 +343,52 @@ class App(tk.Tk):
             fontsize = 12
 
         # View attention maps
-        for i in range(len(self.attn_list)):
-            if self.show_all_layers.get() or self.selected_camera.get() == -1:
-                ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
-            else:
-                ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
-            
-            if self.selected_camera.get() == -1:
-                attn = self.attn_list[self.cam_idx[i]]
-            else:
-                attn = self.attn_list[i]
-            
-            ax_attn.axis('off')
+        if not self.gen_video_bool:
+            for i in range(len(self.attn_list)):
+                if self.show_all_layers.get() or self.selected_camera.get() == -1:
+                    ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
+                else:
+                    ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
+                
+                if self.selected_camera.get() == -1:
+                    attn = self.attn_list[self.cam_idx[i]]
+                else:
+                    attn = self.attn_list[i]
+                
+                ax_attn.axis('off')
 
-            # Attention map normalization
-            if self.selected_camera.get() == -1:
-                attn /= attn_max
-                attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
-            else:
-                attn -= attn.min()
-                attn /= attn.max()
-                attmap = ax_attn.imshow(attn)
+                # Attention map normalization
+                if self.selected_camera.get() == -1:
+                    attn /= attn_max
+                    attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
+                else:
+                    attn -= attn.min()
+                    attn /= attn.max()
+                    attmap = ax_attn.imshow(attn)
 
-            # Visualize attention bar scale if option is selected
-            if self.show_scale.get():  
-                im_ratio = attn.shape[1]/attn.shape[0]
-                self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
+                # Visualize attention bar scale if option is selected
+                if self.show_scale.get():  
+                    im_ratio = attn.shape[1]/attn.shape[0]
+                    self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
 
-            # Set title accordinly
-            if self.show_all_layers.get():
-                title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {i}'
-            elif self.selected_camera.get() == -1:
-                title = f'{list(self.cameras.keys())[self.cam_idx[i]]}, layer {self.selected_layer.get()}'
-            else:
-                title = None
+                # Set title accordinly
+                if self.show_all_layers.get():
+                    title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {i}'
+                elif self.selected_camera.get() == -1:
+                    title = f'{list(self.cameras.keys())[self.cam_idx[i]]}, layer {self.selected_layer.get()}'
+                else:
+                    title = None
 
-            # If doing Attention Rollout, visualize head fusion type
-            if self.show_all_layers.get() or self.selected_camera.get() == -1 and self.selected_expl_type.get() == "Attention Rollout":
-                title += f', {self.selected_head_fusion.get()}'
+                # If doing Attention Rollout, visualize head fusion type
+                if self.show_all_layers.get() or self.selected_camera.get() == -1 and self.selected_expl_type.get() == "Attention Rollout":
+                    title += f', {self.selected_head_fusion.get()}'
 
-            # Show attention camera contributon for one object
-            if self.attn_contr.get() and self.selected_camera.get() == -1 and self.single_bbox.get():
-                update_scores(self)
-                title += f', {self.scores_perc[self.cam_idx[i]]}%'
+                # Show attention camera contributon for one object
+                if self.attn_contr.get() and self.selected_camera.get() == -1 and self.single_bbox.get():
+                    update_scores(self)
+                    title += f', {self.scores_perc[self.cam_idx[i]]}%'
 
-            ax_attn.set_title(title, fontsize=fontsize)
+                ax_attn.set_title(title, fontsize=fontsize)
 
     def update_data(self):
         '''
@@ -441,7 +445,7 @@ class App(tk.Tk):
         if self.bboxes:
             self.bboxes[0].set(True)
 
-    def visualize(self, gen_video_bool=False):
+    def visualize(self):
         '''
         Visualizes predicted bounding boxes on all the cameras and shows
         the attention map in the middle of the plot.
@@ -521,7 +525,7 @@ class App(tk.Tk):
             self.cam_imgs.append(img)
 
         # Visualize the generated images list on the figure subplots
-        if not gen_video_bool:
+        if not self.gen_video_bool:
             for i in range(len(self.imgs)):
                 if i < 3:
                     ax = self.fig.add_subplot(self.spec[0, i])
@@ -540,5 +544,5 @@ class App(tk.Tk):
 
         print("Done.\n")
 
-        if gen_video_bool:
+        if self.gen_video_bool:
             return self.cam_imgs
