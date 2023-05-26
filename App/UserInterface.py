@@ -17,6 +17,8 @@ from App.Utils import show_message, show_model_info, red_text, black_text, \
                     change_theme
 
 from mmdet3d.core.visualizer import show_multi_modality_result
+from PIL import Image, ImageGrab, ImageTk
+
 
 
 class App(tk.Tk):
@@ -237,7 +239,7 @@ class App(tk.Tk):
         self.spec.update(wspace=0, hspace=0)
         # Create canvas with the figure embedded in it, and update it after each visualization
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        #self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
     def extract_data(self):
 
@@ -270,30 +272,25 @@ class App(tk.Tk):
         self.img_metas = img_metas
 
     def gen_video(self):
+        self.video_canvas = tk.Canvas(self)
+        self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        self.thsObj = self.video_canvas.create_image(0, 0, anchor='nw', image=None)
+        self.after("idle", self.snapS)
 
-        # for i in range(10):
-        # self.canvas = None
-        height, width = 720, 1920
-        video_canvas = tk.Canvas(self, width=width, height=height)
-        video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        for i in range(10):
-            self.data_idx = i
-            self.extract_data()
-            show_multi_modality_result(
-                self.imgs,
-                None,
-                self.pred_bboxes,
-                self.img_metas['lidar2img'],
-                "out_dir",
-                filename="file_video",
-                box_mode='lidar',
-                img_metas=None,
-                gt_bbox_color=(0, 0, 255),
-                pred_bbox_color=(0, 255, 0),
-                show=True,
-                index=0,
-                save=False,
-                window=video_canvas)
+    def snapS(self):
+
+        self.data_idx += 1
+        imgs_video = self.visualize(gen_video_bool=True)
+
+        hori = np.concatenate((imgs_video[2], imgs_video[0], imgs_video[1]), axis=1)
+        ver = np.concatenate((imgs_video[5], imgs_video[3], imgs_video[4]), axis=1)  
+        full = np.concatenate((hori, ver), axis=0)
+
+        w, h = self.video_canvas.winfo_width(), self.video_canvas.winfo_height()
+        self.image = ImageTk.PhotoImage(Image.fromarray((full * 255).astype(np.uint8)).resize((w, h)))
+        self.video_canvas.itemconfig(self.thsObj, image=self.image)
+
+        self.after(1000, self.snapS)
             
     def show_attention_maps(self, grid_clm=1):
         '''
@@ -444,7 +441,7 @@ class App(tk.Tk):
         if self.bboxes:
             self.bboxes[0].set(True)
 
-    def visualize(self):
+    def visualize(self, gen_video_bool=False):
         '''
         Visualizes predicted bounding boxes on all the cameras and shows
         the attention map in the middle of the plot.
@@ -487,7 +484,7 @@ class App(tk.Tk):
 
         # Generate images list with bboxes on it
         print("Generating camera images...")
-        self.imgs_bbox = []
+        self.cam_imgs = []
         for camidx in range(len(self.imgs)):
             img = draw_lidar_bbox3d_on_img(
                     self.pred_bboxes,
@@ -521,17 +518,18 @@ class App(tk.Tk):
                     img = overlay_attention_on_image(img, attn)
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            self.imgs_bbox.append(img)
+            self.cam_imgs.append(img)
 
         # Visualize the generated images list on the figure subplots
-        for i in range(len(self.imgs)):
-            if i < 3:
-                ax = self.fig.add_subplot(self.spec[0, i])
-            else:
-                ax = self.fig.add_subplot(self.spec[2, i-3])
+        if not gen_video_bool:
+            for i in range(len(self.imgs)):
+                if i < 3:
+                    ax = self.fig.add_subplot(self.spec[0, i])
+                else:
+                    ax = self.fig.add_subplot(self.spec[2, i-3])
 
-            ax.imshow(self.imgs_bbox[self.cam_idx[i]])
-            ax.axis('off')
+                ax.imshow(self.cam_imgs[self.cam_idx[i]])
+                ax.axis('off')
         
         self.fig.tight_layout(pad=0)
         self.canvas.draw()
@@ -541,3 +539,6 @@ class App(tk.Tk):
             capture(self)
 
         print("Done.\n")
+
+        if gen_video_bool:
+            return self.cam_imgs
