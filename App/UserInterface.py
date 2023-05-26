@@ -13,7 +13,7 @@ from App.File import load_from_config, load_model
 from App.Utils import show_message, show_model_info, red_text, black_text, \
                     select_data_idx, random_data_idx, update_thr, capture, \
                     single_bbox_select, update_scores, add_separator, \
-                    select_all_bboxes, update_info_label, overlay_attention_on_image, \
+                    initialize_bboxes, update_info_label, overlay_attention_on_image, \
                     change_theme
 from PIL import Image
 import os
@@ -41,6 +41,8 @@ class App(tk.Tk):
         self.model, self.dataloader = None, None
         self.started_app = False
         self.gen_video_bool = False
+
+        self.video_length = 10
         
         # Main Tkinter menu in which all other cascade menus are added
         self.menubar = tk.Menu(self)
@@ -83,7 +85,6 @@ class App(tk.Tk):
 
         # Suffix used for saving screenshot of same model with different numbering
         self.file_suffix = 0
-        self.video_file_suffix = 0
 
         # Tkinter frame for visualizing model and GPU info
         frame = tk.Frame(self)
@@ -98,6 +99,7 @@ class App(tk.Tk):
         # Cascade menu for Data index
         dataidx_opt = tk.Menu(self.menubar)
         dataidx_opt.add_command(label=" Select data index", command=lambda: select_data_idx(self))
+        dataidx_opt.add_command(label=" Select video length", command=lambda: select_data_idx(self, length=True))
         dataidx_opt.add_command(label=" Select random data", command=lambda: random_data_idx(self))
 
         # Cascade menus for Prediction threshold
@@ -121,7 +123,7 @@ class App(tk.Tk):
         # Cascade menu for Attention layer
         layer_opt = tk.Menu(self.menubar)
         self.selected_layer = tk.IntVar()
-        self.show_all_layers= tk.BooleanVar()
+        self.show_all_layers = tk.BooleanVar()
         for i in range(self.Attention.layers):
             layer_opt.add_radiobutton(label=i, variable=self.selected_layer, command=lambda k=self: update_info_label(k))
         layer_opt.add_checkbutton(label="All", onvalue=1, offvalue=0, variable=self.show_all_layers)
@@ -190,9 +192,10 @@ class App(tk.Tk):
         # Cascade menus for object selection
         self.bbox_opt = tk.Menu(self.menubar)
         self.single_bbox = tk.BooleanVar()
+        self.select_all_bboxes = tk.BooleanVar()
         self.single_bbox.set(True)
         self.bbox_opt.add_checkbutton(label=" Single object", onvalue=1, offvalue=0, variable=self.single_bbox) 
-        self.bbox_opt.add_command(label=" Select all", command=lambda: select_all_bboxes(self))
+        self.bbox_opt.add_checkbutton(label=" Select all", onvalue=1, offvalue=0, variable=self.select_all_bboxes, command=lambda: initialize_bboxes(self))
         self.bbox_opt.add_separator()
 
         # Cascade menus for Additional options
@@ -274,8 +277,10 @@ class App(tk.Tk):
     def gen_video(self):
 
         self.gen_video_bool = True
+        self.select_all_bboxes.set(True)
+        prog_bar = mmcv.ProgressBar(self.video_length)
 
-        for i in range(self.data_idx, self.data_idx + 10):
+        for i in range(self.data_idx, self.data_idx + self.video_length):
             self.data_idx = i
             imgs = self.visualize()
 
@@ -285,15 +290,28 @@ class App(tk.Tk):
 
             img_frame = Image.fromarray((full * 255).astype(np.uint8))
 
-            path = f"video_gen/{self.model_name}_{self.selected_expl_type.get()}_{self.data_idx}"
+            path = f"video_gen/{self.model_name}_{self.selected_expl_type.get()}_{self.data_idx}.png"
 
-            if os.path.exists(path+"_"+str(self.file_suffix)+".png"):
-                self.video_file_suffix += 1
-            else:
-                self.video_file_suffix = 0
-
-            path += "_" + str(self.video_file_suffix) + ".png"
             img_frame.save(path)
+
+            prog_bar.update()
+
+        image_folder = 'video_gen'
+        video_name = 'video.avi'
+
+        images = [img for img in os.listdir(image_folder) if img.endswith(".png")]
+        frame = cv2.imread(os.path.join(image_folder, images[0]))
+        height, width, layers = frame.shape
+
+        video = cv2.VideoWriter(video_name, 0, 1, (width, height))
+
+        for image in images:
+            video.write(cv2.imread(os.path.join(image_folder, image)))
+
+        cv2.destroyAllWindows()
+        video.release()
+        
+        print("\n Video generated")
 
     def show_attention_maps(self, grid_clm=1):
         '''
@@ -442,8 +460,9 @@ class App(tk.Tk):
             self.bbox_opt.add_checkbutton(label=f" {self.class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: single_bbox_select(self, idx))
 
         # Default bbox for first visualization
-        if self.bboxes:
-            self.bboxes[0].set(True)
+        initialize_bboxes(self)
+        # if self.bboxes:
+        #     self.bboxes[0].set(True)
 
     def visualize(self):
         '''
@@ -524,16 +543,20 @@ class App(tk.Tk):
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.cam_imgs.append(img)
 
-        # Visualize the generated images list on the figure subplots
-        if not self.gen_video_bool:
-            for i in range(len(self.imgs)):
-                if i < 3:
-                    ax = self.fig.add_subplot(self.spec[0, i])
-                else:
-                    ax = self.fig.add_subplot(self.spec[2, i-3])
+        print("Done.\n")
 
-                ax.imshow(self.cam_imgs[self.cam_idx[i]])
-                ax.axis('off')
+        if self.gen_video_bool:
+            return self.cam_imgs
+
+        # Visualize the generated images list on the figure subplots
+        for i in range(len(self.imgs)):
+            if i < 3:
+                ax = self.fig.add_subplot(self.spec[0, i])
+            else:
+                ax = self.fig.add_subplot(self.spec[2, i-3])
+
+            ax.imshow(self.cam_imgs[self.cam_idx[i]])
+            ax.axis('off')
         
         self.fig.tight_layout(pad=0)
         self.canvas.draw()
@@ -542,7 +565,4 @@ class App(tk.Tk):
         if self.capture_bool.get():
             capture(self)
 
-        print("Done.\n")
 
-        if self.gen_video_bool:
-            return self.cam_imgs

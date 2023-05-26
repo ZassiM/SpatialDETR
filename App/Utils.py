@@ -44,25 +44,32 @@ def show_model_info(self, event=None):
     text.configure(state="disabled")
 
 
-def select_data_idx(self):
+def select_data_idx(self, length=False):
     popup = tk.Toplevel(self)
     popup.geometry("80x50")
 
     self.entry = tk.Entry(popup, width=20)
     self.entry.pack()
 
-    button = tk.Button(popup, text="OK", command=lambda k=self: close_entry(k, popup))
+    button = tk.Button(popup, text="OK", command=lambda k=self: close_entry(k, popup, length))
     button.pack()
 
-
-def close_entry(self, popup):
+def close_entry(self, popup, length):
     idx = self.entry.get()
-    if idx.isnumeric() and int(idx) <= (len(self.dataloader)-1):
-        self.data_idx = int(idx)
-        update_info_label(self)
-        popup.destroy()
+    if not length:
+        if idx.isnumeric() and int(idx) <= (len(self.dataloader)-1):
+            self.data_idx = int(idx)
+            update_info_label(self)
+            popup.destroy()
+        else:
+            show_message(self, f"Insert an integer between 0 and {len(self.dataloader)-1}")
     else:
-        show_message(self, f"Insert an integer between 0 and {len(self.dataloader)-1}")
+        if idx.isnumeric() and int(idx) <= ((len(self.dataloader)-1) - self.data_idx):
+            self.video_length = int(idx)
+            update_info_label(self)
+            popup.destroy()
+        else:
+            show_message(self, f"Insert an integer between 0 and {(len(self.dataloader)-1) - self.data_idx}")       
 
 
 def random_data_idx(self):
@@ -75,10 +82,12 @@ def update_info_label(self, info=None):
     idx = self.data_idx
     if info is None:
         info = f"Model: {self.model_name} | Dataloader: {self.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
-        if self.selected_camera.get() != -1 and self.selected_layer.get() != -1:
+        if self.selected_camera.get() != -1 and not self.show_all_layers.get():
             info += f" | Camera {list(self.cameras.keys())[self.selected_camera.get()]} | Layer {self.selected_layer.get()}"
             if self.selected_expl_type.get() == "Attention Rollout":
                 info += f'| {self.selected_head_fusion.get().capitalize()} Head fusion'
+        if hasattr(self, "video_length"):
+            info += f'| Video lenght: {self.video_length}'
     self.info_text.set(info)
 
 
@@ -94,17 +103,20 @@ def single_bbox_select(self, idx):
                 self.bboxes[i].set(False)
 
 
-def select_all_bboxes(self):
+def initialize_bboxes(self):
     if hasattr(self, "bboxes"):
-        for i in range(len(self.bboxes)):
-            self.bboxes[i].set(True)
+        if self.select_all_bboxes.get():
+            for i in range(len(self.bboxes)):
+                self.bboxes[i].set(True)
+        else:
+            self.bboxes[0].set(True)
 
 
 def update_scores(self):
     all_attentions = self.Attention.get_all_attn(self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
     scores = []
     self.scores_perc = []
-    if self.selected_layer.get() == -1:
+    if self.show_all_layers.get():
         for layer in range(self.Attention.layers):
             attn = all_attentions[layer][self.selected_camera.get()]
             score = round(attn.sum().item(), 2)
