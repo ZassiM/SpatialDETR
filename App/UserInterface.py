@@ -46,7 +46,7 @@ class App(tk.Tk):
         self.tk.call("set_theme", "light")
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
-        self.canvas, self.video_canvas, self.fig, self.spec = None, None, None, None
+        self.canvas, self.fig, self.spec = None, None, None
 
         # Model and dataloader objects
         self.model, self.dataloader = None, None
@@ -240,55 +240,25 @@ class App(tk.Tk):
         self.fig = plt.figure()
         self.spec = self.fig.add_gridspec(3, 3)
         self.video_spec = self.fig.add_gridspec(2, 3)
+        self.single_object_spec = self.fig.add_gridspec(3, 2)
+        
         self.spec.update(wspace=0, hspace=0)
         self.video_spec.update(wspace=0, hspace=0)
         # Create canvas with the figure embedded in it, and update it after each visualization
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
-        #self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-    def extract_data(self):
-
-        data = self.dataloader.dataset[self.data_idx]
-        metas = [[data['img_metas'][0].data]]
-        img = [data['img'][0].data.unsqueeze(0)]
-        data['img_metas'][0] = DC(metas, cpu_only=True)
-        data['img'][0] = DC(img)
-
-        with torch.no_grad():
-            outputs = self.model(return_loss=False, rescale=True, **data)
-            
-        # 0=CAMFRONT, 1=CAMFRONTRIGHT, 2=CAMFRONTLEFT, 3=CAMBACK, 4=CAMBACKLEFT, 5=CAMBACKRIGHT
-        score_thr = 0.5
-        
-        inds = outputs[0]["pts_bbox"]['scores_3d'] > score_thr      
-        pred_bboxes = outputs[0]["pts_bbox"]["boxes_3d"][inds]
-        img_metas = data["img_metas"][0]._data[0][0]
-
-        imgs = data["img"][0]._data[0].numpy()[0]
-                
-        imgs = imgs.transpose(0, 2, 3, 1)[:, :900, :, :]
-        mean = np.array(self.img_norm_cfg["mean"], dtype=np.float32)
-        std = np.array(self.img_norm_cfg["std"], dtype=np.float32)
-        for i in range(len(imgs)):
-            imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
-
-        self.imgs = imgs
-        self.pred_bboxes = pred_bboxes
-        self.img_metas = img_metas
 
     def gen_video(self):
+        self.fig.clear()
         
-        if self.video_canvas is None:
-            self.video_canvas = FigureCanvasTkAgg(self.fig, master=self)
-            self.video_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-
-            #self.menubar.delete(0, 'end' - 1)
+        if not self.gen_video_bool:
             self.menubar.add_command(label="Pause/Resume", command=self.pause_resume)
             self.menubar.add_command(label="Restart", command=self.restart)
 
         self.gen_video_bool = True
         self.select_all_bboxes.set(True)
-        self.img_frames = []
+        self.img_frames, self.og_imgs_frames, self.bbox_coords = [], [], []
 
         self.paused = False
 
@@ -297,17 +267,11 @@ class App(tk.Tk):
         blockPrint()
 
         for i in range(self.data_idx, self.data_idx + self.video_length):
-
             self.data_idx = i
-
-            imgs = self.visualize()
-
-            # hori = np.concatenate((imgs[2], imgs[0], imgs[1]), axis=1)
-            # ver = np.concatenate((imgs[5], imgs[3], imgs[4]), axis=1)
-            # full = np.concatenate((hori, ver), axis=0)
-
+            imgs, imgs_og, bbox_coord = self.visualize()
             self.img_frames.append(imgs)
-
+            self.og_imgs_frames.append(imgs_og)
+            self.bbox_coords.append(bbox_coord)
             prog_bar.update()
 
         enablePrint()
@@ -326,28 +290,62 @@ class App(tk.Tk):
 
         if not self.paused:
             update_info_label(self, idx=self.data_idx + self.idx_video)
+            self.img_frame = self.img_frames[self.idx_video]
 
-            img_frame = self.img_frames[self.idx_video]
-
-            for i in range(len(img_frame)):
+            for i in range(len(self.img_frame)):
                 if i < 3:
                     ax = self.fig.add_subplot(self.video_spec[0, i])
                 else:
                     ax = self.fig.add_subplot(self.video_spec[1, i-3])
-
-                ax.imshow(img_frame[self.cam_idx[i]])
+                ax.imshow(self.img_frame[self.cam_idx[i]])
                 ax.axis('off')
             
             self.fig.tight_layout(pad=0)
-            self.video_canvas.draw()
-
+            self.canvas.draw()
             self.idx_video += 1
-
             if self.idx_video < self.video_length:
                 self.after(1, self.show_sequence)
             else:
                 print("\nEnd\n")
-                self.gen_video = False
+                self.gen_video_bool = False
+            
+        else:
+            self.after(1, self.show_att_maps_object)
+                
+    def get_single_object(self):
+        ciao = 0
+        
+    def show_att_maps_object(self):
+        
+        self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
+
+        if len(self.bbox_idx) == 1:
+            og_img_frame = self.og_imgs_frames[self.idx_video]
+            bbox_coord = self.bbox_coords[self.idx_video]
+        
+            self.fig.clear()
+            img_single_obj = get_single_object(og_img_frame, self.bbox_coords[self.bbox_idx])
+
+            all_expl = []
+            for expl_type in self.expl_options:
+                attn = self.Attention.generate_explainability(expl_type, self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
+                img_single_attn = attn.crop(coord)
+                all_expl.append(img_single_attn)
+            
+            for i in range(len(all_expl)):
+
+                ax_img = self.fig.add_subplot(self.single_object_spec[i, 0])
+                ax_attn = self.fig.add_subplot(self.single_object_spec[i, 1])
+
+                ax_img.imshow(img_single_obj)
+                ax_attn.imshow(all_expl[i])
+                ax_img.axis('off')
+                ax_attn.axis("off")
+            
+            self.fig.tight_layout(pad=0)
+            self.canvas.draw()
+        
+        self.after(1, self.show_att_maps_object)
         
 
     def pause_resume(self):
@@ -555,8 +553,10 @@ class App(tk.Tk):
         # Generate images list with bboxes on it
         print("Generating camera images...")
         self.cam_imgs = []
+        og_imgs = [] # Used for video generation
+        bbox_coords = []
         for camidx in range(len(self.imgs)):
-            img = draw_lidar_bbox3d_on_img(
+            img, coord = draw_lidar_bbox3d_on_img(
                     self.pred_bboxes,
                     self.imgs[camidx],
                     self.img_metas['lidar2img'][camidx],
@@ -566,9 +566,13 @@ class App(tk.Tk):
                     all_bbx=self.BB_bool.get(),
                     bbx_idx=self.bbox_idx,
                     mode_2d=self.bbox_2d.get())  
+            
+            og_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            og_imgs.append(og_img)
+            bbox_coords.append(coord)
 
             if self.GT_bool.get():
-                img = draw_lidar_bbox3d_on_img(
+                img, _ = draw_lidar_bbox3d_on_img(
                         self.gt_bbox,
                         img,
                         self.img_metas['lidar2img'][camidx],
@@ -593,7 +597,7 @@ class App(tk.Tk):
         print("Done.\n")
 
         if self.gen_video_bool:
-            return self.cam_imgs
+            return self.cam_imgs, og_imgs, bbox_coords
 
         # Visualize the generated images list on the figure subplots
         for i in range(len(self.imgs)):
