@@ -23,12 +23,11 @@ class App(tk.Tk):
     '''
     Application User Interface
     '''
-    def __init__(self, usermode="dev"):
+    def __init__(self):
         '''
         Tkinter initialization with model loading option.
         '''
         super().__init__()
-        self.usermode = usermode
 
         # Tkinter-related settings
         self.tk.call("source", "theme/azure.tcl")
@@ -65,17 +64,8 @@ class App(tk.Tk):
         # Speeding up the testing
         load_from_config(self)
 
+
     def start_app(self):
-        if self.usermode == "dev":
-            self.start_app_dev()
-        elif self.usermode == "user":
-            self.start_app_usr()
-
-    def start_app_usr(self):
-        # TBD: User-mode application with pre-defined settings and continuous prediction with live XAI visualization
-        tbd = 1
-
-    def start_app_dev(self):
         '''
         It starts the UI after loading the model. Variables are initialized.
         '''
@@ -323,6 +313,7 @@ class App(tk.Tk):
 
         if self.selected_expl_type.get() == "Gradient Rollout":
             self.update_data()
+            self.show_all_layers.set(False)
 
         # Explainable attention maps generation
         for i in range(6):
@@ -451,18 +442,18 @@ class App(tk.Tk):
         self.img_metas = self.data["img_metas"][0]._data[0][0]
 
         # Update the Bounding box menu with the predicted labels
-        self.bboxes = []
-        self.bbox_opt.delete(3, 'end')
-        for i in range(len(self.thr_idxs.nonzero())):
-            view_bbox = tk.BooleanVar()
-            view_bbox.set(False)
-            self.bboxes.append(view_bbox)
-            self.bbox_opt.add_checkbutton(label=f" {self.class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: single_bbox_select(self, idx))
+        if self.old_data_idx != self.data_idx or self.old_thr != self.selected_threshold.get() or self.new_model:
+            self.bboxes = []
+            self.bbox_opt.delete(3, 'end')
+            for i in range(len(self.thr_idxs.nonzero())):
+                view_bbox = tk.BooleanVar()
+                view_bbox.set(False)
+                self.bboxes.append(view_bbox)
+                self.bbox_opt.add_checkbutton(label=f" {self.class_names[self.labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: single_bbox_select(self, idx))
 
-        # Default bbox for first visualization
-        initialize_bboxes(self)
-        # if self.bboxes:
-        #     self.bboxes[0].set(True)
+            # BBoxes initialization
+            initialize_bboxes(self)
+
 
     def visualize(self):
         '''
