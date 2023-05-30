@@ -239,7 +239,9 @@ class App(tk.Tk):
         # Create figure with a 3x3 grid
         self.fig = plt.figure()
         self.spec = self.fig.add_gridspec(3, 3)
+        self.video_spec = self.fig.add_gridspec(2, 3)
         self.spec.update(wspace=0, hspace=0)
+        self.video_spec.update(wspace=0, hspace=0)
         # Create canvas with the figure embedded in it, and update it after each visualization
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
         #self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
@@ -277,13 +279,12 @@ class App(tk.Tk):
     def gen_video(self):
         
         if self.video_canvas is None:
-            self.video_canvas = tk.Canvas(self)
-            self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+            self.video_canvas = FigureCanvasTkAgg(self.fig, master=self)
+            self.video_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
             #self.menubar.delete(0, 'end' - 1)
             self.menubar.add_command(label="Pause/Resume", command=self.pause_resume)
             self.menubar.add_command(label="Restart", command=self.restart)
-
-        self.thsObj = self.video_canvas.create_image(0, 0, anchor='nw', image=None)
 
         self.gen_video_bool = True
         self.select_all_bboxes.set(True)
@@ -301,41 +302,53 @@ class App(tk.Tk):
 
             imgs = self.visualize()
 
-            hori = np.concatenate((imgs[2], imgs[0], imgs[1]), axis=1)
-            ver = np.concatenate((imgs[5], imgs[3], imgs[4]), axis=1)
-            full = np.concatenate((hori, ver), axis=0)
+            # hori = np.concatenate((imgs[2], imgs[0], imgs[1]), axis=1)
+            # ver = np.concatenate((imgs[5], imgs[3], imgs[4]), axis=1)
+            # full = np.concatenate((hori, ver), axis=0)
 
-            self.img_frames.append(full)
+            self.img_frames.append(imgs)
 
             prog_bar.update()
 
         enablePrint()
+
         self.idx_video = 0
         self.data_idx -= self.video_length
-        self.after("idle", self.snapS)
+        self.after("idle", self.show_sequence)
 
     def restart(self):
         self.idx_video = 0
         self.paused = False
-        self.snapS()
+        self.show_sequence()
 
-    def snapS(self):
-        
+    def show_sequence(self):
+        self.fig.clear()
+
         if not self.paused:
             update_info_label(self, idx=self.data_idx + self.idx_video)
 
             img_frame = self.img_frames[self.idx_video]
 
-            w, h = self.video_canvas.winfo_width(), self.video_canvas.winfo_height()
-            self.image = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((w, h)))
-            self.video_canvas.itemconfig(self.thsObj, image=self.image)
+            for i in range(len(img_frame)):
+                if i < 3:
+                    ax = self.fig.add_subplot(self.video_spec[0, i])
+                else:
+                    ax = self.fig.add_subplot(self.video_spec[1, i-3])
+
+                ax.imshow(img_frame[self.cam_idx[i]])
+                ax.axis('off')
+            
+            self.fig.tight_layout(pad=0)
+            self.video_canvas.draw()
 
             self.idx_video += 1
 
             if self.idx_video < self.video_length:
-                self.after(1, self.snapS)
+                self.after(1, self.show_sequence)
             else:
                 print("\nEnd\n")
+                self.gen_video = False
+        
 
     def pause_resume(self):
         if not self.paused:
@@ -343,7 +356,7 @@ class App(tk.Tk):
             self.paused = True
         else:
             self.paused = False
-            self.after(1, self.snapS)
+            self.after(1, self.show_sequence)
 
 
     def show_attention_maps(self, grid_clm=1):
