@@ -15,8 +15,20 @@ from App.Utils import show_message, show_model_info, red_text, black_text, \
                     single_bbox_select, update_scores, add_separator, \
                     initialize_bboxes, update_info_label, overlay_attention_on_image, \
                     change_theme
-from PIL import Image
+
+from PIL import Image, ImageTk
+import sys
 import os
+
+
+# Disable
+def blockPrint():
+    sys.stdout = open(os.devnull, 'w')
+
+
+# Restore
+def enablePrint():
+    sys.stdout = sys.__stdout__
 
 
 class App(tk.Tk):
@@ -34,13 +46,12 @@ class App(tk.Tk):
         self.tk.call("set_theme", "light")
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
-        self.canvas, self.fig, self.spec = None, None, None
+        self.canvas, self.video_canvas, self.fig, self.spec = None, None, None, None
 
         # Model and dataloader objects
         self.model, self.dataloader = None, None
         self.started_app = False
         self.gen_video_bool = False
-
         self.video_length = 10
         
         # Main Tkinter menu in which all other cascade menus are added
@@ -63,7 +74,6 @@ class App(tk.Tk):
 
         # Speeding up the testing
         load_from_config(self)
-
 
     def start_app(self):
         '''
@@ -208,23 +218,23 @@ class App(tk.Tk):
 
         # Adding all cascade menus ro the main menubar menu
         add_separator(self)
-        self.menubar.add_cascade(label=" Data", menu=dataidx_opt)
+        self.menubar.add_cascade(label="Data", menu=dataidx_opt)
         add_separator(self)
-        self.menubar.add_cascade(label=" Prediction threshold", menu=thr_opt)
+        self.menubar.add_cascade(label="Prediction threshold", menu=thr_opt)
         add_separator(self)
-        self.menubar.add_cascade(label=" Camera", menu=camera_opt)
+        self.menubar.add_cascade(label="Camera", menu=camera_opt)
         add_separator(self)
-        self.menubar.add_cascade(label=" Objects", menu=self.bbox_opt)
+        self.menubar.add_cascade(label="Objects", menu=self.bbox_opt)
         add_separator(self)
-        self.menubar.add_cascade(label=" Layer", menu=layer_opt)
+        self.menubar.add_cascade(label="Layer", menu=layer_opt)
         add_separator(self)
-        self.menubar.add_cascade(label=" Explainability", menu=expl_opt)
+        self.menubar.add_cascade(label="Explainability", menu=expl_opt)
         add_separator(self)
-        self.menubar.add_cascade(label=" Options", menu=add_opt)
+        self.menubar.add_cascade(label="Options", menu=add_opt)
         add_separator(self, "|")
-        self.menubar.add_command(label=" Visualize", command=self.visualize)
+        self.menubar.add_command(label="Visualize", command=self.visualize)
         add_separator(self, "|")
-        self.menubar.add_command(label=" Generate video", command=self.gen_video)
+        self.menubar.add_command(label="Generate video", command=self.gen_video)
 
         # Create figure with a 3x3 grid
         self.fig = plt.figure()
@@ -232,7 +242,7 @@ class App(tk.Tk):
         self.spec.update(wspace=0, hspace=0)
         # Create canvas with the figure embedded in it, and update it after each visualization
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        #self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
     def extract_data(self):
 
@@ -265,43 +275,76 @@ class App(tk.Tk):
         self.img_metas = img_metas
 
     def gen_video(self):
+        
+        if self.video_canvas is None:
+            self.video_canvas = tk.Canvas(self)
+            self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+            #self.menubar.delete(0, 'end' - 1)
+            self.menubar.add_command(label="Pause/Resume", command=self.pause_resume)
+            self.menubar.add_command(label="Restart", command=self.restart)
+
+        self.thsObj = self.video_canvas.create_image(0, 0, anchor='nw', image=None)
 
         self.gen_video_bool = True
         self.select_all_bboxes.set(True)
+        self.img_frames = []
+
+        self.paused = False
+
+        print("\nGenerating image frames...\n")
         prog_bar = mmcv.ProgressBar(self.video_length)
+        blockPrint()
 
         for i in range(self.data_idx, self.data_idx + self.video_length):
+
             self.data_idx = i
+
             imgs = self.visualize()
 
             hori = np.concatenate((imgs[2], imgs[0], imgs[1]), axis=1)
-            ver = np.concatenate((imgs[5], imgs[3], imgs[4]), axis=1)  
+            ver = np.concatenate((imgs[5], imgs[3], imgs[4]), axis=1)
             full = np.concatenate((hori, ver), axis=0)
 
-            img_frame = Image.fromarray((full * 255).astype(np.uint8))
-
-            path = f"video_gen/{self.model_name}_{self.selected_expl_type.get()}_{self.data_idx}.png"
-
-            img_frame.save(path)
+            self.img_frames.append(full)
 
             prog_bar.update()
 
-        image_folder = 'video_gen'
-        video_name = 'video.avi'
+        enablePrint()
+        self.idx_video = 0
+        self.data_idx -= self.video_length
+        self.after("idle", self.snapS)
 
-        images = [img for img in os.listdir(image_folder) if img.endswith(".png")]
-        frame = cv2.imread(os.path.join(image_folder, images[0]))
-        height, width, layers = frame.shape
+    def restart(self):
+        self.idx_video = 0
+        self.paused = False
+        self.snapS()
 
-        video = cv2.VideoWriter(video_name, 0, 1, (width, height))
-
-        for image in images:
-            video.write(cv2.imread(os.path.join(image_folder, image)))
-
-        cv2.destroyAllWindows()
-        video.release()
+    def snapS(self):
         
-        print("\n Video generated")
+        if not self.paused:
+            update_info_label(self, idx=self.data_idx + self.idx_video)
+
+            img_frame = self.img_frames[self.idx_video]
+
+            w, h = self.video_canvas.winfo_width(), self.video_canvas.winfo_height()
+            self.image = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((w, h)))
+            self.video_canvas.itemconfig(self.thsObj, image=self.image)
+
+            self.idx_video += 1
+
+            if self.idx_video < self.video_length:
+                self.after(1, self.snapS)
+            else:
+                print("\nEnd\n")
+
+    def pause_resume(self):
+        if not self.paused:
+            print(f"\nPaused at idx {self.data_idx}.\n")
+            self.paused = True
+        else:
+            self.paused = False
+            self.after(1, self.snapS)
+
 
     def show_attention_maps(self, grid_clm=1):
         '''

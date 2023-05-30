@@ -78,8 +78,9 @@ def random_data_idx(self):
     update_info_label(self)
 
 
-def update_info_label(self, info=None):
-    idx = self.data_idx
+def update_info_label(self, info=None, idx=None):
+    if idx is None:
+        idx = self.data_idx
     if info is None:
         info = f"Model: {self.model_name} | Dataloader: {self.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
         if self.selected_camera.get() != -1 and not self.show_all_layers.get():

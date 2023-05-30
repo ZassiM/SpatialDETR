@@ -220,6 +220,7 @@ class Attention:
             # TO-DO
 
         attention_map = self.R_q_i[indexes[bbox_idx]].detach()
-        attention_map = attention_map.max(dim=0)[0]
+        if attention_map.shape[0] > 0:
+            attention_map = attention_map.max(dim=0)[0]
 
         return attention_map
