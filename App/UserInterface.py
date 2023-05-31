@@ -241,66 +241,90 @@ class App(tk.Tk):
 
     def evaluate_expl(self):
         print(f"Evaluating {self.selected_expl_type.get()}...")
-        discard_ratio = 0.1
-        bbox_idx = [0]
-        initial_idx = 200
-        len_dataset = 20
-        mask = torch.zeros(3)
-        prog_bar = mmcv.ProgressBar(len_dataset)
-        
-        for i in range(initial_idx, initial_idx + len_dataset):
-            self.fig.clear()
 
+        bbox_idx = [0]
+        initial_idx = 500
+        evaluation_lenght = 20
+        num_tokens = int(0.5 * 1450)
+        outputs_pert = []
+        dataset = self.dataloader.dataset
+        prog_bar = mmcv.ProgressBar(evaluation_lenght)
+
+        for i in range(initial_idx, initial_idx + evaluation_lenght):
             data = self.dataloader.dataset[i]
             metas = [[data['img_metas'][0].data]]
-            img = [data['img'][0].data.unsqueeze(0)]
+            img = [data['img'][0].data.unsqueeze(0)] # img[0] = torch.Size([1, 6, 3, 928, 1600])
             data['img_metas'][0] = DC(metas, cpu_only=True)
             data['img'][0] = DC(img)
 
             # Attention scores are extracted, together with gradients if grad-CAM is selected
             if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
-                outputs = self.Attention.extract_attentions(data)
+                self.Attention.extract_attentions(data)
+            else:
+                self.Attention.extract_attentions(data, bbox_idx)
 
-            self.nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes()
+            nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes()
+
+            attn_list = []
+            topk_list = []
             
-            attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
+            for camidx in range(6):
+                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), bbox_idx, nms_idxs, camidx, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
+                attn = attn.view(1, 1, 29, 50)
+                attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
+                attn = attn.view(attn.shape[2], attn.shape[3]).cpu()
+                attn_list.append(attn)
 
-            attn = attn.view(1, 1, 29, 50)
-            attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
-            attn = attn.view(attn.shape[2], attn.shape[3]).cpu()
-            _, indices = torch.topk(attn.flatten(), int(1450*discard_ratio))
-            indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
+            attn_max = np.max(np.concatenate(attn_list))
+            for i in range(len(attn_list)):
+                attn = attn_list[i]
+                attn /= attn_max
+                _, indices = torch.topk(attn.flatten(), k=num_tokens)
+                indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
+                topk_list.append(indices)
 
             # Mask input image
-            img = img[0][0][self.selected_camera.get()].permute(1, 2, 0)
-            img_pert = img
-            for idx in indices:
-                img_pert[idx[0], idx[1]] = mask
+            img_og_list = []
+            img_pert_list = []
 
-            # data['img'][0] = DC(img_pert)
-            # outputs_perturbed = self.Attention.extract_attentions(data)
+            # Denormalization is needed, because data is normalized 
+            img = img[0][0]
+            for i in range(len(img)):
+                img_og = img[i].permute(1, 2, 0)
+                img_og_list.append(img_og)
+                img_pert = img_og.clone()
+                for idx in topk_list[i]:
+                    img_pert[idx[0], idx[1]] = 0
+                img_pert_list.append(img_pert.permute(2, 0, 1))
 
-            ax_og = self.fig.add_subplot(self.spec[0, 0])
-            ax_pert = self.fig.add_subplot(self.spec[1, 0])
-            ax_att = self.fig.add_subplot(self.spec[2, 0])
+            # Modify input data for second forward
+            # img_pert_list = 6x(928, 1600, 3)
+            img = [torch.stack((img_pert_list)).unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
+            data['img'][0] = DC(img)
+            output = self.model(return_loss=False, rescale=True, **data)
 
-            mean = np.array(self.img_norm_cfg["mean"], dtype=np.float32)
-            std = np.array(self.img_norm_cfg["std"], dtype=np.float32)
+            for pred in output[0]["pts_bbox"]:
+                output[0]["pts_bbox"][pred].tensor = output[0]["pts_bbox"][pred].tensor.cpu()
 
-            img = mmcv.imdenormalize(img.numpy(), mean, std, to_bgr=False)
-            img_pert = mmcv.imdenormalize(img_pert.numpy(), mean, std, to_bgr=False)
-
-            ax_og.imshow(img.astype(np.uint8))
-            ax_pert.imshow(img_pert.astype(np.uint8))
-            ax_att.imshow(attn)
-        
-            self.fig.tight_layout()
-            self.canvas.draw()
+            outputs_pert.extend(output)
+            torch.cuda.empty_cache()
 
             prog_bar.update()
-            
-            
+        
+        print("\nCompleted.\n")
 
+        kwargs = {}
+        eval_kwargs = self.cfg.get('evaluation', {}).copy()
+        # hard-code way to remove EvalHook args
+        for key in [
+                'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
+                'rule'
+        ]:
+            eval_kwargs.pop(key, None)
+        eval_kwargs.update(dict(metric="bbox", **kwargs))
+        print(dataset.evaluate(outputs_pert, **eval_kwargs))
+            
+            
     def gen_video(self):
         self.fig.clear()
         
@@ -450,12 +474,13 @@ class App(tk.Tk):
         print("Generating attention maps...")
         # List to which attention maps are appended
         self.attn_list = []
-
+        self.topk_idx = []
         if self.selected_expl_type.get() == "Gradient Rollout":
             self.update_data()
             self.show_all_layers.set(False)
         
-
+        pert_steps = [0, 0.25, 0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 1]
+        step = pert_steps[1]
         # Explainable attention maps generation
         for i in range(6):
             # All cameras option
@@ -471,13 +496,14 @@ class App(tk.Tk):
                 attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
 
             attn = attn.view(1, 1, 29, 50)
+            attn[:, :, :, 0] = 0
+            attn[:, :, :, -1] = 0
             attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
             attn = attn.view(attn.shape[2], attn.shape[3]).cpu()
             attn = attn[:900, :]
 
-            # step = pert_steps[1]
-            # curr_num_boxes = int(step * attn.size(-2) * attn.size(-1))
-            # _, indices = torch.topk(attn.flatten(), k=curr_num_boxes)
+            # num_tokens = int(step * attn.size(-2) * attn.size(-1))
+            # _, indices = torch.topk(attn.flatten(), k=num_tokens)
             # indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
             # self.topk_idx.append(indices)
 
@@ -499,8 +525,6 @@ class App(tk.Tk):
 
         # View attention maps
         if not self.gen_video_bool:
-            self.topk_idx = []
-            pert_steps = [0, 0.25, 0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 1]
             for i in range(len(self.attn_list)):
                 if self.show_all_layers.get() or self.selected_camera.get() == -1:
                     ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
@@ -514,6 +538,7 @@ class App(tk.Tk):
                 
                 ax_attn.axis('off')
 
+
                 # Attention map normalization
                 if self.selected_camera.get() == -1:
                     attn /= attn_max
@@ -522,14 +547,6 @@ class App(tk.Tk):
                     attn -= attn.min()
                     attn /= attn.max()
                     attmap = ax_attn.imshow(attn)
-
-                step = pert_steps[1]
-                attn = torch.from_numpy(attn)
-                curr_num_boxes = int(step * attn.size(-2) * attn.size(-1))
-                _, indices = torch.topk(attn.flatten(), k=curr_num_boxes)
-                indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
-                self.topk_idx.append(indices)
-                attn = attn.numpy()
 
                 # Visualize attention bar scale if option is selected
                 if self.show_scale.get():  
@@ -696,10 +713,19 @@ class App(tk.Tk):
                 if (self.selected_camera.get() != -1 and camidx == self.selected_camera.get()) or (self.selected_camera.get() == -1):
                     img = overlay_attention_on_image(img, attn)
 
-            if self.selected_camera.get() == -1:
-                topk = self.topk_idx[camidx]
-            elif self.show_all_layers.get():
-                topk = self.topk_idx[self.selected_layer.get()]
+            num_tokens = int(0.5 * 1450)
+            _, indices = torch.topk(torch.from_numpy(attn).flatten(), k=num_tokens)
+            indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
+
+            # if self.selected_camera.get() == -1:
+            #     topk = self.topk_idx[camidx]
+            # elif self.show_all_layers.get():
+            #     topk = self.topk_idx[self.selected_layer.get()]
+            # else:
+            #     topk = topk[0]
+
+            for idx in indices:
+                img[idx[0], idx[1]] = 0
 
             # img = torch.from_numpy(img.reshape(org_shape[0], org_shape[1], -1))
             # img = img.scatter_(-1, topk, 0)
@@ -708,14 +734,12 @@ class App(tk.Tk):
             # []
             # # scatter assigns zeros to 
             # img = img.reshape(*org_shape).numpy()
-            img_t = torch.from_numpy(img)
-            mask = torch.ones_like(img_t)
-            for idx in topk:
-                mask[idx[0], idx[1]] = 0
+            # img_t = torch.from_numpy(img)
+            # for idx in topk:
+            #     img_t[idx[0], idx[1]] = 0
 
-            img_masked = img_t * mask
-            img = cv2.cvtColor(img_masked.numpy(), cv2.COLOR_BGR2RGB)
-            #img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            # img = cv2.cvtColor(img_t.numpy(), cv2.COLOR_BGR2RGB)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.cam_imgs.append(img)
 
         print("Done.\n")

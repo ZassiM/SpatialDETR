@@ -94,7 +94,7 @@ def init_app(args):
         # segmentation dataset has `PALETTE` attribute
         model.PALETTE = dataset.PALETTE
     
-    return model, data_loader, img_norm_cfg
+    return model, data_loader, img_norm_cfg, cfg
 
 
 
