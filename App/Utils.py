@@ -87,8 +87,6 @@ def update_info_label(self, info=None, idx=None):
             info += f" | Camera {list(self.cameras.keys())[self.selected_camera.get()]} | Layer {self.selected_layer.get()}"
             if self.selected_expl_type.get() == "Attention Rollout":
                 info += f'| {self.selected_head_fusion.get().capitalize()} Head fusion'
-        if hasattr(self, "video_length"):
-            info += f'| Video lenght: {self.video_length}'
     self.info_text.set(info)
 
 

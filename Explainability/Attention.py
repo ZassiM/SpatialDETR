@@ -8,10 +8,12 @@ def avg_heads(attn, head_fusion="min", discard_ratio=0.9):
     elif head_fusion == "min":
         attn = attn.min(dim=0)[0]
 
-    flat = attn.view(attn.size(0), -1)
-    _, indices = flat.topk(int(attn.size(-1)*discard_ratio), -1, False)
-    for i in range(len(indices)):
-        flat[i, indices[i]] = 0
+    flat = attn.view(-1)
+    _, indices = flat.topk(int(flat.size(-1)*discard_ratio), -1, False)
+    indices = indices[indices != 0]
+    flat[indices] = 0
+    # for i in range(len(indices)):
+    #     flat[i, indices[i]] = 0
     return attn
 
 # rule 5 from paper
