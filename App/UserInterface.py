@@ -52,7 +52,7 @@ class App(tk.Tk):
         self.model, self.dataloader = None, None
         self.started_app = False
         self.gen_video_bool = False
-        self.video_length = 5
+        self.video_length = 10
         
         # Main Tkinter menu in which all other cascade menus are added
         self.menubar = tk.Menu(self)
@@ -301,10 +301,8 @@ class App(tk.Tk):
             # img_pert_list = 6x(928, 1600, 3)
             img = [torch.stack((img_pert_list)).unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
             data['img'][0] = DC(img)
-            output = self.model(return_loss=False, rescale=True, **data)
-
-            for pred in output[0]["pts_bbox"]:
-                output[0]["pts_bbox"][pred].tensor = output[0]["pts_bbox"][pred].tensor.cpu()
+            with torch.no_grad():
+                output = self.model(return_loss=False, rescale=True, **data)
 
             outputs_pert.extend(output)
             torch.cuda.empty_cache()
@@ -323,11 +321,10 @@ class App(tk.Tk):
             eval_kwargs.pop(key, None)
         eval_kwargs.update(dict(metric="bbox", **kwargs))
         print(dataset.evaluate(outputs_pert, **eval_kwargs))
-            
-            
+
     def gen_video(self):
-        self.fig.clear()
-        
+
+        self.canvas.get_tk_widget().pack_forget()
         if self.video_canvas is None:
             self.video_canvas = tk.Canvas(self)
             self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
@@ -346,8 +343,8 @@ class App(tk.Tk):
         prog_bar = mmcv.ProgressBar(self.video_length)
         blockPrint()
 
+        #expl_options = ["Attention Rollout", "Grad-CAM", "Gradient Rollout"]
         expl_options = ["Attention Rollout"]
-
         for i in range(self.data_idx, self.data_idx + self.video_length):
             self.data_idx = i
             expl_object = []
@@ -410,14 +407,14 @@ class App(tk.Tk):
                 self.bbox_opt.add_checkbutton(label=f" {self.class_names[labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: single_bbox_select(self, idx))
             
             self.after(1, self.show_att_maps_object)
-               
+
     def show_att_maps_object(self):
 
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
         if len(self.bbox_idx) == 1:
             self.bbox_idx = self.bbox_idx[0]
-            self.video_canvas.destroy()
+            self.video_canvas.pack_forget()
             self.fig.clear()
             self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
@@ -432,10 +429,10 @@ class App(tk.Tk):
                         break
 
             og_img_frame = self.og_imgs_frames[self.idx_video-1][camidx]
-            
             img_single_obj = og_img_frame[bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
-
-            all_expl = self.img_frames_overlayed[self.idx_video]
+            all_expl = self.img_frames_overlayed[self.idx_video-1]
+            
+            labels = self.bbox_labels[self.idx_video-1]
             for i in range(len(all_expl)):
                 attn = all_expl[i][camidx][bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
 
@@ -444,7 +441,7 @@ class App(tk.Tk):
 
                 ax_img.imshow(img_single_obj)
                 ax_attn.imshow(attn)
-                ax_img.set_title(f"{self.class_names[self.bbox_idx].capitalize()} ({self.bbox_idx})")
+                ax_img.set_title(f"{self.class_names[labels[self.bbox_idx]].capitalize()}")
                 ax_attn.set_title(f"{self.expl_options[i]}")
                 ax_img.axis('off')
                 ax_attn.axis("off")
@@ -453,7 +450,7 @@ class App(tk.Tk):
             self.canvas.draw()
         
         self.after(1, self.show_att_maps_object)
-        
+
     def pause_resume(self):
         if not self.paused:
             print(f"\nPaused at idx {self.data_idx + self.idx_video - 1}.\n")
@@ -461,7 +458,7 @@ class App(tk.Tk):
         else:
             self.paused = False
             if not self.video_canvas:
-                self.canvas.destroy()
+                self.canvas.get_tk_widget().pack_forget()
                 self.video_canvas = tk.Canvas(self)
                 self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
                 self.thsObj = self.video_canvas.create_image(0, 0, anchor='nw', image=None)
@@ -673,9 +670,9 @@ class App(tk.Tk):
         print("Generating camera images...")
         self.cam_imgs = []
         og_imgs, bbox_cameras = [], []  # Used for video generation
-        mask = np.zeros((3), dtype=np.uint8)
-        org_shape = [900, 1600]
+
         for camidx in range(len(self.imgs)):
+
             img, bbox_camera = draw_lidar_bbox3d_on_img(
                     self.pred_bboxes,
                     self.imgs[camidx],
@@ -690,7 +687,6 @@ class App(tk.Tk):
             
             og_img = cv2.cvtColor(self.imgs[camidx], cv2.COLOR_BGR2RGB)
             og_imgs.append(og_img)
-
             bbox_cameras.append(bbox_camera)
 
             if self.GT_bool.get():
@@ -701,6 +697,7 @@ class App(tk.Tk):
                         self.img_metas,
                         color=(255, 0, 0),
                         mode_2d=self.bbox_2d.get())
+            
 
             if self.overlay_bool.get():
                 if self.selected_camera.get() == -1:
@@ -713,32 +710,6 @@ class App(tk.Tk):
                 if (self.selected_camera.get() != -1 and camidx == self.selected_camera.get()) or (self.selected_camera.get() == -1):
                     img = overlay_attention_on_image(img, attn)
 
-            num_tokens = int(0.5 * 1450)
-            _, indices = torch.topk(torch.from_numpy(attn).flatten(), k=num_tokens)
-            indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
-
-            # if self.selected_camera.get() == -1:
-            #     topk = self.topk_idx[camidx]
-            # elif self.show_all_layers.get():
-            #     topk = self.topk_idx[self.selected_layer.get()]
-            # else:
-            #     topk = topk[0]
-
-            for idx in indices:
-                img[idx[0], idx[1]] = 0
-
-            # img = torch.from_numpy(img.reshape(org_shape[0], org_shape[1], -1))
-            # img = img.scatter_(-1, topk, 0)
-            # # topk = [1, 1600x(900*1600)*d_r, 1] = indexes of top attentions
-            # # img = [900, 1600, 3]
-            # []
-            # # scatter assigns zeros to 
-            # img = img.reshape(*org_shape).numpy()
-            # img_t = torch.from_numpy(img)
-            # for idx in topk:
-            #     img_t[idx[0], idx[1]] = 0
-
-            # img = cv2.cvtColor(img_t.numpy(), cv2.COLOR_BGR2RGB)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.cam_imgs.append(img)
 
