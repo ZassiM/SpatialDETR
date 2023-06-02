@@ -95,8 +95,10 @@ def update_thr(self):
     self.show_labels.set(True)
 
 
-def single_bbox_select(self, idx):
+def single_bbox_select(self, idx=None):
     if self.single_bbox.get():
+        if idx is None:
+            idx = 0
         for i in range(len(self.bboxes)):
             if i != idx:
                 self.bboxes[i].set(False)
@@ -113,7 +115,7 @@ def initialize_bboxes(self):
 
 
 def update_scores(self):
-    all_attentions = self.Attention.get_all_attn(self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
+    all_attentions = self.Attention.get_attention_maps(self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
     scores = []
     self.scores_perc = []
     if self.show_all_layers.get():

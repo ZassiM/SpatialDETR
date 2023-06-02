@@ -63,8 +63,8 @@ class App(tk.Tk):
         file_opt, gpu_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.gpu_id = tk.IntVar()
         self.gpu_id.set(0)
-        file_opt.add_command(label=" Load model", command=lambda:load_model(self))
-        file_opt.add_command(label=" Load from config file", command=lambda:load_from_config(self))
+        file_opt.add_command(label=" Load model", command=lambda: load_model(self))
+        file_opt.add_command(label=" Load from config file", command=lambda: load_from_config(self))
         file_opt.add_separator()
         file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
         message = "You need to reload the model to apply GPU change."
@@ -132,7 +132,7 @@ class App(tk.Tk):
 
         # Cascade menus for Explainable options
         expl_opt = tk.Menu(self.menubar)
-        attn_rollout, grad_cam, partial_lrp, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
+        attn_rollout, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.expl_options = ["Attention Rollout", "Grad-CAM", "Gradient Rollout"]
 
         # Attention Rollout
@@ -188,8 +188,8 @@ class App(tk.Tk):
         self.bbox_opt = tk.Menu(self.menubar)
         self.single_bbox = tk.BooleanVar()
         self.select_all_bboxes = tk.BooleanVar()
-        self.single_bbox.set(True)
-        self.bbox_opt.add_checkbutton(label=" Single object", onvalue=1, offvalue=0, variable=self.single_bbox) 
+        self.select_all_bboxes.set(True)
+        self.bbox_opt.add_checkbutton(label=" Single object", onvalue=1, offvalue=0, variable=self.single_bbox, command=lambda: single_bbox_select(self)) 
         self.bbox_opt.add_checkbutton(label=" Select all", onvalue=1, offvalue=0, variable=self.select_all_bboxes, command=lambda: initialize_bboxes(self))
         self.bbox_opt.add_separator()
 
@@ -201,6 +201,7 @@ class App(tk.Tk):
         self.show_labels.set(True)
         self.overlay_bool.set(True)
         self.bbox_2d.set(True)
+        self.show_scale.set(True)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
         add_opt.add_checkbutton(label=" Show attention scale", onvalue=1, offvalue=0, variable=self.show_scale)
@@ -486,13 +487,11 @@ class App(tk.Tk):
             self.show_all_layers.set(False)
 
         # Explainable attention maps generation
-        if self.selected_camera.get() == -1:
-            self.attn_list = self.Attention.generate_explainability_cameras(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
-        elif self.show_all_layers.get():
+        if self.show_all_layers.get():
             self.attn_list = self.Attention.generate_explainability_layers(self.selected_expl_type.get(), self.selected_camera.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
         else:
-            self.attn_list = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_camera.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
-        
+            self.attn_list = self.Attention.generate_explainability_cameras(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
+
         # View attention maps
         if not self.gen_video_bool:
             # If we want to visualize all layers or all cameras:
@@ -510,24 +509,25 @@ class App(tk.Tk):
                 else:
                     ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
                 
-                if self.selected_camera.get() == -1:
+                if self.show_all_layers.get():
+                    attn = self.attn_list[i]
+                elif self.selected_camera.get() == -1:
                     attn = self.attn_list[self.cam_idx[i]]
                 else:
-                    attn = self.attn_list[i]
-                
+                    attn = self.attn_list[self.selected_camera.get()]
+                  
                 ax_attn.axis('off')
 
                 # Attention map normalization
                 if self.selected_camera.get() == -1:
                     attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
                 else:
-                    #attn = (attn - attn.min()) / (attn.max() - attn.min())
                     attmap = ax_attn.imshow(attn)
 
                 # Visualize attention bar scale if option is selected
                 if self.show_scale.get():  
                     im_ratio = attn.shape[1]/attn.shape[0]
-                    self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio)
+                    self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio, pad=0.01)
 
                 # Set title accordinly
                 if self.show_all_layers.get():
@@ -692,12 +692,12 @@ class App(tk.Tk):
                         mode_2d=self.bbox_2d.get())
                 
             if self.overlay_bool.get() and ((self.selected_camera.get() != -1 and camidx == self.selected_camera.get()) or (self.selected_camera.get() == -1)):
-                if self.selected_camera.get() == -1:
-                    attn = self.attn_list[camidx]
-                elif self.show_all_layers.get():
+                if self.show_all_layers.get():
                     attn = self.attn_list[self.selected_layer.get()]
+                elif self.selected_camera.get() == -1:
+                    attn = self.attn_list[camidx]
                 else:
-                    attn = self.attn_list[0]
+                    attn = self.attn_list[self.selected_camera.get()]
 
                 img = overlay_attention_on_image(img, attn)            
 
