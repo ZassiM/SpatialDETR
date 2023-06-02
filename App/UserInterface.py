@@ -520,8 +520,7 @@ class App(tk.Tk):
 
                 # Visualize attention bar scale if option is selected
                 if self.show_scale.get():  
-                    im_ratio = attn.shape[1]/attn.shape[0]
-                    self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', shrink=1, pad=0)
+                    self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', shrink=0.7, pad=0)
 
                 # Set title accordinly
                 if self.show_all_layers.get():
@@ -541,6 +540,8 @@ class App(tk.Tk):
                     title += f', {self.scores_perc[self.cam_idx[i]]}%'
 
                 ax_attn.set_title(title, fontsize=fontsize)
+
+
 
     def update_data(self):
         '''

@@ -97,6 +97,7 @@ def update_thr(self):
 
 def single_bbox_select(self, idx=None):
     if self.single_bbox.get():
+        self.select_all_bboxes.set(False)
         if idx is None:
             idx = 0
         for i in range(len(self.bboxes)):
@@ -115,19 +116,13 @@ def initialize_bboxes(self):
 
 
 def update_scores(self):
-    all_attentions = self.Attention.get_attention_maps(self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get())
     scores = []
     self.scores_perc = []
-    if self.show_all_layers.get():
-        for layer in range(self.Attention.layers):
-            attn = all_attentions[layer][self.selected_camera.get()]
-            score = round(attn.sum().item(), 2)
-            scores.append(score)
-    else:
-        for cam in range(len(all_attentions[self.selected_layer.get()])):
-            attn = all_attentions[self.selected_layer.get()][cam]
-            score = round(attn.sum().item(), 2)
-            scores.append(score)
+
+    for camidx in range(len(self.attn_list)):
+        attn = self.attn_list[camidx]
+        score = round(attn.sum().item(), 2)
+        scores.append(score)
 
     sum_scores = sum(scores)
     if sum_scores > 0:

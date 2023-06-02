@@ -82,6 +82,7 @@ class Attention:
         self.layers = 0
         for _ in self.model.module.pts_bbox_head.transformer.decoder.layers:
             self.layers += 1
+        self.height_feats, self.width_feats = None, None
             
     def handle_co_attn_self_query(self, layer):
         # grad = self.dec_self_attn_grads[layer]
@@ -110,6 +111,12 @@ class Attention:
                 layer.attentions[1].attn.register_forward_hook(
                     lambda _, input, output: self.dec_cross_attn_weights.append(output[1])
                 ))
+        
+        if self.height_feats is None:
+            conv_feats = []
+            self.model.module.img_backbone.register_forward_hook(
+                lambda _, input, output: conv_feats.append(output)
+            )
 
         if target_index is None:
             with torch.no_grad():
@@ -136,30 +143,13 @@ class Attention:
             for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
                 self.dec_cross_attn_grads.append(layer.attentions[1].attn.get_attn_gradients())
 
+        if self.height_feats is None:
+            self.height_feats, self.width_feats = conv_feats[0][0].shape[-2:]
+                                                                     
         for hook in hooks:
             hook.remove()
         
         return outputs
-    
-    def save_attn_gradients(self, attn_gradients):
-        self.attn_gradients = attn_gradients
-        
-
-    def get_attention_maps(self, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True):
-        # self.dec_cross_attn_weights = 6x[6x8x900x1450] = layers x (cams x heads x queries x keys)
-        attention_maps_layers = []
-        # loop through layers
-        for i in range(self.layers):
-            attention_maps = []
-            # loop through cameras
-            for attn in self.dec_cross_attn_weights[i]:
-                attn_avg = avg_heads(attn, head_fusion=head_fusion, discard_ratio=discard_ratio)
-                attn_avg = attn_avg[indexes[bbox_idx]].detach()
-                attn_avg = attn_avg.sum(dim=0)
-                attention_maps.append(attn_avg)
-            attention_maps_layers.append(attention_maps)    
-            
-        return attention_maps_layers
         
     def generate_rollout(self, layer, camidx, head_fusion="min", discard_ratio=0.9, raw=True):  
         ''' Generates Attention Rollout for XAI. '''      
@@ -272,7 +262,7 @@ class Attention:
         if attention_maps.dim() == 1:
             attention_maps.unsqueeze_(0)
         for i in range(len(attention_maps)):
-            attn = attention_maps[i].view(1, 1, 29, 50)
+            attn = attention_maps[i].view(1, 1, self.height_feats, self.width_feats)
             attn = torch.nn.functional.interpolate(attn, scale_factor=8, mode='bilinear')
             attn = attn.view(attn.shape[2], attn.shape[3])
             attention_maps_inter.append(attn)
