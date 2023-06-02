@@ -236,7 +236,6 @@ class App(tk.Tk):
         self.fig = plt.figure()
         self.spec = self.fig.add_gridspec(3, 3)
         self.single_object_spec = self.fig.add_gridspec(3, 2)
-        self.spec.update(wspace=0, hspace=0)
         # Create canvas with the figure embedded in it, and update it after each visualization
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
@@ -517,17 +516,12 @@ class App(tk.Tk):
                     attn = self.attn_list[self.selected_camera.get()]
                   
                 ax_attn.axis('off')
-
-                # Attention map normalization
-                if self.selected_camera.get() == -1:
-                    attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
-                else:
-                    attmap = ax_attn.imshow(attn)
+                attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
 
                 # Visualize attention bar scale if option is selected
                 if self.show_scale.get():  
                     im_ratio = attn.shape[1]/attn.shape[0]
-                    self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', fraction=0.047*im_ratio, pad=0.01)
+                    self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', shrink=1, pad=0)
 
                 # Set title accordinly
                 if self.show_all_layers.get():
