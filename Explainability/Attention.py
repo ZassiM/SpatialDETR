@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 def avg_heads(attn, head_fusion="min", discard_ratio=0.9):
     if head_fusion == "mean":
@@ -145,21 +146,21 @@ class Attention:
         self.attn_gradients = attn_gradients
         
 
-    def get_all_attn(self, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True):
+    def get_attention_maps(self, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True):
         # self.dec_cross_attn_weights = 6x[6x8x900x1450] = layers x (cams x heads x queries x keys)
-        all_attn_layers = []
+        attention_maps_layers = []
         # loop through layers
         for i in range(self.layers):
-            all_attn = []
+            attention_maps = []
             # loop through cameras
             for attn in self.dec_cross_attn_weights[i]:
                 attn_avg = avg_heads(attn, head_fusion=head_fusion, discard_ratio=discard_ratio)
                 attn_avg = attn_avg[indexes[bbox_idx]].detach()
                 attn_avg = attn_avg.sum(dim=0)
-                all_attn.append(attn_avg)
-            all_attn_layers.append(all_attn)    
+                attention_maps.append(attn_avg)
+            attention_maps_layers.append(attention_maps)    
             
-        return all_attn_layers
+        return attention_maps_layers
         
     def generate_rollout(self, layer, camidx, head_fusion="min", discard_ratio=0.9, raw=True):  
         ''' Generates Attention Rollout for XAI. '''      
@@ -210,7 +211,7 @@ class Attention:
             # encoder decoder attention
             self.handle_co_attn_query(layer, camidx, handle_residual, apply_rule)
     
-    def generate_explainability(self, expl_type, layer, bbox_idx, indexes, camidx, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
+    def generate_explainability(self, expl_type, camidx, layer, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
         if expl_type == "Attention Rollout":
             self.generate_rollout(layer, camidx, head_fusion, discard_ratio, raw)
         elif expl_type == "Grad-CAM":
@@ -218,11 +219,85 @@ class Attention:
         elif expl_type == "Gradient Rollout":
             self.generate_gradroll(layer, camidx, handle_residual, apply_rule)
         elif expl_type == "Partial-LRP":
-            attention_map = 0
+            attention_maps = 0
             # TO-DO
 
-        attention_map = self.R_q_i[indexes[bbox_idx]].detach()
-        if attention_map.shape[0] > 0:
-            attention_map = attention_map.max(dim=0)[0]
+        attention_maps = self.R_q_i[indexes[bbox_idx]].detach().cpu() # num_objects x 1450
+        attention_maps = attention_maps.max(dim=0)[0]
 
-        return attention_map
+        attention_maps /= attention_maps.max()
+
+        attention_maps = self.interpolate_expl(attention_maps)
+
+        return attention_maps
+    
+    def generate_explainability_cameras(self, expl_type, layer, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
+        
+        attention_maps = []
+        for camidx in range(6):
+            if expl_type == "Attention Rollout":
+                self.generate_rollout(layer, camidx, head_fusion, discard_ratio, raw)
+            elif expl_type == "Grad-CAM":
+                self.generate_gradcam(layer, camidx)
+            elif expl_type == "Gradient Rollout":
+                self.generate_gradroll(layer, camidx, handle_residual, apply_rule)
+            elif expl_type == "Partial-LRP":
+                attention_maps = 0
+            attention_maps.append(self.R_q_i[indexes[bbox_idx]].detach().cpu())
+
+        # num_cams x num_objects x 1450
+            
+        attention_maps = torch.stack(attention_maps)
+        attention_maps = attention_maps.permute(1, 0, 2) # num_objects x num_cams x 1450 # take only the selected objects
+
+        # normalize across cameras
+        for i in range(len(attention_maps)):
+            attention_maps[i] = (attention_maps[i] - attention_maps[i].min()) / (attention_maps[i].max() - attention_maps[i].min())
+
+        # now attention maps can be overlayed
+        attention_maps = attention_maps.max(dim=0)[0]  # num_cams x [1450]
+
+        attention_maps = self.interpolate_expl(attention_maps)
+
+        return attention_maps
+    
+    def generate_explainability_layers(self, expl_type, camidx, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
+        
+        attention_maps = []
+        for layer in range(6):
+            if expl_type == "Attention Rollout":
+                self.generate_rollout(layer, camidx, head_fusion, discard_ratio, raw)
+            elif expl_type == "Grad-CAM":
+                self.generate_gradcam(layer, camidx)
+            elif expl_type == "Gradient Rollout":
+                self.generate_gradroll(layer, camidx, handle_residual, apply_rule)
+            elif expl_type == "Partial-LRP":
+                attention_maps = 0
+            attention_maps.append(self.R_q_i[indexes[bbox_idx]].detach().cpu())
+
+        # num_layers x num_objects x 1450
+        attention_maps = torch.stack(attention_maps)
+        attention_maps = attention_maps.permute(1, 0, 2) # num_objects x num_cams x 1450 # take only the selected objects
+
+        attention_maps /= attention_maps.max()
+
+        # now attention maps can be overlayed
+        attention_maps = attention_maps.max(dim=0)[0]  # num_cams x [1450]
+
+        attention_maps = self.interpolate_expl(attention_maps)
+
+        return attention_maps
+
+    def interpolate_expl(self, attention_maps):
+        attention_maps_inter = []
+        if attention_maps.dim() == 1:
+            attention_maps.unsqueeze_(0)
+        for i in range(len(attention_maps)):
+            attn = attention_maps[i].view(1, 1, 29, 50)
+            attn = torch.nn.functional.interpolate(attn, scale_factor=8, mode='bilinear')
+            attn = attn.view(attn.shape[2], attn.shape[3])
+            attention_maps_inter.append(attn)
+
+        attention_maps_inter = torch.stack(attention_maps_inter)
+
+        return attention_maps_inter

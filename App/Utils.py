@@ -108,7 +108,8 @@ def initialize_bboxes(self):
             for i in range(len(self.bboxes)):
                 self.bboxes[i].set(True)
         else:
-            self.bboxes[0].set(True)
+            if len(self.bboxes) > 0:
+                self.bboxes[0].set(True)
 
 
 def update_scores(self):

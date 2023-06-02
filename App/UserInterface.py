@@ -46,6 +46,7 @@ class App(tk.Tk):
         self.tk.call("set_theme", "light")
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
+        self.protocol("WM_DELETE_WINDOW", self.quit)
         self.canvas, self.video_canvas, self.fig, self.spec = None, None, None, None
 
         # Model and dataloader objects
@@ -245,7 +246,7 @@ class App(tk.Tk):
         bbox_idx = [0]
         initial_idx = 500
         evaluation_lenght = 20
-        num_tokens = int(0.5 * 1450)
+        num_tokens = int(0.25 * 1450)
         outputs_pert = []
         dataset = self.dataloader.dataset
         prog_bar = mmcv.ProgressBar(evaluation_lenght)
@@ -283,24 +284,26 @@ class App(tk.Tk):
                 indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
                 topk_list.append(indices)
 
-            # Mask input image
-            img_og_list = []
-            img_pert_list = []
+            img_og_list = [] # list of original images
+            img_pert_list = [] # list of perturbed images
 
             # Denormalization is needed, because data is normalized 
             img = img[0][0]
             for i in range(len(img)):
                 img_og = img[i].permute(1, 2, 0)
+
                 img_og_list.append(img_og)
                 img_pert = img_og.clone()
+                # Image perturbation by setting pixels to (0,0,0)
                 for idx in topk_list[i]:
                     img_pert[idx[0], idx[1]] = 0
                 img_pert_list.append(img_pert.permute(2, 0, 1))
 
-            # Modify input data for second forward
-            # img_pert_list = 6x(928, 1600, 3)
+            # Save the perturbed 6 camera images into the data input
             img = [torch.stack((img_pert_list)).unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
             data['img'][0] = DC(img)
+
+            # Second forward
             with torch.no_grad():
                 output = self.model(return_loss=False, rescale=True, **data)
 
@@ -323,21 +326,23 @@ class App(tk.Tk):
         print(dataset.evaluate(outputs_pert, **eval_kwargs))
 
     def gen_video(self):
+        self.video_window = tk.Toplevel(self)
+        self.video_window.geometry('1500x1500')
+        self.video_canvas = tk.Canvas(self.video_window)
+        self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        menubar_video = tk.Menu(self.video_window)
+        self.video_window.config(menu=menubar_video)
+        menubar_video.add_command(label="Pause/Resume", command=self.pause_resume)
+        menubar_video.add_command(label="Close", command=self.close_video)
 
-        self.canvas.get_tk_widget().pack_forget()
-        if self.video_canvas is None:
-            self.video_canvas = tk.Canvas(self)
-            self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-            self.menubar.add_command(label="Pause/Resume", command=self.pause_resume)
-            self.menubar.add_command(label="Restart", command=self.restart)
-
-        self.thsObj = self.video_canvas.create_image(0, 0, anchor='nw', image=None)
+        self.canvas_frame = self.video_canvas.create_image(0, 0, anchor='nw', image=None)
 
         self.gen_video_bool = True
         self.select_all_bboxes.set(True)
         self.img_frames, self.img_frames_overlayed, self.og_imgs_frames, self.bbox_coords, self.bbox_cameras, self.bbox_labels, self.all_expl = [], [], [], [], [], [], []
 
         self.paused = False
+        self.video_completed = False
 
         print("\nGenerating image frames...\n")
         prog_bar = mmcv.ProgressBar(self.video_length)
@@ -351,7 +356,7 @@ class App(tk.Tk):
 
             for expl_type in expl_options:
                 self.selected_expl_type.set(expl_type)
-                imgs, imgs_og, bbox_camera, labels = self.visualize()
+                _, imgs_og, bbox_camera, labels, imgs = self.visualize()
                 expl_object.append(imgs)
 
             self.img_frames_overlayed.append(expl_object)
@@ -373,30 +378,25 @@ class App(tk.Tk):
         
         self.after("idle", self.show_sequence)
 
-    def restart(self):
-        self.idx_video = 0
-        self.paused = False
-        self.show_sequence()
-
-    def show_sequence(self):
-
-        if not self.paused:
-            update_info_label(self, idx=self.data_idx + self.idx_video)
-            img_frame = self.img_frames[self.idx_video]
-
-            w, h = self.video_canvas.winfo_width(), self.video_canvas.winfo_height()
-            self.img_frame = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((w, h)))
-            self.video_canvas.itemconfig(self.thsObj, image=self.img_frame)
-
-            self.idx_video += 1
-
-            if self.idx_video < self.video_length:
-                self.after(1, self.show_sequence)
-            else:
-                print("\nEnd\n")
-                self.gen_video_bool = False
-            
+    def close_video(self):
+        self.gen_video_bool = False
+        self.video_window.destroy()
+        self.video_canvas.destroy()
+        self.fig.clear()
+        self.canvas.draw()
+        
+    def pause_resume(self):
+        if not self.paused and not self.video_completed:
+            self.paused = True
+            print(f"\nPaused at video idx: {self.idx_video-1}")
         else:
+            if self.paused:
+                self.paused = False
+            if self.video_completed:
+                self.idx_video = 0
+                self.video_completed = False
+                self.paused = False
+
             labels = self.bbox_labels[self.idx_video-1]
             self.bboxes = []
             self.bbox_opt.delete(3, 'end')
@@ -406,6 +406,28 @@ class App(tk.Tk):
                 self.bboxes.append(view_bbox)
                 self.bbox_opt.add_checkbutton(label=f" {self.class_names[labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: single_bbox_select(self, idx))
             
+            self.show_sequence()
+
+    def show_sequence(self):
+
+        if not self.paused and not self.video_completed:
+            update_info_label(self, idx=self.data_idx + self.idx_video)
+            img_frame = self.img_frames[self.idx_video]
+
+            w, h = self.video_canvas.winfo_width(), self.video_canvas.winfo_height()
+            self.img_frame = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((w, h)))
+            self.video_canvas.itemconfig(self.canvas_frame, image=self.img_frame)
+
+            self.idx_video += 1
+
+            if self.idx_video < self.video_length:
+                self.after(1, self.show_sequence)
+            else:
+                self.video_completed = True
+        # else:
+        #     self.show_att_maps_object()
+            
+        else:
             self.after(1, self.show_att_maps_object)
 
     def show_att_maps_object(self):
@@ -414,9 +436,8 @@ class App(tk.Tk):
 
         if len(self.bbox_idx) == 1:
             self.bbox_idx = self.bbox_idx[0]
-            self.video_canvas.pack_forget()
             self.fig.clear()
-            self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+            self.canvas.draw()
 
             bbox_camera = self.bbox_cameras[self.idx_video-1]
 
@@ -433,6 +454,7 @@ class App(tk.Tk):
             all_expl = self.img_frames_overlayed[self.idx_video-1]
             
             labels = self.bbox_labels[self.idx_video-1]
+
             for i in range(len(all_expl)):
                 attn = all_expl[i][camidx][bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
 
@@ -451,78 +473,38 @@ class App(tk.Tk):
         
         self.after(1, self.show_att_maps_object)
 
-    def pause_resume(self):
-        if not self.paused:
-            print(f"\nPaused at idx {self.data_idx + self.idx_video - 1}.\n")
-            self.paused = True
-        else:
-            self.paused = False
-            if not self.video_canvas:
-                self.canvas.get_tk_widget().pack_forget()
-                self.video_canvas = tk.Canvas(self)
-                self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-                self.thsObj = self.video_canvas.create_image(0, 0, anchor='nw', image=None)
-            self.after(1, self.show_sequence)
-
     def show_attention_maps(self, grid_clm=1):
         '''
         Shows the attention map for explainability.
         '''
         print("Generating attention maps...")
         # List to which attention maps are appended
-        self.attn_list = []
+        #self.attn_list = []
         self.topk_idx = []
         if self.selected_expl_type.get() == "Gradient Rollout":
             self.update_data()
             self.show_all_layers.set(False)
-        
-        pert_steps = [0, 0.25, 0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 1]
-        step = pert_steps[1]
+
         # Explainable attention maps generation
-        for i in range(6):
-            # All cameras option
-            if self.selected_camera.get() == -1:
-                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, i, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
-            
-            # All layers option
-            elif self.show_all_layers.get():
-                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), i, self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
-            
-            # Single camera and single layer option
-            else:
-                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_camera.get(), self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
-
-            attn = attn.view(1, 1, 29, 50)
-            attn[:, :, :, 0] = 0
-            attn[:, :, :, -1] = 0
-            attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
-            attn = attn.view(attn.shape[2], attn.shape[3]).cpu()
-            attn = attn[:900, :]
-
-            # num_tokens = int(step * attn.size(-2) * attn.size(-1))
-            # _, indices = torch.topk(attn.flatten(), k=num_tokens)
-            # indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
-            # self.topk_idx.append(indices)
-
-            self.attn_list.append(attn.numpy())
-
-            if self.selected_camera.get() != -1 and not self.show_all_layers.get():
-                break
-        
-        # Extract maximum score for normalization
-        attn_max = np.max(np.concatenate(self.attn_list))
-
-        # If we want to visualize all layers or all cameras:
-        if self.show_all_layers.get() or self.selected_camera.get() == -1:
-            # Select the center of the grid to plot the attentions and add 2x2 subgrid
-            layer_grid = self.spec[1, grid_clm].subgridspec(2, 3)
-            fontsize = 8
+        if self.selected_camera.get() == -1:
+            self.attn_list = self.Attention.generate_explainability_cameras(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
+        elif self.show_all_layers.get():
+            self.attn_list = self.Attention.generate_explainability_layers(self.selected_expl_type.get(), self.selected_camera.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
         else:
-            fontsize = 12
-
+            self.attn_list = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_camera.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
+        
         # View attention maps
         if not self.gen_video_bool:
+            # If we want to visualize all layers or all cameras:
+            if self.show_all_layers.get() or self.selected_camera.get() == -1:
+                # Select the center of the grid to plot the attentions and add 2x2 subgrid
+                layer_grid = self.spec[1, grid_clm].subgridspec(2, 3)
+                fontsize = 8
+            else:
+                fontsize = 12
+                
             for i in range(len(self.attn_list)):
+
                 if self.show_all_layers.get() or self.selected_camera.get() == -1:
                     ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
                 else:
@@ -535,14 +517,11 @@ class App(tk.Tk):
                 
                 ax_attn.axis('off')
 
-
                 # Attention map normalization
                 if self.selected_camera.get() == -1:
-                    attn /= attn_max
                     attmap = ax_attn.imshow(attn, vmin=0, vmax=1)
                 else:
-                    attn -= attn.min()
-                    attn /= attn.max()
+                    #attn = (attn - attn.min()) / (attn.max() - attn.min())
                     attmap = ax_attn.imshow(attn)
 
                 # Visualize attention bar scale if option is selected
@@ -573,7 +552,7 @@ class App(tk.Tk):
         '''
         Predict bboxes and extracts attentions.
         '''
-        print("Detecting bounding boxes...")
+        print("\nDetecting bounding boxes...")
         # Load selected data from dataloader, manual DataContainer fixes are needed
         data = self.dataloader.dataset[self.data_idx]
         metas = [[data['img_metas'][0].data]]
@@ -669,9 +648,24 @@ class App(tk.Tk):
         # Generate images list with bboxes on it
         print("Generating camera images...")
         self.cam_imgs = []
-        og_imgs, bbox_cameras = [], []  # Used for video generation
+        og_imgs, att_images_list, bbox_cameras = [], [], []  # Used for video generation
 
         for camidx in range(len(self.imgs)):
+
+            if self.gen_video_bool:
+                og_img = cv2.cvtColor(self.imgs[camidx], cv2.COLOR_BGR2RGB)
+                og_imgs.append(og_img)
+                attn_img = self.imgs[camidx].astype(np.uint8)
+                if self.selected_camera.get() == -1:
+                    attn = self.attn_list[camidx]
+                elif self.show_all_layers.get():
+                    attn = self.attn_list[self.selected_layer.get()]
+                else:
+                    attn = self.attn_list[0]
+
+                attn_img = overlay_attention_on_image(attn_img, attn)      
+                attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
+                att_images_list.append(attn_img)
 
             img, bbox_camera = draw_lidar_bbox3d_on_img(
                     self.pred_bboxes,
@@ -685,21 +679,19 @@ class App(tk.Tk):
                     mode_2d=self.bbox_2d.get(),
                     camidx=camidx)  
             
-            og_img = cv2.cvtColor(self.imgs[camidx], cv2.COLOR_BGR2RGB)
-            og_imgs.append(og_img)
-            bbox_cameras.append(bbox_camera)
+            if self.gen_video_bool:
+                bbox_cameras.append(bbox_camera)
 
             if self.GT_bool.get():
-                img, _, _ = draw_lidar_bbox3d_on_img(
+                img, _ = draw_lidar_bbox3d_on_img(
                         self.gt_bbox,
                         img,
                         self.img_metas['lidar2img'][camidx],
                         self.img_metas,
                         color=(255, 0, 0),
                         mode_2d=self.bbox_2d.get())
-            
-
-            if self.overlay_bool.get():
+                
+            if self.overlay_bool.get() and ((self.selected_camera.get() != -1 and camidx == self.selected_camera.get()) or (self.selected_camera.get() == -1)):
                 if self.selected_camera.get() == -1:
                     attn = self.attn_list[camidx]
                 elif self.show_all_layers.get():
@@ -707,8 +699,13 @@ class App(tk.Tk):
                 else:
                     attn = self.attn_list[0]
 
-                if (self.selected_camera.get() != -1 and camidx == self.selected_camera.get()) or (self.selected_camera.get() == -1):
-                    img = overlay_attention_on_image(img, attn)
+                img = overlay_attention_on_image(img, attn)            
+
+            # num_tokens = int(1450)
+            # _, indices = torch.topk(torch.from_numpy(attn).flatten(), k=num_tokens)
+            # indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
+            # for idx in indices:
+            #     img[idx[0], idx[1]] = 0
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.cam_imgs.append(img)
@@ -716,7 +713,7 @@ class App(tk.Tk):
         print("Done.\n")
 
         if self.gen_video_bool:
-            return self.cam_imgs, og_imgs, bbox_cameras, self.labels
+            return self.cam_imgs, og_imgs, bbox_cameras, self.labels, att_images_list
 
         # Visualize the generated images list on the figure subplots
         for i in range(len(self.imgs)):
