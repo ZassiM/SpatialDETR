@@ -301,31 +301,35 @@ class UI_baseclass(tk.Tk):
         if gpu_id is not None:
             self.gpu_id.set(gpu_id)
 
-        # Model configuration needs to load weights
-        args = {}
-        args["config"] = cfg_file
-        args["checkpoint"] = weights_file
-        model, dataloader, img_norm_cfg, cfg = init_app(args)
-                
-        self.model = MMDataParallel(model, device_ids=[self.gpu_id.get()])
-        self.dataloader = dataloader
-        self.Attention = Attention(self.model)
-        self.img_norm_cfg = img_norm_cfg  # Used for image de-normalization
-        self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
-        self.dataloader_name = self.dataloader.dataset.metadata['version']
-        self.class_names = self.dataloader.dataset.CLASSES
-        self.cfg = cfg
-        print("\nModel loaded.")
+        if cfg_file and weights_file:
+            # Model configuration needs to load weights
+            args = {}
+            args["config"] = cfg_file
+            args["checkpoint"] = weights_file
+            model, dataloader, img_norm_cfg, cfg = init_app(args)
+                    
+            self.model = MMDataParallel(model, device_ids=[self.gpu_id.get()])
+            self.dataloader = dataloader
+            self.Attention = Attention(self.model)
+            self.img_norm_cfg = img_norm_cfg  # Used for image de-normalization
+            self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
+            self.dataloader_name = self.dataloader.dataset.metadata['version']
+            self.class_names = self.dataloader.dataset.CLASSES
+            self.cfg = cfg
+            print("\nModel loaded.")
+            
+            self.new_model = True
+
+            if not self.started_app:
+                print("Starting app...\n")
+                self.start_app()
+                self.started_app = True
+                self.random_data_idx()
+
+            self.update_info_label()
         
-        self.new_model = True
-
-        if not self.started_app:
-            print("Starting app...\n")
-            self.start_app()
-            self.started_app = True
-            self.random_data_idx()
-
-        self.update_info_label()
+        else:
+            self.show_message("No file selected.")
 
     def add_separator(self, sep="|"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))

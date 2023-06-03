@@ -34,6 +34,8 @@ class App(UI_baseclass):
         self.add_separator("|")
         self.menubar.add_command(label="Show video", command=self.show_video)
 
+        self.expl_types = ["Attention Rollout", "Grad-CAM"]
+
     def evaluate_expl(self):
         print(f"Evaluating {self.selected_expl_type.get()}...")
 
@@ -305,7 +307,7 @@ class App(UI_baseclass):
 
         if self.single_object_window is None:
             self.single_object_window = tk.Toplevel(self)
-            self.single_object_window.title("Object Explainability visualization")
+            self.single_object_window.title("Object Explainability Visualizer")
             self.fig_obj = plt.figure()
             self.single_object_spec = self.fig_obj.add_gridspec(3, 2)
             self.obj_canvas = FigureCanvasTkAgg(self.fig_obj, master=self.single_object_window)
@@ -324,7 +326,6 @@ class App(UI_baseclass):
 
         self.select_all_bboxes.set(True)
         self.img_frames, self.img_frames_attention_nobbx, self.og_imgs_frames, self.bbox_coords, self.bbox_cameras, self.bbox_labels, self.all_expl = [], [], [], [], [], [], []
-        self.expl_types = ["Attention Rollout"]
 
         print("\nGenerating image frames...\n")
         prog_bar = mmcv.ProgressBar(self.video_length)
@@ -338,7 +339,7 @@ class App(UI_baseclass):
                 img_att_expl.append(imgs_att)
                 img_att_nobbx.append(imgs_att_nobbx)
 
-            img_att = img_att_expl[1]
+            img_att = img_att_expl[0]
             hori = np.concatenate((img_att[2], img_att[0], img_att[1]), axis=1)
             ver = np.concatenate((img_att[5], img_att[3], img_att[4]), axis=1)
             full = np.concatenate((hori, ver), axis=0)
@@ -476,16 +477,16 @@ class App(UI_baseclass):
         return cam_imgs, att_nobbx, og_imgs, bbox_cameras, self.labels
     
     def save_video(self):
-        if self.img_frames:
-            print("Saving the video in data.pickle...\n")
-
+        if hasattr(self, "img_frames"):
             data = {'img_frames': self.img_frames, 'img_frames_attention_nobbx': self.img_frames_attention_nobbx, 'og_imgs_frames': self.og_imgs_frames, 'bbox_cameras': self.bbox_cameras, 'bbox_labels': self.bbox_labels}
 
-            # Save the data dictionary to a pickle file
-            with open('data.pkl', 'wb') as f:
+            file_path = fd.asksaveasfilename(defaultextension=".pkl", filetypes=[("All Files", "*.*")])
+
+            print(f"Saving video in {file_path}...\n")
+            with open(file_path, 'wb') as f:
                 pickle.dump(data, f)
             
-            print("Video saved.\n")
+            self.show_message(f"Video saved in {file_path}")
         else:
             self.show_message("You should first generate a video.")
 
@@ -498,7 +499,7 @@ class App(UI_baseclass):
             initialdir='/workspace/',
             filetypes=video_datatypes)
 
-        print(f"Loading from {video_pickle}...\n")
+        print(f"Loading video from {video_pickle}...\n")
         with open(video_pickle, 'rb') as f:
             data = pickle.load(f)
 
