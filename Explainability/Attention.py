@@ -9,10 +9,10 @@ def avg_heads(attn, head_fusion="min", discard_ratio=0.9):
     elif head_fusion == "min":
         attn = attn.min(dim=0)[0]
 
-    flat = attn.view(-1)
-    _, indices = flat.topk(int(flat.size(-1)*discard_ratio), -1, False)
-    indices = indices[indices != 0]
-    flat[indices] = 0
+    # flat = attn.view(-1)
+    # _, indices = flat.topk(int(flat.size(-1)*discard_ratio), -1, False)
+    # indices = indices[indices != 0]
+    # flat[indices] = 0
     return attn
 
 
@@ -178,7 +178,7 @@ class Attention:
         cam_q_i = gradcam(cam_q_i, grad_q_i)
         self.R_q_i = cam_q_i
     
-    def generate_gradroll(self, layer, camidx, handle_residual, apply_rule):
+    def generate_gradroll(self, camidx, handle_residual, apply_rule):
         # initialize relevancy matrices
 
         #self.extract_attentions(bbox_idx)
@@ -209,7 +209,7 @@ class Attention:
             elif expl_type == "Grad-CAM":
                 self.generate_gradcam(layer, camidx)
             elif expl_type == "Gradient Rollout":
-                self.generate_gradroll(layer, camidx, handle_residual, apply_rule)
+                self.generate_gradroll(camidx, handle_residual, apply_rule)
             elif expl_type == "Partial-LRP":
                 attention_maps = 0
             attention_maps.append(self.R_q_i[indexes[bbox_idx]].detach().cpu())
@@ -218,7 +218,6 @@ class Attention:
             
         attention_maps = torch.stack(attention_maps)
         attention_maps = attention_maps.permute(1, 0, 2) # num_objects x num_cams x 1450 # take only the selected objects
-
         # normalize across cameras
         for i in range(len(attention_maps)):
             attention_maps[i] = (attention_maps[i] - attention_maps[i].min()) / (attention_maps[i].max() - attention_maps[i].min())
@@ -239,19 +238,20 @@ class Attention:
             elif expl_type == "Grad-CAM":
                 self.generate_gradcam(layer, camidx)
             elif expl_type == "Gradient Rollout":
-                self.generate_gradroll(layer, camidx, handle_residual, apply_rule)
+                self.generate_gradroll(camidx, handle_residual, apply_rule)
             elif expl_type == "Partial-LRP":
                 attention_maps = 0
             attention_maps.append(self.R_q_i[indexes[bbox_idx]].detach().cpu())
 
         # num_layers x num_objects x 1450
         attention_maps = torch.stack(attention_maps)
-        attention_maps = attention_maps.permute(1, 0, 2) # num_objects x num_cams x 1450 # take only the selected objects
-
-        attention_maps /= attention_maps.max()
+        attention_maps = attention_maps.permute(1, 0, 2) # num_objects x num_layers x 1450 # take only the selected objects
 
         # now attention maps can be overlayed
-        attention_maps = attention_maps.max(dim=0)[0]  # num_cams x [1450]
+        attention_maps = attention_maps.max(dim=0)[0]  # num_layers x [1450]
+
+        for i in range(len(attention_maps)):
+            attention_maps[i] /= attention_maps[i].max()
 
         attention_maps = self.interpolate_expl(attention_maps)
 

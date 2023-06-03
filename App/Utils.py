@@ -95,9 +95,21 @@ def update_thr(self):
     self.show_labels.set(True)
 
 
+def update_objects_list(self, labels=None):
+    if labels is None:
+        labels = self.labels
+    self.bboxes = []
+    self.bbox_opt.delete(3, 'end')
+    for i in range(len(labels)):
+        view_bbox = tk.BooleanVar()
+        view_bbox.set(False)
+        self.bboxes.append(view_bbox)
+        self.bbox_opt.add_checkbutton(label=f" {self.class_names[labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: single_bbox_select(self, idx))
+
+
 def single_bbox_select(self, idx=None):
+    self.select_all_bboxes.set(False)
     if self.single_bbox.get():
-        self.select_all_bboxes.set(False)
         if idx is None:
             idx = 0
         for i in range(len(self.bboxes)):
@@ -106,6 +118,8 @@ def single_bbox_select(self, idx=None):
 
 
 def initialize_bboxes(self):
+    if self.single_bbox.get():
+        self.single_bbox.set(False)
     if hasattr(self, "bboxes"):
         if self.select_all_bboxes.get():
             for i in range(len(self.bboxes)):
