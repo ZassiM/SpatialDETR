@@ -216,6 +216,11 @@ class UI_baseclass(tk.Tk):
         self.add_separator()
         self.menubar.add_cascade(label="Options", menu=add_opt)
         self.add_separator("|")
+        self.menubar.add_command(label="Visualize", command=self.visualize)
+        self.add_separator("|")
+        self.menubar.add_command(label="Show video", command=self.show_video)
+
+        self.expl_types = ["Attention Rollout", "Grad-CAM"]
 
     def update_data(self):
         '''

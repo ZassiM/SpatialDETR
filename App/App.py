@@ -16,7 +16,6 @@ import pickle
 from tkinter import filedialog as fd
 
 
-
 class App(UI_baseclass):
     '''
     Application User Interface
@@ -28,13 +27,7 @@ class App(UI_baseclass):
         super().__init__()
 
         # Speeding up the testing
-        self.load_from_config()
-
-        self.menubar.add_command(label="Visualize", command=self.visualize)
-        self.add_separator("|")
-        self.menubar.add_command(label="Show video", command=self.show_video)
-
-        self.expl_types = ["Attention Rollout", "Grad-CAM"]
+        #self.load_from_config()
 
     def evaluate_expl(self):
         print(f"Evaluating {self.selected_expl_type.get()}...")
