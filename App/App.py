@@ -27,6 +27,10 @@ class App(UI_baseclass):
         # Speeding up the testing
         self.load_from_config()
 
+        self.menubar.add_command(label="Visualize", command=self.visualize)
+        self.add_separator("|")
+        self.menubar.add_command(label="Show video", command=self.show_video)
+
     def evaluate_expl(self):
         print(f"Evaluating {self.selected_expl_type.get()}...")
 
@@ -170,10 +174,17 @@ class App(UI_baseclass):
         Visualizes predicted bounding boxes on all the cameras and shows
         the attention map in the middle of the plot.
         '''
-        if self.canvas is None:
+        if self.canvas is None or self.video_gen_bool:
             # Create canvas with the figure embedded in it, and update it after each visualization
+            if self.video_gen_bool:
+                self.canvas.pack_forget()
+                self.menubar.delete('end', 'end')
+            self.fig = plt.figure()
+            self.spec = self.fig.add_gridspec(3, 3)
             self.canvas = FigureCanvasTkAgg(self.fig, master=self)
             self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+            self.video_gen_bool = False
+
         self.fig.clear()
 
         # Data is updated only when data idx, prediction threshold or the model is changed
@@ -276,6 +287,129 @@ class App(UI_baseclass):
 
         # take a screenshot if the option is selected
         if self.capture_bool.get():
-            capture(self)
+            self.capture()
 
+    def show_video(self):
 
+        if self.canvas and not self.video_gen_bool or not self.canvas:
+            if self.canvas:
+                self.canvas.get_tk_widget().pack_forget()
+            self.menubar.add_command(label="Pause/Resume", command=self.pause_resume)
+            self.canvas = tk.Canvas(self)
+            self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+            self.canvas_frame = self.canvas.create_image(0, 0, anchor='nw', image=None)
+            self.video_gen_bool = True
+        
+        self.idx_video = 0
+        if not hasattr(self, "img_frames"):
+            self.generate_video()
+        
+        self.show_sequence()
+
+    def generate_video(self):
+
+        self.select_all_bboxes.set(True)
+        self.img_frames, self.img_frames_attention_nobbx, self.og_imgs_frames, self.bbox_coords, self.bbox_cameras, self.bbox_labels, self.all_expl = [], [], [], [], [], [], []
+
+        self.paused = False
+
+        print("\nGenerating image frames...\n")
+        prog_bar = mmcv.ProgressBar(self.video_length)
+
+        for i in range(self.data_idx, self.data_idx + self.video_length):
+            self.data_idx = i
+
+            imgs_att, imgs_att_nobbx, imgs_og, bbox_camera, labels = self.generate_video_frame()
+
+            hori = np.concatenate((imgs_att[2], imgs_att[0], imgs_att[1]), axis=1)
+            ver = np.concatenate((imgs_att[5], imgs_att[3], imgs_att[4]), axis=1)
+            full = np.concatenate((hori, ver), axis=0)
+
+            self.img_frames.append(full)
+            self.img_frames_attention_nobbx.append(imgs_att_nobbx)
+            self.og_imgs_frames.append(imgs_og)
+            self.bbox_cameras.append(bbox_camera)
+            self.bbox_labels.append(labels)
+            prog_bar.update()
+
+        self.data_idx -= (self.video_length - 1)
+        print("\nVideo generated.\n")
+
+    def show_sequence(self):
+        if not self.paused:
+            self.update_frame()
+            self.update_info_label(idx=self.data_idx + self.idx_video)
+
+            if self.idx_video < self.video_length:
+                self.after(1, self.show_sequence)
+            else:
+                self.paused = True
+
+    def update_frame(self):
+        img_frame = self.img_frames[self.idx_video]
+        w, h = self.canvas.winfo_width(), self.canvas.winfo_height()
+        self.img_frame = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((w, h)))
+        self.canvas.itemconfig(self.canvas_frame, image=self.img_frame)
+
+        self.idx_video += 1
+
+    def pause_resume(self):
+        if not self.paused:
+            self.paused = True
+        else:
+            self.paused = False
+            if self.idx_video >= len(self.img_frames):
+                self.idx_video = 0
+
+            labels = self.bbox_labels[self.idx_video]
+            self.update_objects_list(labels)
+            self.show_sequence()
+
+    def generate_video_frame(self):
+
+        self.update_data()
+
+        # Avoid selecting all layers and all cameras. Only the last layer will be visualized
+        if self.show_all_layers.get() and self.selected_camera.get() == -1:
+            self.selected_layer.set(self.Attention.layers - 1)
+
+        # Extract the selected bounding box indexes from the menu
+        self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
+
+        self.attn_list = self.Attention.generate_explainability_cameras(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
+
+        # Generate images list with bboxes on it
+        cam_imgs, og_imgs, bbox_cameras, att_nobbx = [], [], [], []  # Used for video generation
+
+        for camidx in range(len(self.imgs)):
+            og_img = cv2.cvtColor(self.imgs[camidx], cv2.COLOR_BGR2RGB)
+            og_imgs.append(og_img)
+
+            attn_img = self.imgs[camidx].astype(np.uint8)
+            attn = self.attn_list[camidx]
+
+            attn_img = self.overlay_attention_on_image(attn_img, attn)      
+            attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
+            att_nobbx.append(attn_img)
+
+            img, bbox_camera = draw_lidar_bbox3d_on_img(
+                    self.pred_bboxes,
+                    self.imgs[camidx],
+                    self.img_metas['lidar2img'][camidx],
+                    self.img_metas,
+                    color=(0, 255, 0),
+                    with_label=self.show_labels.get(),
+                    all_bbx=self.BB_bool.get(),
+                    bbx_idx=self.bbox_idx,
+                    mode_2d=self.bbox_2d.get(),
+                    camidx=camidx)  
+            
+            bbox_cameras.append(bbox_camera)       
+
+            attn = self.attn_list[camidx]
+            img = self.overlay_attention_on_image(img, attn)   
+
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            cam_imgs.append(img)
+
+        return cam_imgs, att_nobbx, og_imgs, bbox_cameras, self.labels

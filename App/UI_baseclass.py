@@ -34,12 +34,13 @@ class UI_baseclass(tk.Tk):
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
         self.protocol("WM_DELETE_WINDOW", self.quit)
-        self.canvas, self.video_canvas, self.fig, self.spec = None, None, None, None
+        self.canvas, self.fig, self.spec = None, None, None
 
         # Model and dataloader objects
         self.model, self.dataloader = None, None
         self.started_app = False
         self.video_length = 10
+        self.video_gen_bool = False
         
         # Main Tkinter menu in which all other cascade menus are added
         self.menubar = tk.Menu(self)
@@ -83,8 +84,10 @@ class UI_baseclass(tk.Tk):
         # Cascade menu for Data index
         dataidx_opt = tk.Menu(self.menubar)
         dataidx_opt.add_command(label=" Select data index", command=self.select_data_idx)
-        dataidx_opt.add_command(label=" Select video length", command=self.select_data_idx(length=True))
+        dataidx_opt.add_command(label=" Select video length", command=lambda: self.select_data_idx(length=True))
         dataidx_opt.add_command(label=" Select random data", command=self.random_data_idx)
+        dataidx_opt.add_separator()
+        dataidx_opt.add_command(label=" Generate video", command=self.generate_video)
 
         # Cascade menus for Prediction threshold
         thr_opt = tk.Menu(self.menubar)
@@ -210,15 +213,6 @@ class UI_baseclass(tk.Tk):
         self.add_separator()
         self.menubar.add_cascade(label="Options", menu=add_opt)
         self.add_separator("|")
-        self.menubar.add_command(label="Visualize", command=self.visualize)
-
-        # Create figure with a 3x3 grid
-        self.fig = plt.figure()
-        self.spec = self.fig.add_gridspec(3, 3)
-
-        # # Create canvas with the figure embedded in it, and update it after each visualization
-        # self.canvas = FigureCanvasTkAgg(self.fig, master=self)
-        # self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
     def update_data(self):
         '''
@@ -269,6 +263,7 @@ class UI_baseclass(tk.Tk):
         if self.old_data_idx != self.data_idx or self.old_thr != self.selected_threshold.get() or self.new_model:
             self.update_objects_list()
             self.initialize_bboxes()
+
 
     def load_from_config(self):
         with open("config.toml", mode="rb") as argsF:

@@ -1,4 +1,4 @@
-from App.UserInterface import App
+from App.App import App
 from App.VideoGen import VideoGen
 import warnings
 
@@ -6,8 +6,7 @@ import warnings
 def main():
     ''' Main script which creates the App class interface and runs it. '''
     warnings.filterwarnings("ignore")
-    #app = App()
-    app = VideoGen()
+    app = App()
     app.mainloop()
 
 

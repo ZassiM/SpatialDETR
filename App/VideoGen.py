@@ -9,7 +9,7 @@ import mmcv
 from mmcv.parallel import DataContainer as DC
 from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 
-from App.UserInterface import App
+from App.App import App
 
 from PIL import Image, ImageTk
 from App.UI_baseclass import UI_baseclass
