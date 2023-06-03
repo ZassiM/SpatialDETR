@@ -148,11 +148,7 @@ class App(UI_baseclass):
                 attn = self.attn_list[self.selected_camera.get()]
                 
             ax_attn.axis('off')
-            attmap = ax_attn.imshow(attn, vmin=0, vmax=1)            
-
-            # Visualize attention bar scale if option is selected
-            if self.show_scale.get():  
-                self.fig.colorbar(attmap, ax=ax_attn, orientation='horizontal', extend='both', shrink=0.7, pad=0)
+            ax_attn.imshow(attn, vmin=0, vmax=1)            
 
             # Set title accordinly
             if self.show_all_layers.get():
@@ -167,11 +163,14 @@ class App(UI_baseclass):
                 title += f', {self.selected_head_fusion.get()}'
 
             # Show attention camera contributon for one object
-            if self.attn_contr.get() and self.selected_camera.get() == -1 and self.single_bbox.get():
+            if self.attn_contr.get() and self.selected_camera.get() == -1:
                 self.update_scores()
                 score = self.scores_perc[self.cam_idx[i]]
                 title += f', {score}%'
-                
+                ax_attn.axhline(y=0, color='black', linewidth=10)
+                ax_attn.axhline(y=0, color='green', linewidth=10, xmax=score/100)
+
+            self.fig.tight_layout(pad=0)
             ax_attn.set_title(title, fontsize=fontsize)
 
     def visualize(self):
