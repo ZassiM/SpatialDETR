@@ -217,7 +217,7 @@ class Attention:
         # num_cams x num_objects x 1450
             
         attention_maps = torch.stack(attention_maps)
-        attention_maps = attention_maps.permute(1, 0, 2) # num_objects x num_cams x 1450 # take only the selected objects
+        attention_maps = attention_maps.permute(1, 0, 2)  # num_objects x num_cams x 1450 # take only the selected objects
         # normalize across cameras
         for i in range(len(attention_maps)):
             attention_maps[i] = (attention_maps[i] - attention_maps[i].min()) / (attention_maps[i].max() - attention_maps[i].min())

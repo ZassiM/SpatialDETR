@@ -52,7 +52,8 @@ class UI_baseclass(tk.Tk):
         self.gpu_id = tk.IntVar()
         self.gpu_id.set(0)
         file_opt.add_command(label=" Load model", command=self.load_model)
-        file_opt.add_command(label=" Load from config file", command=self.load_from_config)
+        file_opt.add_command(label=" Load model from config file", command=self.load_from_config)
+        file_opt.add_command(label=" Load video from pickle file", command=self.load_video)
         file_opt.add_separator()
         file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
         message = "You need to reload the model to apply GPU change."
@@ -90,6 +91,7 @@ class UI_baseclass(tk.Tk):
         dataidx_opt.add_command(label=" Select video length", command=lambda: self.select_data_idx(type=1))
         dataidx_opt.add_command(label=" Select frame rate", command=lambda: self.select_data_idx(type=2))
         dataidx_opt.add_command(label=" Generate video", command=self.generate_video)
+        dataidx_opt.add_command(label=" Save video", command=self.save_video)
 
         # Cascade menus for Prediction threshold
         thr_opt = tk.Menu(self.menubar)
@@ -455,8 +457,8 @@ class UI_baseclass(tk.Tk):
                 score_perc = round(((scores[i]/sum_scores)*100))
                 self.scores_perc.append(score_perc)
 
-    def overlay_attention_on_image(self, img, attn):
-        attn = cv2.applyColorMap(np.uint8(255 * attn), cv2.COLORMAP_JET)
+    def overlay_attention_on_image(self, img, attn, intensity=255):
+        attn = cv2.applyColorMap(np.uint8(attn * intensity), cv2.COLORMAP_JET)
         attn = np.float32(attn) 
         attn = cv2.resize(attn, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
         img = attn + np.float32(img)

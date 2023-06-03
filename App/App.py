@@ -12,6 +12,9 @@ from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 from App.UI_baseclass import UI_baseclass
 
 from PIL import Image, ImageTk
+import pickle
+from tkinter import filedialog as fd
+
 
 
 class App(UI_baseclass):
@@ -30,7 +33,6 @@ class App(UI_baseclass):
         self.menubar.add_command(label="Visualize", command=self.visualize)
         self.add_separator("|")
         self.menubar.add_command(label="Show video", command=self.show_video)
-
 
     def evaluate_expl(self):
         print(f"Evaluating {self.selected_expl_type.get()}...")
@@ -315,32 +317,38 @@ class App(UI_baseclass):
         if not hasattr(self, "img_frames"):
             self.generate_video()
         
+        self.old_bbox_idx = None
         self.show_sequence()
 
     def generate_video(self):
 
         self.select_all_bboxes.set(True)
         self.img_frames, self.img_frames_attention_nobbx, self.og_imgs_frames, self.bbox_coords, self.bbox_cameras, self.bbox_labels, self.all_expl = [], [], [], [], [], [], []
-
-        self.paused = False
+        self.expl_types = ["Attention Rollout"]
 
         print("\nGenerating image frames...\n")
         prog_bar = mmcv.ProgressBar(self.video_length)
-
         for i in range(self.data_idx, self.data_idx + self.video_length):
             self.data_idx = i
 
-            imgs_att, imgs_att_nobbx, imgs_og, bbox_camera, labels = self.generate_video_frame()
+            img_att_expl, img_att_nobbx = [], []
+            for expl in self.expl_types:
+                self.selected_expl_type.set(expl)
+                imgs_att, imgs_att_nobbx, imgs_og, bbox_camera, labels = self.generate_video_frame()
+                img_att_expl.append(imgs_att)
+                img_att_nobbx.append(imgs_att_nobbx)
 
-            hori = np.concatenate((imgs_att[2], imgs_att[0], imgs_att[1]), axis=1)
-            ver = np.concatenate((imgs_att[5], imgs_att[3], imgs_att[4]), axis=1)
+            img_att = img_att_expl[1]
+            hori = np.concatenate((img_att[2], img_att[0], img_att[1]), axis=1)
+            ver = np.concatenate((img_att[5], img_att[3], img_att[4]), axis=1)
             full = np.concatenate((hori, ver), axis=0)
 
             self.img_frames.append(full)
-            self.img_frames_attention_nobbx.append(imgs_att_nobbx)
+            self.img_frames_attention_nobbx.append(img_att_nobbx)
             self.og_imgs_frames.append(imgs_og)
             self.bbox_cameras.append(bbox_camera)
             self.bbox_labels.append(labels)
+
             prog_bar.update()
 
         self.data_idx -= (self.video_length - 1)
@@ -375,7 +383,8 @@ class App(UI_baseclass):
     def show_att_maps_object(self):
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
-        if len(self.bbox_idx) == 1:
+        if len(self.bbox_idx) == 1 and self.bbox_idx != self.old_bbox_idx:
+            self.old_bbox_idx = self.bbox_idx
             self.fig_obj.clear()
             self.bbox_idx = self.bbox_idx[0]
             bbox_camera = self.bbox_cameras[self.idx_video-1]
@@ -389,22 +398,25 @@ class App(UI_baseclass):
                         break
 
             og_img_frame = self.og_imgs_frames[self.idx_video-1][camidx]
-            all_expl = self.img_frames_attention_nobbx[self.idx_video-1]
             label = self.bbox_labels[self.idx_video-1][self.bbox_idx]
-
             img_single_obj = og_img_frame[bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
-            attn = all_expl[camidx][bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
 
-            ax_img = self.fig_obj.add_subplot(self.single_object_spec[0, 0])
-            ax_attn = self.fig_obj.add_subplot(self.single_object_spec[0, 1])
+            all_expl = self.img_frames_attention_nobbx[self.idx_video-1]
 
-            ax_img.imshow(img_single_obj)
-            ax_img.set_title(f"{self.class_names[label].capitalize()}")
-            ax_attn.imshow(attn)
-            ax_attn.set_title(f"{self.selected_expl_type.get()}")
+            for i in range(len(all_expl)):
+                expl = all_expl[i]
+                expl = expl[camidx][bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
 
-            ax_img.axis('off')
-            ax_attn.axis("off")
+                ax_img = self.fig_obj.add_subplot(self.single_object_spec[i, 0])
+                ax_attn = self.fig_obj.add_subplot(self.single_object_spec[i, 1])
+
+                ax_img.imshow(img_single_obj)
+                ax_img.set_title(f"{self.class_names[label].capitalize()}")
+                ax_attn.imshow(expl)
+                ax_attn.set_title(f"{self.expl_types[i]}")
+
+                ax_img.axis('off')
+                ax_attn.axis("off")
             
             self.fig_obj.tight_layout(pad=0)
             self.obj_canvas.draw()
@@ -421,6 +433,9 @@ class App(UI_baseclass):
 
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
+
+        if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
+            self.update_data()
 
         self.attn_list = self.Attention.generate_explainability_cameras(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
 
@@ -453,9 +468,50 @@ class App(UI_baseclass):
             bbox_cameras.append(bbox_camera)       
 
             attn = self.attn_list[camidx]
-            img = self.overlay_attention_on_image(img, attn)   
+            img = self.overlay_attention_on_image(img, attn, intensity=200)   
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             cam_imgs.append(img)
 
         return cam_imgs, att_nobbx, og_imgs, bbox_cameras, self.labels
+    
+    def save_video(self):
+        if self.img_frames:
+            print("Saving the video in data.pickle...\n")
+
+            data = {'img_frames': self.img_frames, 'img_frames_attention_nobbx': self.img_frames_attention_nobbx, 'og_imgs_frames': self.og_imgs_frames, 'bbox_cameras': self.bbox_cameras, 'bbox_labels': self.bbox_labels}
+
+            # Save the data dictionary to a pickle file
+            with open('data.pkl', 'wb') as f:
+                pickle.dump(data, f)
+            
+            print("Video saved.\n")
+        else:
+            self.show_message("You should first generate a video.")
+
+    def load_video(self):
+        video_datatypes = (
+            ('Pickle', '*.pkl'),
+        )
+        video_pickle = fd.askopenfilename(
+            title='Load video data',
+            initialdir='/workspace/',
+            filetypes=video_datatypes)
+
+        print(f"Loading from {video_pickle}...\n")
+        with open(video_pickle, 'rb') as f:
+            data = pickle.load(f)
+
+        self.img_frames = data["img_frames"]
+        self.img_frames_attention_nobbx = data["img_frames_attention_nobbx"]
+        self.og_imgs_frames = data["og_imgs_frames"]
+        self.bbox_cameras = data["bbox_cameras"]
+        self.bbox_labels = data["bbox_labels"]
+
+        self.show_message(f"Video loaded from {video_pickle}.\n")
+
+        
+
+        
+
+    
