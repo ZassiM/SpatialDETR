@@ -12,16 +12,10 @@ from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 from App.UserInterface import App
 
 from PIL import Image, ImageTk
-from App.Utils import show_message, show_model_info, red_text, black_text, \
-                    select_data_idx, random_data_idx, update_thr, \
-                    update_objects_list, single_bbox_select, add_separator, \
-                    initialize_bboxes, update_info_label, overlay_attention_on_image, \
-                    change_theme
-
-from App.File import load_from_config
+from App.UI_baseclass import UI_baseclass
 
 
-class VideoGen(App):
+class VideoGen(UI_baseclass):
     '''
     Application User Interface
     '''
@@ -30,36 +24,15 @@ class VideoGen(App):
         Tkinter initialization with model loading option.
         '''
         super().__init__()
-        load_from_config(self)
 
-    def start_app(self):
+        # Speeding up the testing
+        self.load_from_config()
 
-        self.selected_expl_type = tk.StringVar()
-        self.selected_expl_type.set("Attention Rollout")
-        self.selected_camera = tk.IntVar()
-        self.selected_camera.set(-1)
-
-        frame = tk.Frame(self)
-        frame.pack(fill=tk.Y)
-        self.info_text = tk.StringVar()
-        self.info_label = tk.Label(frame, textvariable=self.info_text, anchor=tk.CENTER)
-        self.info_label.bind("<Button-1>", lambda event, k=self: show_model_info(self))
-        self.info_label.bind("<Enter>", lambda event, k=self: red_text(self))
-        self.info_label.bind("<Leave>", lambda event, k=self: black_text(self))
-        self.info_label.pack(side=tk.TOP)
-
-        menubar_video = tk.Menu(self)
-        self.config(menu=menubar_video)
-        menubar_video.add_command(label="Generate", command=self.gen_video)
-        menubar_video.add_command(label="Pause/Resume", command=self.pause_resume)
-        menubar_video.add_command(label="Close", command=self.close_video)
-
-        self.video_length = 10
-
-    def gen_video(self):
-        self.video_canvas = tk.Canvas(self)
-        self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        self.canvas_frame = self.video_canvas.create_image(0, 0, anchor='nw', image=None)
+    def visualize(self):
+        if self.video_canvas is None:
+            self.video_canvas = tk.Canvas(self)
+            self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+            self.canvas_frame = self.video_canvas.create_image(0, 0, anchor='nw', image=None)
 
         self.select_all_bboxes.set(True)
         self.img_frames, self.img_frames_attention_nobbx, self.og_imgs_frames, self.bbox_coords, self.bbox_cameras, self.bbox_labels, self.all_expl = [], [], [], [], [], [], []
@@ -117,7 +90,7 @@ class VideoGen(App):
                 self.idx_video = 0
 
             labels = self.bbox_labels[self.idx_video-1]
-            update_objects_list(self, labels)
+            self.update_objects_list(labels)
             self.show_sequence()
 
     def close_video(self):
@@ -191,7 +164,7 @@ class VideoGen(App):
             attn_img = self.imgs[camidx].astype(np.uint8)
             attn = self.attn_list[camidx]
 
-            attn_img = overlay_attention_on_image(attn_img, attn)      
+            attn_img = self.overlay_attention_on_image(attn_img, attn)      
             attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
             att_nobbx.append(attn_img)
 
@@ -210,7 +183,7 @@ class VideoGen(App):
             bbox_cameras.append(bbox_camera)       
 
             attn = self.attn_list[camidx]
-            img = overlay_attention_on_image(img, attn)   
+            img = self.overlay_attention_on_image(img, attn)   
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             cam_imgs.append(img)
@@ -264,8 +237,8 @@ class VideoGen(App):
 
         # Update the Bounding box menu with the predicted labels
         if self.old_data_idx != self.data_idx or self.old_thr != self.selected_threshold.get() or self.new_model:
-            update_objects_list(self)
-            initialize_bboxes(self)
+            self.update_objects_list()
+            self.initialize_bboxes()
 
 
 

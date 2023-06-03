@@ -4,24 +4,18 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import torch
 import numpy as np
 import cv2
-
-
+import mmcv
 import tomli
 import os
 from tkinter import filedialog as fd
 from mmcv.parallel import MMDataParallel
-
-from App.Utils import random_data_idx, update_info_label
 from Explainability.Attention import Attention
 from App.Model import init_app
-
 from mmcv.parallel import DataContainer as DC
-
 from tkinter.messagebox import showinfo
 from tkinter import scrolledtext
 import random
 from PIL import ImageGrab
-
 
 
 class UI_baseclass(tk.Tk):
@@ -55,18 +49,15 @@ class UI_baseclass(tk.Tk):
         file_opt, gpu_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.gpu_id = tk.IntVar()
         self.gpu_id.set(0)
-        file_opt.add_command(label=" Load model", command=self.load_model())
-        file_opt.add_command(label=" Load from config file", command=self.load_from_config())
+        file_opt.add_command(label=" Load model", command=self.load_model)
+        file_opt.add_command(label=" Load from config file", command=self.load_from_config)
         file_opt.add_separator()
         file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
         message = "You need to reload the model to apply GPU change."
         for i in range(torch.cuda.device_count()):
-            gpu_opt.add_radiobutton(label=f"GPU {i}", variable=self.gpu_id, value=i, command=self.show_message(message))
+            gpu_opt.add_radiobutton(label=f"GPU {i}", variable=self.gpu_id, value=i, command=lambda: self.show_message(message))
 
         self.menubar.add_cascade(label=" File", menu=file_opt)
-
-        # Speeding up the testing
-        #load_from_config(self)
 
     def start_app(self):
         '''
@@ -91,9 +82,9 @@ class UI_baseclass(tk.Tk):
 
         # Cascade menu for Data index
         dataidx_opt = tk.Menu(self.menubar)
-        dataidx_opt.add_command(label=" Select data index", command=self.select_data_idx())
+        dataidx_opt.add_command(label=" Select data index", command=self.select_data_idx)
         dataidx_opt.add_command(label=" Select video length", command=self.select_data_idx(length=True))
-        dataidx_opt.add_command(label=" Select random data", command=self.random_data_idx())
+        dataidx_opt.add_command(label=" Select random data", command=self.random_data_idx)
 
         # Cascade menus for Prediction threshold
         thr_opt = tk.Menu(self.menubar)
@@ -101,7 +92,7 @@ class UI_baseclass(tk.Tk):
         self.selected_threshold.set(0.5)
         values = np.arange(0.0, 1, 0.1).round(1)
         for i in values:
-            thr_opt.add_radiobutton(label=i, variable=self.selected_threshold, command=self.update_thr())
+            thr_opt.add_radiobutton(label=i, variable=self.selected_threshold, command=self.update_thr)
 
         # Cascade menu for Camera
         camera_opt = tk.Menu(self.menubar)
@@ -109,8 +100,8 @@ class UI_baseclass(tk.Tk):
         self.cam_idx = [2, 0, 1, 5, 3, 4]  # Used for visualizing camera outputs properly
         self.selected_camera = tk.IntVar()
         for value, key in enumerate(self.cameras):
-            camera_opt.add_radiobutton(label=key, variable=self.selected_camera, value=value, command=self.update_info_label())
-        camera_opt.add_radiobutton(label="All", variable=self.selected_camera, value=-1, command=self.update_info_label())
+            camera_opt.add_radiobutton(label=key, variable=self.selected_camera, value=value, command=self.update_info_label)
+        camera_opt.add_radiobutton(label="All", variable=self.selected_camera, value=-1, command=self.update_info_label)
         self.selected_camera.set(-1) # Default: visualize all cameras
 
         # Cascade menu for Attention layer
@@ -118,7 +109,7 @@ class UI_baseclass(tk.Tk):
         self.selected_layer = tk.IntVar()
         self.show_all_layers = tk.BooleanVar()
         for i in range(self.Attention.layers):
-            layer_opt.add_radiobutton(label=i, variable=self.selected_layer, command=self.update_info_label())
+            layer_opt.add_radiobutton(label=i, variable=self.selected_layer, command=self.update_info_label)
         layer_opt.add_checkbutton(label="All", onvalue=1, offvalue=0, variable=self.show_all_layers)
         self.selected_layer.set(self.Attention.layers - 1)
 
@@ -141,7 +132,7 @@ class UI_baseclass(tk.Tk):
         for i in values:
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_ratio)
         for i in range(len(self.head_types)):
-            hf_opt.add_radiobutton(label=self.head_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_types[i], command=lambda k=self: update_info_label(k))
+            hf_opt.add_radiobutton(label=self.head_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_types[i], command=self.update_info_label)
         attn_rollout.add_cascade(label=" Head fusion", menu=hf_opt)
         attn_rollout.add_cascade(label=" Discard ratio", menu=dr_opt)
         attn_rollout.add_checkbutton(label=" Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
@@ -171,17 +162,17 @@ class UI_baseclass(tk.Tk):
         self.selected_expl_type.set(self.expl_options[0])
         self.old_expl_type = self.expl_options[0]
         for i in range(len(self.expl_options)):
-            expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i], command=lambda: update_info_label(self))
+            expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i], command=self.update_info_label)
 
-        expl_opt.add_command(label="Evaluate explainability", command=self.evaluate_expl)
+        #expl_opt.add_command(label="Evaluate explainability", command=self.evaluate_expl)
 
         # Cascade menus for object selection
         self.bbox_opt = tk.Menu(self.menubar)
         self.single_bbox = tk.BooleanVar()
         self.select_all_bboxes = tk.BooleanVar()
         self.select_all_bboxes.set(True)
-        self.bbox_opt.add_checkbutton(label=" Single object", onvalue=1, offvalue=0, variable=self.single_bbox, command=self.single_bbox_select()) 
-        self.bbox_opt.add_checkbutton(label=" Select all", onvalue=1, offvalue=0, variable=self.select_all_bboxes, command=self.initialize_bboxes())
+        self.bbox_opt.add_checkbutton(label=" Single object", onvalue=1, offvalue=0, variable=self.single_bbox, command=self.single_bbox_select) 
+        self.bbox_opt.add_checkbutton(label=" Select all", onvalue=1, offvalue=0, variable=self.select_all_bboxes, command=self.initialize_bboxes)
         self.bbox_opt.add_separator()
 
         # Cascade menus for Additional options
@@ -201,33 +192,83 @@ class UI_baseclass(tk.Tk):
         add_opt.add_checkbutton(label=" Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
         add_opt.add_checkbutton(label=" Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
-        add_opt.add_checkbutton(label=" Dark theme", onvalue=1, offvalue=0, variable=self.dark_theme, command=self.change_theme())
+        add_opt.add_checkbutton(label=" Dark theme", onvalue=1, offvalue=0, variable=self.dark_theme, command=self.change_theme)
 
         # Adding all cascade menus ro the main menubar menu
-        self.add_separator(self)
+        self.add_separator()
         self.menubar.add_cascade(label="Data", menu=dataidx_opt)
-        self.add_separator(self)
+        self.add_separator()
         self.menubar.add_cascade(label="Prediction threshold", menu=thr_opt)
-        self.add_separator(self)
+        self.add_separator()
         self.menubar.add_cascade(label="Camera", menu=camera_opt)
-        self.add_separator(self)
+        self.add_separator()
         self.menubar.add_cascade(label="Objects", menu=self.bbox_opt)
-        self.add_separator(self)
+        self.add_separator()
         self.menubar.add_cascade(label="Layer", menu=layer_opt)
-        self.add_separator(self)
+        self.add_separator()
         self.menubar.add_cascade(label="Explainability", menu=expl_opt)
-        self.add_separator(self)
+        self.add_separator()
         self.menubar.add_cascade(label="Options", menu=add_opt)
-        self.add_separator(self, "|")
+        self.add_separator("|")
         self.menubar.add_command(label="Visualize", command=self.visualize)
 
         # Create figure with a 3x3 grid
         self.fig = plt.figure()
         self.spec = self.fig.add_gridspec(3, 3)
 
-        # Create canvas with the figure embedded in it, and update it after each visualization
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self)
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        # # Create canvas with the figure embedded in it, and update it after each visualization
+        # self.canvas = FigureCanvasTkAgg(self.fig, master=self)
+        # self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
+    def update_data(self):
+        '''
+        Predict bboxes and extracts attentions.
+        '''
+        # Load selected data from dataloader, manual DataContainer fixes are needed
+        data = self.dataloader.dataset[self.data_idx]
+        metas = [[data['img_metas'][0].data]]
+        img = [data['img'][0].data.unsqueeze(0)]
+        data['img_metas'][0] = DC(metas, cpu_only=True)
+        data['img'][0] = DC(img)
+        self.data = data
+
+        # Attention scores are extracted, together with gradients if grad-CAM is selected
+        if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
+            outputs = self.Attention.extract_attentions(self.data)
+        else:
+            outputs = self.Attention.extract_attentions(self.data, self.bbox_idx)
+
+        # Those are needed to index the bboxes decoded by the NMS-Free decoder
+        self.nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes()
+
+        # Extract predicted bboxes and their labels
+        self.outputs = outputs[0]["pts_bbox"]
+        self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
+
+        self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
+        self.pred_bboxes.tensor.detach()
+        self.labels = self.outputs['labels_3d'][self.thr_idxs]
+
+        # Extract image metas which contain, for example, the lidar to camera projection matrices
+        self.img_metas = self.data["img_metas"][0]._data[0][0]
+        ori_shape = self.img_metas["ori_shape"] # Used for removing the padded pixels
+
+        # Extract the 6 camera images from the data and remove the padded pixels
+        imgs = self.data["img"][0]._data[0].numpy()[0]
+        imgs = imgs.transpose(0, 2, 3, 1)[:, :ori_shape[0], :ori_shape[1], :] # [num_cams x height x width x channels]
+        
+        # Denormalize the images
+        mean = np.array(self.img_norm_cfg["mean"], dtype=np.float32)
+        std = np.array(self.img_norm_cfg["std"], dtype=np.float32)
+
+        for i in range(len(imgs)):
+            imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
+        self.imgs = imgs.astype(np.uint8)
+
+        # Update the Bounding box menu with the predicted labels
+        if self.old_data_idx != self.data_idx or self.old_thr != self.selected_threshold.get() or self.new_model:
+            self.update_objects_list()
+            self.initialize_bboxes()
 
     def load_from_config(self):
         with open("config.toml", mode="rb") as argsF:
@@ -237,7 +278,7 @@ class UI_baseclass(tk.Tk):
         weights_file = args["weights_file"]
         gpu_id = args["gpu_id"]
 
-        self.load_model(self, cfg_file, weights_file, gpu_id)
+        self.load_model(cfg_file, weights_file, gpu_id)
 
     def load_model(self, cfg_file=None, weights_file=None, gpu_id=None):
         cfg_filetypes = (
@@ -284,9 +325,9 @@ class UI_baseclass(tk.Tk):
             print("Starting app...\n")
             self.start_app()
             self.started_app = True
-            random_data_idx(self)
+            self.random_data_idx()
 
-        update_info_label(self)
+        self.update_info_label()
 
     def add_separator(self, sep="|"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
@@ -325,7 +366,7 @@ class UI_baseclass(tk.Tk):
         self.entry = tk.Entry(popup, width=20)
         self.entry.pack()
 
-        button = tk.Button(popup, text="OK", command=lambda k=self: close_entry(k, popup, length))
+        button = tk.Button(popup, text="OK", command=lambda: self.close_entry(popup, length))
         button.pack()
 
     def close_entry(self, popup, length):
@@ -333,22 +374,22 @@ class UI_baseclass(tk.Tk):
         if not length:
             if idx.isnumeric() and int(idx) <= (len(self.dataloader)-1):
                 self.data_idx = int(idx)
-                update_info_label(self)
+                self.update_info_label()
                 popup.destroy()
             else:
-                self.self.show_message(self, f"Insert an integer between 0 and {len(self.dataloader)-1}")
+                self.show_message(f"Insert an integer between 0 and {len(self.dataloader)-1}")
         else:
             if idx.isnumeric() and int(idx) <= ((len(self.dataloader)-1) - self.data_idx):
                 self.video_length = int(idx)
-                update_info_label(self)
+                self.update_info_label()
                 popup.destroy()
             else:
-                self.show_message(self, f"Insert an integer between 0 and {(len(self.dataloader)-1) - self.data_idx}")       
+                self.show_message(f"Insert an integer between 0 and {(len(self.dataloader)-1) - self.data_idx}")       
 
     def random_data_idx(self):
         idx = random.randint(0, len(self.dataloader)-1)
         self.data_idx = idx
-        update_info_label(self)
+        self.update_info_label()
 
     def update_info_label(self, info=None, idx=None):
         if idx is None:
@@ -374,7 +415,7 @@ class UI_baseclass(tk.Tk):
             view_bbox = tk.BooleanVar()
             view_bbox.set(False)
             self.bboxes.append(view_bbox)
-            self.bbox_opt.add_checkbutton(label=f" {self.class_names[labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: single_bbox_select(self, idx))
+            self.bbox_opt.add_checkbutton(label=f" {self.class_names[labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
 
     def single_bbox_select(self, idx=None):
         self.select_all_bboxes.set(False)
@@ -411,7 +452,7 @@ class UI_baseclass(tk.Tk):
                 score_perc = round(((scores[i]/sum_scores)*100))
                 self.scores_perc.append(score_perc)
 
-    def overlay_attention_on_image(img, attn):
+    def overlay_attention_on_image(self, img, attn):
         attn = cv2.applyColorMap(np.uint8(255 * attn), cv2.COLORMAP_JET)
         attn = np.float32(attn) 
         attn = cv2.resize(attn, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
