@@ -31,6 +31,7 @@ class App(UI_baseclass):
         self.add_separator("|")
         self.menubar.add_command(label="Show video", command=self.show_video)
 
+
     def evaluate_expl(self):
         print(f"Evaluating {self.selected_expl_type.get()}...")
 
@@ -299,8 +300,18 @@ class App(UI_baseclass):
             self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
             self.canvas_frame = self.canvas.create_image(0, 0, anchor='nw', image=None)
             self.video_gen_bool = True
+
+        if self.single_object_window is None:
+            self.single_object_window = tk.Toplevel(self)
+            self.single_object_window.title("Object Explainability visualization")
+            self.fig_obj = plt.figure()
+            self.single_object_spec = self.fig_obj.add_gridspec(3, 2)
+            self.obj_canvas = FigureCanvasTkAgg(self.fig_obj, master=self.single_object_window)
+            self.obj_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         
         self.idx_video = 0
+        self.paused = False
+
         if not hasattr(self, "img_frames"):
             self.generate_video()
         
@@ -337,33 +348,68 @@ class App(UI_baseclass):
 
     def show_sequence(self):
         if not self.paused:
-            self.update_frame()
+            img_frame = self.img_frames[self.idx_video]
+            w, h = self.canvas.winfo_width(), self.canvas.winfo_height()
+            self.img_frame = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((w, h)))
+            self.canvas.itemconfig(self.canvas_frame, image=self.img_frame)
+            self.idx_video += 1
             self.update_info_label(idx=self.data_idx + self.idx_video)
 
-            if self.idx_video < self.video_length:
-                self.after(1, self.show_sequence)
-            else:
-                self.paused = True
+            if self.idx_video >= self.video_length:
+                self.idx_video = 0
 
-    def update_frame(self):
-        img_frame = self.img_frames[self.idx_video]
-        w, h = self.canvas.winfo_width(), self.canvas.winfo_height()
-        self.img_frame = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((w, h)))
-        self.canvas.itemconfig(self.canvas_frame, image=self.img_frame)
-
-        self.idx_video += 1
+            self.after_seq_id = self.after(self.frame_rate, self.show_sequence)
 
     def pause_resume(self):
         if not self.paused:
             self.paused = True
+            self.after_cancel(self.after_seq_id)
+            labels = self.bbox_labels[self.idx_video-1]
+            self.update_objects_list(labels)
+            self.show_att_maps_object()
         else:
             self.paused = False
-            if self.idx_video >= len(self.img_frames):
-                self.idx_video = 0
-
-            labels = self.bbox_labels[self.idx_video]
-            self.update_objects_list(labels)
+            self.after_cancel(self.after_obj_id)
             self.show_sequence()
+
+    def show_att_maps_object(self):
+        self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
+
+        if len(self.bbox_idx) == 1:
+            self.fig_obj.clear()
+            self.bbox_idx = self.bbox_idx[0]
+            bbox_camera = self.bbox_cameras[self.idx_video-1]
+
+            #{'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
+            for i, bboxes in enumerate(bbox_camera):
+                for b in bboxes:
+                    if self.bbox_idx == b[0]:
+                        camidx = i
+                        bbox_coord = b[1]
+                        break
+
+            og_img_frame = self.og_imgs_frames[self.idx_video-1][camidx]
+            all_expl = self.img_frames_attention_nobbx[self.idx_video-1]
+            label = self.bbox_labels[self.idx_video-1][self.bbox_idx]
+
+            img_single_obj = og_img_frame[bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
+            attn = all_expl[camidx][bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
+
+            ax_img = self.fig_obj.add_subplot(self.single_object_spec[0, 0])
+            ax_attn = self.fig_obj.add_subplot(self.single_object_spec[0, 1])
+
+            ax_img.imshow(img_single_obj)
+            ax_img.set_title(f"{self.class_names[label].capitalize()}")
+            ax_attn.imshow(attn)
+            ax_attn.set_title(f"{self.selected_expl_type.get()}")
+
+            ax_img.axis('off')
+            ax_attn.axis("off")
+            
+            self.fig_obj.tight_layout(pad=0)
+            self.obj_canvas.draw()
+        
+        self.after_obj_id = self.after(1, self.show_att_maps_object)
 
     def generate_video_frame(self):
 

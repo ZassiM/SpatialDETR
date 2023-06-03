@@ -34,13 +34,14 @@ class UI_baseclass(tk.Tk):
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
         self.protocol("WM_DELETE_WINDOW", self.quit)
-        self.canvas, self.fig, self.spec = None, None, None
+        self.canvas, self.fig, self.spec, self.single_object_window,self.single_object_canvas = None, None, None, None, None
 
         # Model and dataloader objects
         self.model, self.dataloader = None, None
         self.started_app = False
         self.video_length = 10
         self.video_gen_bool = False
+        self.frame_rate = 1
         
         # Main Tkinter menu in which all other cascade menus are added
         self.menubar = tk.Menu(self)
@@ -83,10 +84,11 @@ class UI_baseclass(tk.Tk):
 
         # Cascade menu for Data index
         dataidx_opt = tk.Menu(self.menubar)
-        dataidx_opt.add_command(label=" Select data index", command=self.select_data_idx)
-        dataidx_opt.add_command(label=" Select video length", command=lambda: self.select_data_idx(length=True))
+        dataidx_opt.add_command(label=" Select data index", command=lambda: self.select_data_idx(type=0))
         dataidx_opt.add_command(label=" Select random data", command=self.random_data_idx)
         dataidx_opt.add_separator()
+        dataidx_opt.add_command(label=" Select video length", command=lambda: self.select_data_idx(type=1))
+        dataidx_opt.add_command(label=" Select frame rate", command=lambda: self.select_data_idx(type=2))
         dataidx_opt.add_command(label=" Generate video", command=self.generate_video)
 
         # Cascade menus for Prediction threshold
@@ -264,7 +266,6 @@ class UI_baseclass(tk.Tk):
             self.update_objects_list()
             self.initialize_bboxes()
 
-
     def load_from_config(self):
         with open("config.toml", mode="rb") as argsF:
             args = tomli.load(argsF)
@@ -354,32 +355,39 @@ class UI_baseclass(tk.Tk):
         text.pack(expand=True, fill='both')
         text.configure(state="disabled")
 
-    def select_data_idx(self, length=False):
+    def select_data_idx(self, type=0):
+        # Type 0: data index; type 1: video lenght; type 2: frame rate
         popup = tk.Toplevel(self)
         popup.geometry("80x50")
 
         self.entry = tk.Entry(popup, width=20)
         self.entry.pack()
 
-        button = tk.Button(popup, text="OK", command=lambda: self.close_entry(popup, length))
+        button = tk.Button(popup, text="OK", command=lambda: self.close_entry(popup, type))
         button.pack()
 
-    def close_entry(self, popup, length):
+    def close_entry(self, popup, type):
         idx = self.entry.get()
-        if not length:
+        if type == 0:
             if idx.isnumeric() and int(idx) <= (len(self.dataloader)-1):
                 self.data_idx = int(idx)
                 self.update_info_label()
-                popup.destroy()
             else:
                 self.show_message(f"Insert an integer between 0 and {len(self.dataloader)-1}")
-        else:
-            if idx.isnumeric() and int(idx) <= ((len(self.dataloader)-1) - self.data_idx):
+        elif type == 1:
+            if idx.isnumeric() and 2 <= int(idx) <= ((len(self.dataloader)-1) - self.data_idx):
                 self.video_length = int(idx)
-                self.update_info_label()
-                popup.destroy()
             else:
-                self.show_message(f"Insert an integer between 0 and {(len(self.dataloader)-1) - self.data_idx}")       
+                self.show_message(f"Insert an integer between 2 and {(len(self.dataloader)-1) - self.data_idx}") 
+        elif type == 2:
+            max_frame_rate = 100
+            if idx.isnumeric() and 1 <= int(idx) <= (max_frame_rate):
+                self.frame_rate = int(idx)
+            else:
+                self.show_message(f"Insert an integer between 1 and {max_frame_rate}") 
+
+        popup.destroy()
+
 
     def random_data_idx(self):
         idx = random.randint(0, len(self.dataloader)-1)
