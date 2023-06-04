@@ -30,13 +30,17 @@ To ease the setup of this project we provide a docker container and some conveni
 ./docker/build.sh
 ```
 to build the container
-- If on a local machine, open 'bash /docker/run_loc.sh', otherwise open `/docker/run_cluster.sh` if on a remote server.
-- Adapt the `nusc_data_dir` to the nuscenes directory and `work_dirs` to the direcory where model weights and pretrained weights directories are saved. Leave everything as it is if testing the project on the rhea3 cluster.
+- If on a Linux machine, open `bash /docker/run_loc.sh`. If on a Windows machine `bash /docker/run_win.sh`. If on a remote Linux server, open `/docker/run_cluster.sh`.
+- Adapt the `nusc_data_dir` to the nuscenes directory and `work_dirs` to the direcory where model weights and pretrained weights directories are saved.
 
 ### Container Run and Setup
-1. If on local machine run:
+1. If on Linux machine run:
 ```bash
 ./docker/run_loc.sh
+```
+If on Windows machine run:
+```bash
+./docker/run_win.sh
 ```
 Otherwise, if working on a remote server, run:
 ```bash
@@ -50,11 +54,10 @@ Otherwise, if working on a remote server, run:
 ## Application testing
 1. After the docker container is set-up, run the application:
 ```bash 
-python3 main.py
+python main.py
 ```
-2. A GUI will appear. Select **File-Load model** to load the model configuration, the checkpoints and the dataset. Otherwise, if the same configurations are used each time, modify the **config.toml** file accordinly and select **File-Load from config file**.
-3. Select a data index from the **data** menu, and click visualize. You can select the bounding box from the **Bounding boxes** menu.
-4. Change the visualization settings with the drop-down menus. Then, click **Visualize**. 
+2. A GUI will appear. Select **File-Load model** to load the model configuration and the checkpoints. Otherwise, if the same configurations are used each time, modify the **config.toml** file accordinly and select **File-Load from config file**.
+3. Change the visualization settings with the drop-down menus. Then, click **Visualize**. 
 
 ## Model Training
 1. Use the configs in the **configs** folder to train SpatialDETR.  
@@ -74,7 +77,6 @@ or for multi-gpu e.g. 4 gpus:
 
 ## Issues and To-Do
 - The shell for running the docker container makes sure that the display environment is correctly forwarded to the docker and ssh server. However, some display errors still can be faced reported while trying to run the GUI application. For testing the GUI inside the Docker container, run `xclock` and see if a window opens. The following guides are useful: https://www.baeldung.com/linux/forward-x-over-ssh, https://x410.dev/cookbook/enabling-ssh-x11-forwarding-in-visual-studio-code-for-remote-development/
-- The application works both on Windows and Linux, but for now this README description is adapted only for Linux. I will describe how to configure the application for Windows too.
 - The application works only with SpatialDETR for now. Other models will be supported.
 
  
