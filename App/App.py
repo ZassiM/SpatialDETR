@@ -1,22 +1,12 @@
-import tkinter as tk
+from App.UI import UI, tk, np, cv2, mmcv, torch
+
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import torch
-import numpy as np
-import cv2
-import mmcv
-
-from mmcv.parallel import DataContainer as DC
 from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
-
-from App.UI_baseclass import UI_baseclass
-
 from PIL import Image, ImageTk
-import pickle
-from tkinter import filedialog as fd
 
 
-class App(UI_baseclass):
+class App(UI):
     '''
     Application User Interface
     '''
@@ -28,143 +18,6 @@ class App(UI_baseclass):
 
         # Speeding up the testing
         self.load_from_config()
-
-    def evaluate_expl(self):
-        print(f"Evaluating {self.selected_expl_type.get()}...")
-
-        bbox_idx = [0]
-        initial_idx = 500
-        evaluation_lenght = 20
-        num_tokens = int(0.25 * 1450)
-        outputs_pert = []
-        dataset = self.dataloader.dataset
-        prog_bar = mmcv.ProgressBar(evaluation_lenght)
-
-        for i in range(initial_idx, initial_idx + evaluation_lenght):
-            data = self.dataloader.dataset[i]
-            metas = [[data['img_metas'][0].data]]
-            img = [data['img'][0].data.unsqueeze(0)] # img[0] = torch.Size([1, 6, 3, 928, 1600])
-            data['img_metas'][0] = DC(metas, cpu_only=True)
-            data['img'][0] = DC(img)
-
-            # Attention scores are extracted, together with gradients if grad-CAM is selected
-            if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
-                self.Attention.extract_attentions(data)
-            else:
-                self.Attention.extract_attentions(data, bbox_idx)
-
-            nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes()
-
-            attn_list = []
-            topk_list = []
-            
-            for camidx in range(6):
-                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), bbox_idx, nms_idxs, camidx, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
-                attn = attn.view(1, 1, 29, 50)
-                attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
-                attn = attn.view(attn.shape[2], attn.shape[3]).cpu()
-                attn_list.append(attn)
-
-            attn_max = np.max(np.concatenate(attn_list))
-            for i in range(len(attn_list)):
-                attn = attn_list[i]
-                attn /= attn_max
-                _, indices = torch.topk(attn.flatten(), k=num_tokens)
-                indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
-                topk_list.append(indices)
-
-            img_og_list = [] # list of original images
-            img_pert_list = [] # list of perturbed images
-
-            # Denormalization is needed, because data is normalized 
-            img = img[0][0]
-            for i in range(len(img)):
-                img_og = img[i].permute(1, 2, 0)
-
-                img_og_list.append(img_og)
-                img_pert = img_og.clone()
-                # Image perturbation by setting pixels to (0,0,0)
-                for idx in topk_list[i]:
-                    img_pert[idx[0], idx[1]] = 0
-                img_pert_list.append(img_pert.permute(2, 0, 1))
-
-            # Save the perturbed 6 camera images into the data input
-            img = [torch.stack((img_pert_list)).unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
-            data['img'][0] = DC(img)
-
-            # Second forward
-            with torch.no_grad():
-                output = self.model(return_loss=False, rescale=True, **data)
-
-            outputs_pert.extend(output)
-            torch.cuda.empty_cache()
-
-            prog_bar.update()
-        
-        print("\nCompleted.\n")
-
-        kwargs = {}
-        eval_kwargs = self.cfg.get('evaluation', {}).copy()
-        # hard-code way to remove EvalHook args
-        for key in [
-                'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
-                'rule'
-        ]:
-            eval_kwargs.pop(key, None)
-        eval_kwargs.update(dict(metric="bbox", **kwargs))
-        print(dataset.evaluate(outputs_pert, **eval_kwargs))
-
-    def show_attention_maps(self, grid_clm=1):
-        '''
-        Shows the attention map for explainability.
-        '''
-        # If we want to visualize all layers or all cameras:
-        if self.show_all_layers.get() or self.selected_camera.get() == -1:
-            # Select the center of the grid to plot the attentions and add 2x2 subgrid
-            layer_grid = self.spec[1, grid_clm].subgridspec(2, 3)
-            fontsize = 8
-        else:
-            fontsize = 12
-            
-        for i in range(len(self.attn_list)):
-
-            if self.show_all_layers.get() or self.selected_camera.get() == -1:
-                ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
-            else:
-                ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
-            
-            if self.show_all_layers.get():
-                attn = self.attn_list[i]
-            elif self.selected_camera.get() == -1:
-                attn = self.attn_list[self.cam_idx[i]]
-            else:
-                attn = self.attn_list[self.selected_camera.get()]
-                
-            ax_attn.axis('off')
-            ax_attn.imshow(attn, vmin=0, vmax=1)            
-
-            # Set title accordinly
-            if self.show_all_layers.get():
-                title = f'{list(self.cameras.keys())[self.selected_camera.get()]}, layer {i}'
-            elif self.selected_camera.get() == -1:
-                title = f'{list(self.cameras.keys())[self.cam_idx[i]]}, layer {self.selected_layer.get()}'
-            else:
-                title = None
-
-            # If doing Attention Rollout, visualize head fusion type
-            if self.show_all_layers.get() or self.selected_camera.get() == -1 and self.selected_expl_type.get() == "Attention Rollout":
-                title += f', {self.selected_head_fusion.get()}'
-
-            # Show attention camera contributon for one object
-            if self.attn_contr.get() and self.selected_camera.get() == -1:
-                self.update_scores()
-                score = self.scores_perc[self.cam_idx[i]]
-                title += f', {score}%'
-                ax_attn.axhline(y=0, color='black', linewidth=10)
-                ax_attn.axhline(y=0, color='green', linewidth=10, xmax=score/100)
-
-            self.fig.tight_layout(pad=0)
-            ax_attn.set_title(title, fontsize=fontsize)
 
     def visualize(self):
         '''
@@ -199,12 +52,12 @@ class App(UI_baseclass):
 
         # Avoid selecting all layers and all cameras. Only the last layer will be visualized
         if self.show_all_layers.get() and self.selected_camera.get() == -1:
-            self.selected_layer.set(self.Attention.layers - 1)
+            self.show_all_layers.set(False)
 
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
-        if self.selected_expl_type.get() == "Gradient Rollout":
+        if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
             self.update_data()
             self.show_all_layers.set(False)
 
@@ -286,6 +139,63 @@ class App(UI_baseclass):
         if self.capture_bool.get():
             self.capture()
 
+    def show_attention_maps(self, grid_clm=1):
+        '''
+        Shows the attention map for explainability.
+        '''
+        # If we want to visualize all layers or all cameras:
+        if self.show_all_layers.get() or self.selected_camera.get() == -1:
+            # Select the center of the grid to plot the attentions and add 2x2 subgrid
+            layer_grid = self.spec[1, grid_clm].subgridspec(2, 3)
+            fontsize = 8
+        else:
+            fontsize = 12
+            
+        for i in range(len(self.attn_list)):
+            if self.show_all_layers.get() or self.selected_camera.get() == -1:
+                ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
+            else:
+                ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
+            
+            if self.show_all_layers.get():
+                attn = self.attn_list[i]
+            elif self.selected_camera.get() == -1:
+                attn = self.attn_list[self.cam_idx[i]]
+            else:
+                attn = self.attn_list[self.selected_camera.get()]
+
+            ax_attn.imshow(attn, vmin=0, vmax=1)      
+
+            # Set title accordinly
+            if self.show_all_layers.get() or self.selected_camera.get() != -1:
+                title = f'{list(self.cameras.keys())[self.selected_camera.get()]}'
+                if self.selected_expl_type.get() != "Gradient Rollout":
+                    title += f' , layer {i}'
+            else:
+                title = f'{list(self.cameras.keys())[self.cam_idx[i]]}'
+                if self.selected_expl_type.get() != "Gradient Rollout":
+                    title += f' , layer {self.selected_layer.get()}'
+
+            # If doing Attention Rollout, visualize head fusion type
+            if self.selected_expl_type.get() == "Attention Rollout":
+                title += f', {self.selected_head_fusion.get()}'
+
+            # Show attention camera contributon if all cameras are selected
+            if self.attn_contr.get() and self.selected_camera.get() == -1:
+                self.update_scores()
+                score = self.scores_perc[self.cam_idx[i]]
+                title += f', {score}%'
+                ax_attn.axhline(y=0, color='black', linewidth=10)
+                ax_attn.axhline(y=0, color='green', linewidth=10, xmax=score/100)
+
+            ax_attn.set_title(title, fontsize=fontsize, pad=0)
+            ax_attn.axis('off')   
+            self.fig.tight_layout()
+   
+
+            if not self.show_all_layers.get() and self.selected_camera.get() != -1:
+                break
+ 
     def show_video(self):
 
         if self.canvas and not self.video_gen_bool or not self.canvas:
@@ -463,44 +373,88 @@ class App(UI_baseclass):
         img_frame = np.concatenate((hori, ver), axis=0)
 
         return img_frame, att_nobbx, og_imgs, bbox_cameras, self.labels
-    
-    def save_video(self):
-        if hasattr(self, "img_frames"):
-            data = {'img_frames': self.img_frames, 'img_frames_attention_nobbx': self.img_frames_attention_nobbx, 'og_imgs_frames': self.og_imgs_frames, 'bbox_cameras': self.bbox_cameras, 'bbox_labels': self.bbox_labels}
 
-            file_path = fd.asksaveasfilename(defaultextension=".pkl", filetypes=[("All Files", "*.*")])
+    def evaluate_expl(self):
+        print(f"Evaluating {self.selected_expl_type.get()}...")
 
-            print(f"Saving video in {file_path}...\n")
-            with open(file_path, 'wb') as f:
-                pickle.dump(data, f)
+        bbox_idx = [0]
+        initial_idx = 500
+        evaluation_lenght = 20
+        num_tokens = int(0.25 * 1450)
+        outputs_pert = []
+        dataset = self.dataloader.dataset
+        prog_bar = mmcv.ProgressBar(evaluation_lenght)
+
+        for i in range(initial_idx, initial_idx + evaluation_lenght):
+            data = self.dataloader.dataset[i]
+            metas = [[data['img_metas'][0].data]]
+            img = [data['img'][0].data.unsqueeze(0)] # img[0] = torch.Size([1, 6, 3, 928, 1600])
+            data['img_metas'][0] = DC(metas, cpu_only=True)
+            data['img'][0] = DC(img)
+
+            # Attention scores are extracted, together with gradients if grad-CAM is selected
+            if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
+                self.Attention.extract_attentions(data)
+            else:
+                self.Attention.extract_attentions(data, bbox_idx)
+
+            nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes()
+
+            attn_list = []
+            topk_list = []
             
-            self.show_message(f"Video saved in {file_path}")
-        else:
-            self.show_message("You should first generate a video.")
+            for camidx in range(6):
+                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), bbox_idx, nms_idxs, camidx, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
+                attn = attn.view(1, 1, 29, 50)
+                attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
+                attn = attn.view(attn.shape[2], attn.shape[3]).cpu()
+                attn_list.append(attn)
 
-    def load_video(self):
-        video_datatypes = (
-            ('Pickle', '*.pkl'),
-        )
-        video_pickle = fd.askopenfilename(
-            title='Load video data',
-            initialdir='/workspace/',
-            filetypes=video_datatypes)
+            attn_max = np.max(np.concatenate(attn_list))
+            for i in range(len(attn_list)):
+                attn = attn_list[i]
+                attn /= attn_max
+                _, indices = torch.topk(attn.flatten(), k=num_tokens)
+                indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
+                topk_list.append(indices)
 
-        print(f"Loading video from {video_pickle}...\n")
-        with open(video_pickle, 'rb') as f:
-            data = pickle.load(f)
+            img_og_list = [] # list of original images
+            img_pert_list = [] # list of perturbed images
 
-        self.img_frames = data["img_frames"]
-        self.img_frames_attention_nobbx = data["img_frames_attention_nobbx"]
-        self.og_imgs_frames = data["og_imgs_frames"]
-        self.bbox_cameras = data["bbox_cameras"]
-        self.bbox_labels = data["bbox_labels"]
+            # Denormalization is needed, because data is normalized 
+            img = img[0][0]
+            for i in range(len(img)):
+                img_og = img[i].permute(1, 2, 0)
 
-        self.show_message(f"Video loaded from {video_pickle}.\n")
+                img_og_list.append(img_og)
+                img_pert = img_og.clone()
+                # Image perturbation by setting pixels to (0,0,0)
+                for idx in topk_list[i]:
+                    img_pert[idx[0], idx[1]] = 0
+                img_pert_list.append(img_pert.permute(2, 0, 1))
 
+            # Save the perturbed 6 camera images into the data input
+            img = [torch.stack((img_pert_list)).unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
+            data['img'][0] = DC(img)
+
+            # Second forward
+            with torch.no_grad():
+                output = self.model(return_loss=False, rescale=True, **data)
+
+            outputs_pert.extend(output)
+            torch.cuda.empty_cache()
+
+            prog_bar.update()
         
+        print("\nCompleted.\n")
 
-        
-
-    
+        kwargs = {}
+        eval_kwargs = self.cfg.get('evaluation', {}).copy()
+        # hard-code way to remove EvalHook args
+        for key in [
+                'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
+                'rule'
+        ]:
+            eval_kwargs.pop(key, None)
+        eval_kwargs.update(dict(metric="bbox", **kwargs))
+        print(dataset.evaluate(outputs_pert, **eval_kwargs))

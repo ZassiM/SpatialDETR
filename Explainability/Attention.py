@@ -245,7 +245,7 @@ class Attention:
 
         # num_layers x num_objects x 1450
         attention_maps = torch.stack(attention_maps)
-        attention_maps = attention_maps.permute(1, 0, 2) # num_objects x num_layers x 1450 # take only the selected objects
+        attention_maps = attention_maps.permute(1, 0, 2)  # num_objects x num_layers x 1450 # take only the selected objects
 
         # now attention maps can be overlayed
         attention_maps = attention_maps.max(dim=0)[0]  # num_layers x [1450]

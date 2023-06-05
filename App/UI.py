@@ -1,10 +1,13 @@
 import tkinter as tk
-import torch
 import numpy as np
+import torch
 import cv2
 import mmcv
 import tomli
 import os
+import random
+import pickle
+
 from tkinter import filedialog as fd
 from mmcv.parallel import MMDataParallel
 from Explainability.Attention import Attention
@@ -12,11 +15,10 @@ from App.Model import init_app
 from mmcv.parallel import DataContainer as DC
 from tkinter.messagebox import showinfo
 from tkinter import scrolledtext
-import random
 from PIL import ImageGrab
 
 
-class UI_baseclass(tk.Tk):
+class UI(tk.Tk):
     '''
     Application User Interface
     '''
@@ -407,10 +409,6 @@ class UI_baseclass(tk.Tk):
             idx = self.data_idx
         if info is None:
             info = f"Model: {self.model_name} | Dataloader: {self.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
-            if self.selected_camera.get() != -1 and not self.show_all_layers.get():
-                info += f" | Camera {list(self.cameras.keys())[self.selected_camera.get()]} | Layer {self.selected_layer.get()}"
-                if self.selected_expl_type.get() == "Attention Rollout":
-                    info += f'| {self.selected_head_fusion.get().capitalize()} Head fusion'
         self.info_text.set(info)
 
     def update_thr(self):
@@ -454,6 +452,7 @@ class UI_baseclass(tk.Tk):
 
         for camidx in range(len(self.attn_list)):
             attn = self.attn_list[camidx]
+            attn = attn.clamp(min=0)
             score = round(attn.sum().item(), 2)
             scores.append(score)
 
@@ -495,3 +494,38 @@ class UI_baseclass(tk.Tk):
         else:
             # Set dark theme
             self.tk.call("set_theme", "light")
+
+    def save_video(self):
+        if hasattr(self, "img_frames"):
+            data = {'img_frames': self.img_frames, 'img_frames_attention_nobbx': self.img_frames_attention_nobbx, 'og_imgs_frames': self.og_imgs_frames, 'bbox_cameras': self.bbox_cameras, 'bbox_labels': self.bbox_labels}
+
+            file_path = fd.asksaveasfilename(defaultextension=".pkl", filetypes=[("All Files", "*.*")])
+
+            print(f"Saving video in {file_path}...\n")
+            with open(file_path, 'wb') as f:
+                pickle.dump(data, f)
+            
+            self.show_message(f"Video saved in {file_path}")
+        else:
+            self.show_message("You should first generate a video.")
+
+    def load_video(self):
+        video_datatypes = (
+            ('Pickle', '*.pkl'),
+        )
+        video_pickle = fd.askopenfilename(
+            title='Load video data',
+            initialdir='/workspace/',
+            filetypes=video_datatypes)
+
+        print(f"Loading video from {video_pickle}...\n")
+        with open(video_pickle, 'rb') as f:
+            data = pickle.load(f)
+
+        self.img_frames = data["img_frames"]
+        self.img_frames_attention_nobbx = data["img_frames_attention_nobbx"]
+        self.og_imgs_frames = data["og_imgs_frames"]
+        self.bbox_cameras = data["bbox_cameras"]
+        self.bbox_labels = data["bbox_labels"]
+
+        self.show_message(f"Video loaded from {video_pickle}.\n")
