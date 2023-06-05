@@ -16,6 +16,7 @@ from mmcv.parallel import DataContainer as DC
 from tkinter.messagebox import showinfo
 from tkinter import scrolledtext
 from PIL import ImageGrab
+from App.SyncedConfigs import SyncedConfigs
 
 
 class UI(tk.Tk):
@@ -67,8 +68,8 @@ class UI(tk.Tk):
         It starts the UI after loading the model. Variables are initialized.
         '''
         # Booleans used for avoiding reloading same data so that the UI is speed up
-        self.old_data_idx, self.old_thr, self.old_bbox_idx, self.old_expl_type, self.new_model = \
-            None, None, None, None, None
+        # self.old_data_idx, self.old_thr, self.old_bbox_idx, self.old_expl_type, self.new_model, self.old_raw, self.old_head_fusion, self.old_discard_ratio, self.old_handle_residual, self.old_apply_rule = \
+        #     None, None, None, None, None, None, None, None, None, None
 
         # Suffix used for saving screenshot of same model with different numbering
         self.file_suffix = 0
@@ -267,10 +268,8 @@ class UI(tk.Tk):
             imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
         self.imgs = imgs.astype(np.uint8)
 
-        # Update the Bounding box menu with the predicted labels
-        if self.old_data_idx != self.data_idx or self.old_thr != self.selected_threshold.get() or self.new_model:
-            self.update_objects_list()
-            self.initialize_bboxes()
+        self.update_objects_list()
+        self.initialize_bboxes()
 
     def load_from_config(self):
         with open("config.toml", mode="rb") as argsF:
@@ -320,15 +319,13 @@ class UI(tk.Tk):
             self.dataloader_name = self.dataloader.dataset.metadata['version']
             self.class_names = self.dataloader.dataset.CLASSES
             self.cfg = cfg
-            print("\nModel loaded.")
-            
-            self.new_model = True
 
+            print("\nModel loaded.")
             if not self.started_app:
                 print("Starting app...")
                 self.start_app()
-                self.started_app = True
                 self.random_data_idx()
+                self.started_app = True
                 print("Completed.\n")
 
             self.update_info_label()
@@ -450,8 +447,8 @@ class UI(tk.Tk):
         scores = []
         self.scores_perc = []
 
-        for camidx in range(len(self.attn_list)):
-            attn = self.attn_list[camidx]
+        for camidx in range(len(self.attn_list[self.selected_layer.get()])):
+            attn = self.attn_list[self.selected_layer.get()][camidx]
             attn = attn.clamp(min=0)
             score = round(attn.sum().item(), 2)
             scores.append(score)

@@ -1,4 +1,5 @@
 from App.UI import UI, tk, np, cv2, mmcv, torch
+from App.SyncedConfigs import SyncedConfigs
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -19,6 +20,13 @@ class App(UI):
         # Speeding up the testing
         self.load_from_config()
 
+        # self.bbox_idx = [0]
+        # self.data, self.nms_idxs = None, None
+        data_configs, expl_configs = [], []
+
+        self.data_configs = SyncedConfigs(data_configs, triggered_function=self.update_data, type=0)
+        self.expl_configs = SyncedConfigs(expl_configs, triggered_function=self.Attention.generate_explainability, type=1)
+
     def visualize(self):
         '''
         Visualizes predicted bounding boxes on all the cameras and shows
@@ -37,37 +45,26 @@ class App(UI):
 
         self.fig.clear()
 
-        # Data is updated only when data idx, prediction threshold or the model is changed
-        if self.old_data_idx != self.data_idx or self.old_thr != self.selected_threshold.get() or self.old_expl_type != self.selected_expl_type.get() or self.new_model:
-            print("\nDetecting bounding boxes...")
-            self.update_data()
-            if self.new_model:
-                self.new_model = False
-            if self.old_thr != self.selected_threshold.get():
-                self.old_thr = self.selected_threshold.get()
-            if self.old_data_idx != self.data_idx:
-                self.old_data_idx = self.data_idx
-            if self.old_expl_type != self.selected_expl_type.get():
-                self.old_expl_type = self.selected_expl_type.get()
-
         # Avoid selecting all layers and all cameras. Only the last layer will be visualized
         if self.show_all_layers.get() and self.selected_camera.get() == -1:
             self.show_all_layers.set(False)
+
+        # With Grad-CAM the last layer's gradients are null, so we set it to the second-last layer
+        if self.selected_expl_type.get() == "Grad-CAM" and self.selected_layer.get() == self.Attention.layers -1:
+            self.selected_layer.set(self.Attention.layers - 2)
+
+        self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.model_name]
 
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
         if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
-            self.update_data()
+            self.Attention.extract_attentions(self.data, self.bbox_idx)
             self.show_all_layers.set(False)
-
-        print("Generating attention maps...")
-        # Explainable attention maps generation
-        if self.show_all_layers.get():
-            self.attn_list = self.Attention.generate_explainability_layers(self.selected_expl_type.get(), self.selected_camera.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
-        else:
-            self.attn_list = self.Attention.generate_explainability_cameras(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
-
+        
+        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual, self.apply_rule]   
+        self.attn_list = self.expl_configs.attn_list
+        
         self.show_attention_maps()
 
         # Extract Ground Truth bboxes if wanted
@@ -103,11 +100,11 @@ class App(UI):
                 
             if self.overlay_bool.get() and ((self.selected_camera.get() != -1 and camidx == self.selected_camera.get()) or (self.selected_camera.get() == -1)):
                 if self.show_all_layers.get():
-                    attn = self.attn_list[self.selected_layer.get()]
+                    attn = self.attn_list[self.selected_layer.get()][self.selected_camera.get()]
                 elif self.selected_camera.get() == -1:
-                    attn = self.attn_list[camidx]
+                    attn = self.attn_list[self.selected_layer.get()][camidx]
                 else:
-                    attn = self.attn_list[self.selected_camera.get()]
+                    attn = self.attn_list[self.selected_layer.get()][self.selected_camera.get()]
 
                 img = self.overlay_attention_on_image(img, attn)            
 
@@ -158,11 +155,11 @@ class App(UI):
                 ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
             
             if self.show_all_layers.get():
-                attn = self.attn_list[i]
+                attn = self.attn_list[i][self.selected_camera.get()]
             elif self.selected_camera.get() == -1:
-                attn = self.attn_list[self.cam_idx[i]]
+                attn = self.attn_list[self.selected_layer.get()][self.cam_idx[i]]
             else:
-                attn = self.attn_list[self.selected_camera.get()]
+                attn = self.attn_list[self.selected_layer.get()][self.selected_camera.get()]
 
             ax_attn.imshow(attn, vmin=0, vmax=1)      
 

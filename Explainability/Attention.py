@@ -257,16 +257,52 @@ class Attention:
 
         return attention_maps
 
+    def generate_explainability(self, expl_type, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
+        attention_maps = []
+        for layer in range(self.layers):
+            att_maps_cameras = []
+            for camidx in range(6):
+                if expl_type == "Attention Rollout":
+                    self.generate_rollout(layer, camidx, head_fusion, discard_ratio, raw)
+                elif expl_type == "Grad-CAM":
+                    self.generate_gradcam(layer, camidx)
+                elif expl_type == "Gradient Rollout":
+                    self.generate_gradroll(camidx, handle_residual, apply_rule)
+                elif expl_type == "Partial-LRP":
+                    attention_maps = 0
+                att_maps_cameras.append(self.R_q_i[indexes[bbox_idx]].detach().cpu())
+            attention_maps.append(att_maps_cameras)
+
+        # num_layers x num_cams x num_objects x 1450
+            
+        attention_maps = torch.stack([torch.stack(layer) for layer in attention_maps])
+        attention_maps = attention_maps.permute(0, 2, 1, 3)  # num layers x num_objects x num_cams x 1450 # take only the selected objects
+        # normalize across cameras
+        for layer in range(self.layers):
+            for object in range(len(attention_maps[layer])):
+                attention_maps[layer][object] = (attention_maps[layer][object] - attention_maps[layer][object].min()) / (attention_maps[layer][object].max() - attention_maps[layer][object].min())
+
+        # now attention maps can be overlayed
+        attention_maps = attention_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
+
+        attention_maps = self.interpolate_expl(attention_maps)
+
+        return attention_maps
+
     def interpolate_expl(self, attention_maps):
         attention_maps_inter = []
         if attention_maps.dim() == 1:
             attention_maps.unsqueeze_(0)
-        for i in range(len(attention_maps)):
-            attn = attention_maps[i].view(1, 1, self.height_feats, self.width_feats)
-            attn = torch.nn.functional.interpolate(attn, scale_factor=8, mode='bilinear')
-            attn = attn.view(attn.shape[2], attn.shape[3])
-            attention_maps_inter.append(attn)
+            attention_maps.unsqueeze_(0)
+        for layer in range(self.layers):
+            attention_maps_cameras = []
+            for i in range(len(attention_maps[layer])):
+                attn = attention_maps[layer][i].view(1, 1, self.height_feats, self.width_feats)
+                attn = torch.nn.functional.interpolate(attn, scale_factor=8, mode='bilinear')
+                attn = attn.view(attn.shape[2], attn.shape[3])
+                attention_maps_cameras.append(attn)
+            attention_maps_inter.append(attention_maps_cameras)
 
-        attention_maps_inter = torch.stack(attention_maps_inter)
+        attention_maps_inter = torch.stack([torch.stack(layer) for layer in attention_maps_inter])
 
         return attention_maps_inter
