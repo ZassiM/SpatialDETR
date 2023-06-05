@@ -1,5 +1,4 @@
-from App.UI import UI, tk, np, cv2, mmcv, torch
-from App.SyncedConfigs import SyncedConfigs
+from App.UI import UI, tk, np, cv2, mmcv, torch, DC
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -19,13 +18,6 @@ class App(UI):
 
         # Speeding up the testing
         self.load_from_config()
-
-        # self.bbox_idx = [0]
-        # self.data, self.nms_idxs = None, None
-        data_configs, expl_configs = [], []
-
-        self.data_configs = SyncedConfigs(data_configs, triggered_function=self.update_data, type=0)
-        self.expl_configs = SyncedConfigs(expl_configs, triggered_function=self.Attention.generate_explainability, type=1)
 
     def visualize(self):
         '''
@@ -49,10 +41,6 @@ class App(UI):
         if self.show_all_layers.get() and self.selected_camera.get() == -1:
             self.show_all_layers.set(False)
 
-        # With Grad-CAM the last layer's gradients are null, so we set it to the second-last layer
-        if self.selected_expl_type.get() == "Grad-CAM" and self.selected_layer.get() == self.Attention.layers -1:
-            self.selected_layer.set(self.Attention.layers - 2)
-
         self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.model_name]
 
         # Extract the selected bounding box indexes from the menu
@@ -62,21 +50,20 @@ class App(UI):
             self.Attention.extract_attentions(self.data, self.bbox_idx)
             self.show_all_layers.set(False)
         
-        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual, self.apply_rule]   
+        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get()]   
         self.attn_list = self.expl_configs.attn_list
         
+        if 0 in self.attn_list:
+            self.show_message("No object detected!")
+            return
+        
         self.show_attention_maps()
-
-        # Extract Ground Truth bboxes if wanted
-        if self.GT_bool.get():
-            self.gt_bbox = self.dataloader.dataset.get_ann_info(self.data_idx)['gt_bboxes_3d']
-        else:
-            self.gt_bbox = None
 
         # Generate images list with bboxes on it
         print("Generating camera images...")
         self.cam_imgs = []
         for camidx in range(len(self.imgs)):
+
             img, _ = draw_lidar_bbox3d_on_img(
                     self.pred_bboxes,
                     self.imgs[camidx],
@@ -89,7 +76,9 @@ class App(UI):
                     mode_2d=self.bbox_2d.get(),
                     camidx=camidx)  
             
+            # Extract Ground Truth bboxes if wanted
             if self.GT_bool.get():
+                self.gt_bbox = self.dataloader.dataset.get_ann_info(self.data_idx)['gt_bboxes_3d']
                 img, _ = draw_lidar_bbox3d_on_img(
                         self.gt_bbox,
                         img,
@@ -219,6 +208,7 @@ class App(UI):
             self.generate_video()
         
         self.old_bbox_idx = None
+        self.old_layer = self.selected_layer.get()
         self.show_sequence()
 
     def generate_video(self):
@@ -229,8 +219,8 @@ class App(UI):
         print("\nGenerating image frames...\n")
         prog_bar = mmcv.ProgressBar(self.video_length)
         for i in range(self.data_idx, self.data_idx + self.video_length):
-            self.data_idx = i
 
+            self.data_idx = i
             img_frames, img_att_nobbx = [], []
             for expl in self.expl_types:
                 self.selected_expl_type.set(expl)
@@ -279,11 +269,12 @@ class App(UI):
     def show_att_maps_object(self):
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
-        if len(self.bbox_idx) == 1 and self.bbox_idx != self.old_bbox_idx:
+        if (len(self.bbox_idx) == 1 and self.bbox_idx != self.old_bbox_idx) or self.old_layer != self.selected_layer.get():
             self.old_bbox_idx = self.bbox_idx
             self.fig_obj.clear()
             self.bbox_idx = self.bbox_idx[0]
             bbox_camera = self.bbox_cameras[self.idx_video-1]
+            self.old_layer = self.selected_layer.get()
 
             #{'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
             for i, bboxes in enumerate(bbox_camera):
@@ -300,8 +291,8 @@ class App(UI):
             all_expl = self.img_frames_attention_nobbx[self.idx_video-1]
 
             for i in range(len(all_expl)):
-                expl = all_expl[i]
-                expl = expl[camidx][bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
+                expl = all_expl[i][camidx][self.selected_layer.get()]
+                expl = expl[bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
 
                 ax_img = self.fig_obj.add_subplot(self.single_object_spec[i, 0])
                 ax_attn = self.fig_obj.add_subplot(self.single_object_spec[i, 1])
@@ -329,7 +320,7 @@ class App(UI):
         if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
             self.update_data()
 
-        self.attn_list = self.Attention.generate_explainability_cameras(self.selected_expl_type.get(), self.selected_layer.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
+        self.attn_list = self.Attention.generate_explainability(self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
 
         # Generate images list with bboxes on it
         cam_imgs, og_imgs, bbox_cameras, att_nobbx = [], [], [], []  # Used for video generation
@@ -337,13 +328,14 @@ class App(UI):
         for camidx in range(len(self.imgs)):
             og_img = cv2.cvtColor(self.imgs[camidx], cv2.COLOR_BGR2RGB)
             og_imgs.append(og_img)
-
-            attn_img = self.imgs[camidx].astype(np.uint8)
-            attn = self.attn_list[camidx]
-
-            attn_img = self.overlay_attention_on_image(attn_img, attn)      
-            attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
-            att_nobbx.append(attn_img)
+            og_img = self.imgs[camidx].astype(np.uint8)
+            att_nobbx_layers = []
+            for layer in range(self.Attention.layers):
+                attn = self.attn_list[layer][camidx]
+                attn_img = self.overlay_attention_on_image(og_img, attn)      
+                attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
+                att_nobbx_layers.append(attn_img)
+            att_nobbx.append(att_nobbx_layers)
 
             img, bbox_camera = draw_lidar_bbox3d_on_img(
                     self.pred_bboxes,
@@ -359,7 +351,7 @@ class App(UI):
             
             bbox_cameras.append(bbox_camera)       
 
-            attn = self.attn_list[camidx]
+            attn = self.attn_list[self.selected_layer.get()][camidx]
             img = self.overlay_attention_on_image(img, attn, intensity=200)   
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)

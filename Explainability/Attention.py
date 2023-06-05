@@ -199,63 +199,6 @@ class Attention:
 
             # encoder decoder attention
             self.handle_co_attn_query(layer, camidx, handle_residual, apply_rule)
-    
-    def generate_explainability_cameras(self, expl_type, layer, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
-        
-        attention_maps = []
-        for camidx in range(6):
-            if expl_type == "Attention Rollout":
-                self.generate_rollout(layer, camidx, head_fusion, discard_ratio, raw)
-            elif expl_type == "Grad-CAM":
-                self.generate_gradcam(layer, camidx)
-            elif expl_type == "Gradient Rollout":
-                self.generate_gradroll(camidx, handle_residual, apply_rule)
-            elif expl_type == "Partial-LRP":
-                attention_maps = 0
-            attention_maps.append(self.R_q_i[indexes[bbox_idx]].detach().cpu())
-
-        # num_cams x num_objects x 1450
-            
-        attention_maps = torch.stack(attention_maps)
-        attention_maps = attention_maps.permute(1, 0, 2)  # num_objects x num_cams x 1450 # take only the selected objects
-        # normalize across cameras
-        for i in range(len(attention_maps)):
-            attention_maps[i] = (attention_maps[i] - attention_maps[i].min()) / (attention_maps[i].max() - attention_maps[i].min())
-
-        # now attention maps can be overlayed
-        attention_maps = attention_maps.max(dim=0)[0]  # num_cams x [1450]
-
-        attention_maps = self.interpolate_expl(attention_maps)
-
-        return attention_maps
-    
-    def generate_explainability_layers(self, expl_type, camidx, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
-        
-        attention_maps = []
-        for layer in range(6):
-            if expl_type == "Attention Rollout":
-                self.generate_rollout(layer, camidx, head_fusion, discard_ratio, raw)
-            elif expl_type == "Grad-CAM":
-                self.generate_gradcam(layer, camidx)
-            elif expl_type == "Gradient Rollout":
-                self.generate_gradroll(camidx, handle_residual, apply_rule)
-            elif expl_type == "Partial-LRP":
-                attention_maps = 0
-            attention_maps.append(self.R_q_i[indexes[bbox_idx]].detach().cpu())
-
-        # num_layers x num_objects x 1450
-        attention_maps = torch.stack(attention_maps)
-        attention_maps = attention_maps.permute(1, 0, 2)  # num_objects x num_layers x 1450 # take only the selected objects
-
-        # now attention maps can be overlayed
-        attention_maps = attention_maps.max(dim=0)[0]  # num_layers x [1450]
-
-        for i in range(len(attention_maps)):
-            attention_maps[i] /= attention_maps[i].max()
-
-        attention_maps = self.interpolate_expl(attention_maps)
-
-        return attention_maps
 
     def generate_explainability(self, expl_type, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
         attention_maps = []
@@ -283,10 +226,9 @@ class Attention:
                 attention_maps[layer][object] = (attention_maps[layer][object] - attention_maps[layer][object].min()) / (attention_maps[layer][object].max() - attention_maps[layer][object].min())
 
         # now attention maps can be overlayed
-        attention_maps = attention_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
-
-        attention_maps = self.interpolate_expl(attention_maps)
-
+        if attention_maps.shape[1] > 0:
+            attention_maps = attention_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
+            attention_maps = self.interpolate_expl(attention_maps)
         return attention_maps
 
     def interpolate_expl(self, attention_maps):

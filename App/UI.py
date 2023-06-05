@@ -35,12 +35,12 @@ class UI(tk.Tk):
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
         self.protocol("WM_DELETE_WINDOW", self.quit)
-        self.canvas, self.fig, self.spec, self.single_object_window,self.single_object_canvas = None, None, None, None, None
+        self.canvas, self.fig, self.spec, self.single_object_window, self.single_object_canvas = None, None, None, None, None
 
         # Model and dataloader objects
         self.model, self.dataloader = None, None
         self.started_app = False
-        self.video_length = 10
+        self.video_length = 5
         self.video_gen_bool = False
         self.frame_rate = 1
         
@@ -67,12 +67,13 @@ class UI(tk.Tk):
         '''
         It starts the UI after loading the model. Variables are initialized.
         '''
-        # Booleans used for avoiding reloading same data so that the UI is speed up
-        # self.old_data_idx, self.old_thr, self.old_bbox_idx, self.old_expl_type, self.new_model, self.old_raw, self.old_head_fusion, self.old_discard_ratio, self.old_handle_residual, self.old_apply_rule = \
-        #     None, None, None, None, None, None, None, None, None, None
-
         # Suffix used for saving screenshot of same model with different numbering
         self.file_suffix = 0
+
+        # Synced configurations: when a value is changed, the triggered function is called
+        data_configs, expl_configs = [], []
+        self.data_configs = SyncedConfigs(data_configs, triggered_function=self.update_data, type=0)
+        self.expl_configs = SyncedConfigs(expl_configs, triggered_function=self.Attention.generate_explainability, type=1)
 
         # Tkinter frame for visualizing model and GPU info
         frame = tk.Frame(self)
@@ -454,7 +455,7 @@ class UI(tk.Tk):
             scores.append(score)
 
         sum_scores = sum(scores)
-        if sum_scores > 0:
+        if sum_scores > 0 and not np.isnan(sum_scores):
             for i in range(len(scores)):
                 score_perc = round(((scores[i]/sum_scores)*100))
                 self.scores_perc.append(score_perc)
