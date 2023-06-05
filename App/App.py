@@ -27,7 +27,7 @@ class App(UI_baseclass):
         super().__init__()
 
         # Speeding up the testing
-        #self.load_from_config()
+        self.load_from_config()
 
     def evaluate_expl(self):
         print(f"Evaluating {self.selected_expl_type.get()}...")
@@ -324,23 +324,18 @@ class App(UI_baseclass):
         for i in range(self.data_idx, self.data_idx + self.video_length):
             self.data_idx = i
 
-            img_att_expl, img_att_nobbx = [], []
+            img_frames, img_att_nobbx = [], []
             for expl in self.expl_types:
                 self.selected_expl_type.set(expl)
                 imgs_att, imgs_att_nobbx, imgs_og, bbox_camera, labels = self.generate_video_frame()
-                img_att_expl.append(imgs_att)
+                img_frames.append(imgs_att)
                 img_att_nobbx.append(imgs_att_nobbx)
 
-            img_att = img_att_expl[0]
-            hori = np.concatenate((img_att[2], img_att[0], img_att[1]), axis=1)
-            ver = np.concatenate((img_att[5], img_att[3], img_att[4]), axis=1)
-            full = np.concatenate((hori, ver), axis=0)
-
-            self.img_frames.append(full)
-            self.img_frames_attention_nobbx.append(img_att_nobbx)
-            self.og_imgs_frames.append(imgs_og)
-            self.bbox_cameras.append(bbox_camera)
-            self.bbox_labels.append(labels)
+            self.img_frames.append(img_frames)  # Image frame of all 6 cameras with attention maps and bboxes overlayed
+            self.img_frames_attention_nobbx.append(img_att_nobbx)  # Attention maps without bboxes
+            self.og_imgs_frames.append(imgs_og)  # Original camera images
+            self.bbox_cameras.append(bbox_camera)  # Coordinates of objects
+            self.bbox_labels.append(labels)  # Labels for each frame
 
             prog_bar.update()
 
@@ -349,7 +344,7 @@ class App(UI_baseclass):
 
     def show_sequence(self):
         if not self.paused:
-            img_frame = self.img_frames[self.idx_video]
+            img_frame = self.img_frames[self.idx_video][0]
             w, h = self.canvas.winfo_width(), self.canvas.winfo_height()
             self.img_frame = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((w, h)))
             self.canvas.itemconfig(self.canvas_frame, image=self.img_frame)
@@ -366,8 +361,9 @@ class App(UI_baseclass):
             self.paused = True
             self.after_cancel(self.after_seq_id)
             labels = self.bbox_labels[self.idx_video-1]
-            self.update_objects_list(labels)
-            self.show_att_maps_object()
+            self.update_objects_list(labels)  # Update objects menu list
+            self.single_bbox_select(True)  # Selects the first object
+            self.show_att_maps_object()  # Visualize attention maps for the selected object
         else:
             self.paused = False
             self.after_cancel(self.after_obj_id)
@@ -420,10 +416,6 @@ class App(UI_baseclass):
 
         self.update_data()
 
-        # Avoid selecting all layers and all cameras. Only the last layer will be visualized
-        if self.show_all_layers.get() and self.selected_camera.get() == -1:
-            self.selected_layer.set(self.Attention.layers - 1)
-
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
@@ -466,7 +458,11 @@ class App(UI_baseclass):
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             cam_imgs.append(img)
 
-        return cam_imgs, att_nobbx, og_imgs, bbox_cameras, self.labels
+        hori = np.concatenate((cam_imgs[2], cam_imgs[0], cam_imgs[1]), axis=1)
+        ver = np.concatenate((cam_imgs[5], cam_imgs[3], cam_imgs[4]), axis=1)
+        img_frame = np.concatenate((hori, ver), axis=0)
+
+        return img_frame, att_nobbx, og_imgs, bbox_cameras, self.labels
     
     def save_video(self):
         if hasattr(self, "img_frames"):

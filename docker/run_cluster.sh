@@ -11,15 +11,12 @@ repo_dir=$PWD
 
 #--user $(id -u):$(id -g) \
 
-xhost +
-
 docker run \
 --name $DOCKER_NAME \
 --rm \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
---env DISPLAY=${DISPLAY} \
---shm-size=16gb \
 --net=host \
+--env DISPLAY=${DISPLAY} \
 --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
 --volume $HOME/.Xauthority:/root/.Xauthority:rw \
 --mount source=$repo_dir,target=/workspace,type=bind,consistency=cached \

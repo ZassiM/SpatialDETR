@@ -1,6 +1,4 @@
 import tkinter as tk
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import torch
 import numpy as np
 import cv2
@@ -325,10 +323,11 @@ class UI_baseclass(tk.Tk):
             self.new_model = True
 
             if not self.started_app:
-                print("Starting app...\n")
+                print("Starting app...")
                 self.start_app()
                 self.started_app = True
                 self.random_data_idx()
+                print("Completed.\n")
 
             self.update_info_label()
         
@@ -398,7 +397,6 @@ class UI_baseclass(tk.Tk):
 
         popup.destroy()
 
-
     def random_data_idx(self):
         idx = random.randint(0, len(self.dataloader)-1)
         self.data_idx = idx
@@ -430,9 +428,9 @@ class UI_baseclass(tk.Tk):
             self.bboxes.append(view_bbox)
             self.bbox_opt.add_checkbutton(label=f" {self.class_names[labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
 
-    def single_bbox_select(self, idx=None):
+    def single_bbox_select(self, idx=None, single_select=False):
         self.select_all_bboxes.set(False)
-        if self.single_bbox.get():
+        if self.single_bbox.get() or single_select:
             if idx is None:
                 idx = 0
             for i in range(len(self.bboxes)):
