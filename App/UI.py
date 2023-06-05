@@ -180,7 +180,7 @@ class UI(tk.Tk):
         for i in range(len(self.expl_options)):
             expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i], command=self.update_info_label)
 
-        #expl_opt.add_command(label="Evaluate explainability", command=self.evaluate_expl)
+        expl_opt.add_command(label="Evaluate explainability", command=self.evaluate_expl)
 
         # Cascade menus for object selection
         self.bbox_opt = tk.Menu(self.menubar)
@@ -283,12 +283,12 @@ class UI(tk.Tk):
 
         # Extract image metas which contain, for example, the lidar to camera projection matrices
         self.img_metas = self.data["img_metas"][0]._data[0][0]
-        ori_shape = self.img_metas["ori_shape"] # Used for removing the padded pixels
+        self.ori_shape = self.img_metas["ori_shape"] # Used for removing the padded pixels
 
         # Extract the 6 camera images from the data and remove the padded pixels
         imgs = self.data["img"][0]._data[0].numpy()[0]
-        #imgs = imgs.transpose(0, 2, 3, 1)
-        imgs = imgs.transpose(0, 2, 3, 1)[:, :ori_shape[0], :ori_shape[1], :]  # [num_cams x height x width x channels]
+        imgs = imgs.transpose(0, 2, 3, 1)
+        #imgs = imgs.transpose(0, 2, 3, 1)[:, :self.ori_shape[0], :self.ori_shape[1], :]  # [num_cams x height x width x channels]
         
         # Denormalize the images
         mean = np.array(self.img_norm_cfg["mean"], dtype=np.float32)

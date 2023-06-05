@@ -92,11 +92,11 @@ class App(UI):
 
                 img = self.overlay_attention_on_image(img, attn)            
 
-            # num_tokens = int(1450)
-            # _, indices = torch.topk(torch.from_numpy(attn).flatten(), k=num_tokens)
-            # indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
-            # for idx in indices:
-            #     img[idx[0], idx[1]] = 0
+            num_tokens = int(4000)
+            _, indices = torch.topk(attn.flatten(), k=num_tokens)
+            indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
+            for idx in indices:
+                img[idx[0], idx[1]] = 0
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.cam_imgs.append(img)
@@ -360,9 +360,10 @@ class App(UI):
         print(f"Evaluating {self.selected_expl_type.get()}...")
 
         bbox_idx = [0]
-        initial_idx = 500
-        evaluation_lenght = 20
+        initial_idx = 0
+        evaluation_lenght = 81
         num_tokens = int(0.25 * 1450)
+        layer = self.Attention.layers - 1
         outputs_pert = []
         dataset = self.dataloader.dataset
         prog_bar = mmcv.ProgressBar(evaluation_lenght)
@@ -382,20 +383,14 @@ class App(UI):
 
             nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes()
 
-            attn_list = []
             topk_list = []
             
-            for camidx in range(6):
-                attn = self.Attention.generate_explainability(self.selected_expl_type.get(), self.selected_layer.get(), bbox_idx, nms_idxs, camidx, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
-                attn = attn.view(1, 1, 29, 50)
-                attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
-                attn = attn.view(attn.shape[2], attn.shape[3]).cpu()
-                attn_list.append(attn)
+            attn_list = self.Attention.generate_explainability_cameras(self.selected_expl_type.get(), layer, bbox_idx, nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
 
-            attn_max = np.max(np.concatenate(attn_list))
+            #attn_max = attn_list.max()
             for i in range(len(attn_list)):
                 attn = attn_list[i]
-                attn /= attn_max
+                #attn /= attn_max
                 _, indices = torch.topk(attn.flatten(), k=num_tokens)
                 indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
                 topk_list.append(indices)
