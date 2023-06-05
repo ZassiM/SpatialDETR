@@ -16,7 +16,6 @@ docker run \
 --rm \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
 --env DISPLAY=${DISPLAY} \
---shm-size=16gb \
 --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
 --volume $HOME/.Xauthority:/root/.Xauthority:rw \
 --mount source=$repo_dir,target=/workspace,type=bind,consistency=cached \

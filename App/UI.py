@@ -17,6 +17,10 @@ from tkinter.messagebox import showinfo
 from tkinter import scrolledtext
 from PIL import ImageGrab
 from App.SyncedConfigs import SyncedConfigs
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+
+
 
 
 class UI(tk.Tk):
@@ -55,8 +59,11 @@ class UI(tk.Tk):
         file_opt.add_command(label=" Load model", command=self.load_model)
         file_opt.add_command(label=" Load model from config file", command=self.load_from_config)
         file_opt.add_command(label=" Load video from pickle file", command=self.load_video)
-        file_opt.add_separator()
         file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
+        file_opt.add_separator()
+        file_opt.add_command(label=" Show car setup", command=self.show_car)
+        file_opt.add_command(label=" How to use", command=self.show_app_info)
+        
         message = "You need to reload the model to apply GPU change."
         for i in range(torch.cuda.device_count()):
             gpu_opt.add_radiobutton(label=f"GPU {i}", variable=self.gpu_id, value=i, command=lambda: self.show_message(message))
@@ -201,6 +208,7 @@ class UI(tk.Tk):
         add_opt.add_checkbutton(label=" Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
+        
 
         # Adding all cascade menus ro the main menubar menu
         self.add_separator()
@@ -223,7 +231,27 @@ class UI(tk.Tk):
         self.menubar.add_command(label="Show video", command=self.show_video)
 
         self.expl_types = ["Attention Rollout", "Grad-CAM"]
+        
+    def show_car(self):
+        img = plt.imread("misc/car.ng")
+        plt.imshow(img)
+        plt.axis("off")
+        plt.show()
+        
+    def show_app_info(self):
+        readme_path = 'README.md'
+        with open(readme_path, 'r') as f:
+            readme_content = f.read()
 
+        readme_window = tk.Toplevel(self)
+        readme_window.title("App information")
+
+        readme_text = tk.Text(readme_window, wrap=tk.WORD)
+        readme_text.insert(tk.END, readme_content)
+        readme_text.configure(state='disabled')
+        readme_text.pack()
+
+        
     def update_data(self):
         '''
         Predict bboxes and extracts attentions.

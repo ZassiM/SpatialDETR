@@ -1,9 +1,7 @@
-from App.UI import UI, tk, np, cv2, mmcv, torch, DC
-
-import matplotlib.pyplot as plt
+from App.UI import UI, tk, np, cv2, plt, mmcv, torch, DC
+from PIL import Image, ImageTk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
-from PIL import Image, ImageTk
 
 
 class App(UI):
