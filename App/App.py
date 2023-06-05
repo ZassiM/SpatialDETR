@@ -68,13 +68,11 @@ class App(UI):
                     self.pred_bboxes,
                     self.imgs[camidx],
                     self.img_metas['lidar2img'][camidx],
-                    self.img_metas,
                     color=(0, 255, 0),
                     with_label=self.show_labels.get(),
                     all_bbx=self.BB_bool.get(),
                     bbx_idx=self.bbox_idx,
-                    mode_2d=self.bbox_2d.get(),
-                    camidx=camidx)  
+                    mode_2d=self.bbox_2d.get())
             
             # Extract Ground Truth bboxes if wanted
             if self.GT_bool.get():
@@ -83,7 +81,6 @@ class App(UI):
                         self.gt_bbox,
                         img,
                         self.img_metas['lidar2img'][camidx],
-                        self.img_metas,
                         color=(255, 0, 0),
                         mode_2d=self.bbox_2d.get())
                 
@@ -106,8 +103,6 @@ class App(UI):
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.cam_imgs.append(img)
 
-        print("Done.\n")
-
         # Visualize the generated images list on the figure subplots
         for i in range(len(self.imgs)):
             if i < 3:
@@ -117,13 +112,15 @@ class App(UI):
             
             ax.imshow(self.cam_imgs[self.cam_idx[i]])
             ax.axis('off')
-        
+
         self.fig.tight_layout(pad=0)
         self.canvas.draw()
 
         # take a screenshot if the option is selected
         if self.capture_bool.get():
             self.capture()
+        
+        print("Done.\n")
 
     def show_attention_maps(self, grid_clm=1):
         '''
@@ -300,7 +297,7 @@ class App(UI):
                 ax_img.imshow(img_single_obj)
                 ax_img.set_title(f"{self.class_names[label].capitalize()}")
                 ax_attn.imshow(expl)
-                ax_attn.set_title(f"{self.expl_types[i]}")
+                ax_attn.set_title(f"{self.expl_types[i]}, layer {self.selected_layer.get()}")
 
                 ax_img.axis('off')
                 ax_attn.axis("off")
@@ -341,13 +338,11 @@ class App(UI):
                     self.pred_bboxes,
                     self.imgs[camidx],
                     self.img_metas['lidar2img'][camidx],
-                    self.img_metas,
                     color=(0, 255, 0),
                     with_label=self.show_labels.get(),
                     all_bbx=self.BB_bool.get(),
                     bbx_idx=self.bbox_idx,
-                    mode_2d=self.bbox_2d.get(),
-                    camidx=camidx)  
+                    mode_2d=self.bbox_2d.get())
             
             bbox_cameras.append(bbox_camera)       
 

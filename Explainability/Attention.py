@@ -239,9 +239,9 @@ class Attention:
         for layer in range(self.layers):
             attention_maps_cameras = []
             for i in range(len(attention_maps[layer])):
-                attn = attention_maps[layer][i].view(1, 1, self.height_feats, self.width_feats)
-                attn = torch.nn.functional.interpolate(attn, scale_factor=8, mode='bilinear')
-                attn = attn.view(attn.shape[2], attn.shape[3])
+                attn = attention_maps[layer][i].reshape(1, 1, self.height_feats, self.width_feats)
+                attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
+                attn = attn.reshape(attn.shape[2], attn.shape[3])
                 attention_maps_cameras.append(attn)
             attention_maps_inter.append(attention_maps_cameras)
 

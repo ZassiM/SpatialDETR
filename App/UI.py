@@ -186,8 +186,8 @@ class UI(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.BB_bool, self.points_bool, self.attn_contr, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d, self.dark_theme = \
-            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.GT_bool, self.BB_bool, self.points_bool, self.attn_contr, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.BB_bool.set(True)
         self.show_labels.set(True)
         self.overlay_bool.set(True)
@@ -200,7 +200,7 @@ class UI(tk.Tk):
         add_opt.add_checkbutton(label=" Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
         add_opt.add_checkbutton(label=" Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
-        add_opt.add_checkbutton(label=" Dark theme", onvalue=1, offvalue=0, variable=self.dark_theme, command=self.change_theme)
+        add_opt.add_command(label=" Change theme", command=self.change_theme)
 
         # Adding all cascade menus ro the main menubar menu
         self.add_separator()
@@ -259,7 +259,8 @@ class UI(tk.Tk):
 
         # Extract the 6 camera images from the data and remove the padded pixels
         imgs = self.data["img"][0]._data[0].numpy()[0]
-        imgs = imgs.transpose(0, 2, 3, 1)[:, :ori_shape[0], :ori_shape[1], :] # [num_cams x height x width x channels]
+        #imgs = imgs.transpose(0, 2, 3, 1)
+        imgs = imgs.transpose(0, 2, 3, 1)[:, :ori_shape[0], :ori_shape[1], :]  # [num_cams x height x width x channels]
         
         # Denormalize the images
         mean = np.array(self.img_norm_cfg["mean"], dtype=np.float32)
@@ -484,14 +485,13 @@ class UI(tk.Tk):
 
         path += "_" + str(self.file_suffix) + ".png"
         im.save(path)
+        print(f"Screenshot saved in {path}\n")
 
     def change_theme(self):
-        if self.dark_theme.get():
-            # Set light theme
-            self.tk.call("set_theme", "dark")
-        else:
-            # Set dark theme
+        if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
             self.tk.call("set_theme", "light")
+        else:
+            self.tk.call("set_theme", "dark")
 
     def save_video(self):
         if hasattr(self, "img_frames"):
