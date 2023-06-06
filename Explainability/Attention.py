@@ -295,6 +295,7 @@ class Attention:
                 attn = attention_maps[layer][i].reshape(1, 1, self.height_feats, self.width_feats)
                 attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
                 attn = attn.reshape(attn.shape[2], attn.shape[3])
+                attn = attn[:900, :]
                 attention_maps_cameras.append(attn)
             attention_maps_inter.append(attention_maps_cameras)
 
@@ -302,7 +303,6 @@ class Attention:
 
         return attention_maps_inter
     
-
     def interpolate_expl_cameras(self, attention_maps):
         attention_maps_inter = []
         if attention_maps.dim() == 1:
@@ -311,6 +311,7 @@ class Attention:
             attn = attention_maps[i].reshape(1, 1, self.height_feats, self.width_feats)
             attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
             attn = attn.reshape(attn.shape[2], attn.shape[3])
+            attn = attn[:900, :]
             attention_maps_inter.append(attn)
 
         attention_maps_inter = torch.stack(attention_maps_inter)

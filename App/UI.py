@@ -233,7 +233,7 @@ class UI(tk.Tk):
         self.expl_types = ["Attention Rollout", "Grad-CAM"]
         
     def show_car(self):
-        img = plt.imread("misc/car.ng")
+        img = plt.imread("misc/car.png")
         plt.imshow(img)
         plt.axis("off")
         plt.show()
@@ -287,8 +287,8 @@ class UI(tk.Tk):
 
         # Extract the 6 camera images from the data and remove the padded pixels
         imgs = self.data["img"][0]._data[0].numpy()[0]
-        imgs = imgs.transpose(0, 2, 3, 1)
-        #imgs = imgs.transpose(0, 2, 3, 1)[:, :self.ori_shape[0], :self.ori_shape[1], :]  # [num_cams x height x width x channels]
+        # imgs = imgs.transpose(0, 2, 3, 1)
+        imgs = imgs.transpose(0, 2, 3, 1)[:, :self.ori_shape[0], :self.ori_shape[1], :]  # [num_cams x height x width x channels]
         
         # Denormalize the images
         mean = np.array(self.img_norm_cfg["mean"], dtype=np.float32)
@@ -473,9 +473,9 @@ class UI(tk.Tk):
                 if len(self.bboxes) > 0:
                     self.bboxes[0].set(True)
 
-    def update_scores(self):
+    def update_scores(self, idx):
         scores = []
-        self.scores_perc = []
+        scores_perc = []
 
         for camidx in range(len(self.attn_list[self.selected_layer.get()])):
             attn = self.attn_list[self.selected_layer.get()][camidx]
@@ -487,7 +487,10 @@ class UI(tk.Tk):
         if sum_scores > 0 and not np.isnan(sum_scores):
             for i in range(len(scores)):
                 score_perc = round(((scores[i]/sum_scores)*100))
-                self.scores_perc.append(score_perc)
+                scores_perc.append(score_perc)
+            return scores_perc[idx]
+        else:
+            return 0
 
     def overlay_attention_on_image(self, img, attn, intensity=255):
         attn = cv2.applyColorMap(np.uint8(attn * intensity), cv2.COLORMAP_JET)

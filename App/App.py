@@ -45,15 +45,12 @@ class App(UI):
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
         if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
-            self.Attention.extract_attentions(self.data, self.bbox_idx)
+            #self.Attention.extract_attentions(self.data, self.bbox_idx)
+            self.update_data()
             self.show_all_layers.set(False)
         
         self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get()]   
         self.attn_list = self.expl_configs.attn_list
-        
-        if 0 in self.attn_list:
-            self.show_message("No object detected!")
-            return
         
         self.show_attention_maps()
 
@@ -61,7 +58,6 @@ class App(UI):
         print("Generating camera images...")
         self.cam_imgs = []
         for camidx in range(len(self.imgs)):
-
             img, _ = draw_lidar_bbox3d_on_img(
                     self.pred_bboxes,
                     self.imgs[camidx],
@@ -92,11 +88,11 @@ class App(UI):
 
                 img = self.overlay_attention_on_image(img, attn)            
 
-            num_tokens = int(4000)
-            _, indices = torch.topk(attn.flatten(), k=num_tokens)
-            indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
-            for idx in indices:
-                img[idx[0], idx[1]] = 0
+            # num_tokens = int(4000)
+            # _, indices = torch.topk(attn.flatten(), k=num_tokens)
+            # indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
+            # for idx in indices:
+            #     img[idx[0], idx[1]] = 0
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.cam_imgs.append(img)
@@ -163,8 +159,7 @@ class App(UI):
 
             # Show attention camera contributon if all cameras are selected
             if self.attn_contr.get() and self.selected_camera.get() == -1:
-                self.update_scores()
-                score = self.scores_perc[self.cam_idx[i]]
+                score = self.update_scores(self.cam_idx[i])
                 title += f', {score}%'
                 ax_attn.axhline(y=0, color='black', linewidth=10)
                 ax_attn.axhline(y=0, color='green', linewidth=10, xmax=score/100)
@@ -173,7 +168,6 @@ class App(UI):
             ax_attn.axis('off')   
             self.fig.tight_layout()
    
-
             if not self.show_all_layers.get() and self.selected_camera.get() != -1:
                 break
  
