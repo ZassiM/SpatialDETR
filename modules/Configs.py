@@ -1,7 +1,7 @@
 import torch
 
 
-class SyncedConfigs:
+class Configs:
     def __init__(self, initial_values, triggered_function, type, nms_idx=0):
         self.old_configs = initial_values.copy()
         self.new_configs = initial_values.copy()

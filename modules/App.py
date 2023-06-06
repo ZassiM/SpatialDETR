@@ -40,7 +40,7 @@ class App(UI):
         if self.show_all_layers.get() and self.selected_camera.get() == -1:
             self.show_all_layers.set(False)
 
-        self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.model.model_name]
+        self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name]
 
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
@@ -71,7 +71,7 @@ class App(UI):
             
             # Extract Ground Truth bboxes if wanted
             if self.GT_bool.get():
-                self.gt_bbox = self.model.dataloader.dataset.get_ann_info(self.data_idx)['gt_bboxes_3d']
+                self.gt_bbox = self.ObjectDetector.dataloader.dataset.get_ann_info(self.data_idx)['gt_bboxes_3d']
                 img, _ = draw_lidar_bbox3d_on_img(
                         self.gt_bbox,
                         img,
@@ -173,7 +173,6 @@ class App(UI):
                 break
  
     def show_video(self):
-
         if self.canvas and not self.video_gen_bool or not self.canvas:
             if self.canvas:
                 self.canvas.get_tk_widget().pack_forget()
@@ -183,7 +182,7 @@ class App(UI):
             self.canvas_frame = self.canvas.create_image(0, 0, anchor='nw', image=None)
             self.video_gen_bool = True
 
-        if self.single_object_window is None:
+        if self.single_object_window is None and not self.video_only.get():
             self.single_object_window = tk.Toplevel(self)
             self.single_object_window.title("Object Explainability Visualizer")
             self.fig_obj = plt.figure()
@@ -195,21 +194,22 @@ class App(UI):
         self.paused = False
 
         if not hasattr(self, "img_frames"):
-            self.generate_video()
+            if not self.video_only.get():
+                self.generate_video()
+            else:
+                self.generate_video_only()
         
         self.old_bbox_idx = None
         self.old_layer = self.selected_layer.get()
         self.show_sequence()
 
     def generate_video(self):
-
         self.select_all_bboxes.set(True)
         self.img_frames, self.img_frames_attention_nobbx, self.og_imgs_frames, self.bbox_coords, self.bbox_cameras, self.bbox_labels, self.all_expl = [], [], [], [], [], [], []
 
         print("\nGenerating image frames...\n")
         prog_bar = mmcv.ProgressBar(self.video_length)
         for i in range(self.data_idx, self.data_idx + self.video_length):
-
             self.data_idx = i
             img_frames, img_att_nobbx = [], []
             for expl in self.expl_types:
@@ -223,6 +223,27 @@ class App(UI):
             self.og_imgs_frames.append(imgs_og)  # Original camera images
             self.bbox_cameras.append(bbox_camera)  # Coordinates of objects
             self.bbox_labels.append(labels)  # Labels for each frame
+
+            prog_bar.update()
+
+        self.data_idx -= (self.video_length - 1)
+        print("\nVideo generated.\n")
+
+    def generate_video_only(self):
+        self.select_all_bboxes.set(True)
+        self.img_frames = []
+
+        print("\nGenerating image frames...\n")
+        prog_bar = mmcv.ProgressBar(self.video_length)
+        for i in range(self.data_idx, self.data_idx + self.video_length):
+            self.data_idx = i
+            img_frames = []
+            for expl in self.expl_types:
+                self.selected_expl_type.set(expl)
+                imgs_att = self.generate_video_frame()
+                img_frames.append(imgs_att)
+
+            self.img_frames.append(img_frames)  # Image frame of all 6 cameras with attention maps and bboxes overlayed
 
             prog_bar.update()
 
@@ -247,13 +268,15 @@ class App(UI):
         if not self.paused:
             self.paused = True
             self.after_cancel(self.after_seq_id)
-            labels = self.bbox_labels[self.idx_video-1]
-            self.update_objects_list(labels)  # Update objects menu list
-            self.single_bbox_select(True)  # Selects the first object
-            self.show_att_maps_object()  # Visualize attention maps for the selected object
+            if not self.video_only.get():
+                labels = self.bbox_labels[self.idx_video-1]
+                self.update_objects_list(labels)  # Update objects menu list
+                self.single_bbox_select(True)  # Selects the first object
+                self.show_att_maps_object()  # Visualize attention maps for the selected object
         else:
             self.paused = False
-            self.after_cancel(self.after_obj_id)
+            if not self.video_only.get():
+                self.after_cancel(self.after_obj_id)
             self.show_sequence()
 
     def show_att_maps_object(self):
@@ -288,7 +311,7 @@ class App(UI):
                 ax_attn = self.fig_obj.add_subplot(self.single_object_spec[i, 1])
 
                 ax_img.imshow(img_single_obj)
-                ax_img.set_title(f"{self.model.class_names[label].capitalize()}")
+                ax_img.set_title(f"{self.ObjectDetector.class_names[label].capitalize()}")
                 ax_attn.imshow(expl)
                 ax_attn.set_title(f"{self.expl_types[i]}, layer {self.selected_layer.get()}")
 
@@ -316,16 +339,17 @@ class App(UI):
         cam_imgs, og_imgs, bbox_cameras, att_nobbx = [], [], [], []  # Used for video generation
 
         for camidx in range(len(self.imgs)):
-            og_img = cv2.cvtColor(self.imgs[camidx], cv2.COLOR_BGR2RGB)
-            og_imgs.append(og_img)
-            og_img = self.imgs[camidx].astype(np.uint8)
-            att_nobbx_layers = []
-            for layer in range(self.Attention.layers):
-                attn = self.attn_list[layer][camidx]
-                attn_img = self.overlay_attention_on_image(og_img, attn)      
-                attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
-                att_nobbx_layers.append(attn_img)
-            att_nobbx.append(att_nobbx_layers)
+            if not self.video_only.get():
+                og_img = cv2.cvtColor(self.imgs[camidx], cv2.COLOR_BGR2RGB)
+                og_imgs.append(og_img)
+                og_img = self.imgs[camidx].astype(np.uint8)
+                att_nobbx_layers = []
+                for layer in range(self.Attention.layers):
+                    attn = self.attn_list[layer][camidx]
+                    attn_img = self.overlay_attention_on_image(og_img, attn)      
+                    attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
+                    att_nobbx_layers.append(attn_img)
+                att_nobbx.append(att_nobbx_layers)
 
             img, bbox_camera = draw_lidar_bbox3d_on_img(
                     self.pred_bboxes,
@@ -337,19 +361,23 @@ class App(UI):
                     bbx_idx=self.bbox_idx,
                     mode_2d=self.bbox_2d.get())
             
-            bbox_cameras.append(bbox_camera)       
-
+            if not self.video_only.get():
+                bbox_cameras.append(bbox_camera)  
+            
             attn = self.attn_list[self.selected_layer.get()][camidx]
             img = self.overlay_attention_on_image(img, attn, intensity=200)   
-
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            cam_imgs.append(img)
+
+            cam_imgs.append(img)     
 
         hori = np.concatenate((cam_imgs[2], cam_imgs[0], cam_imgs[1]), axis=1)
         ver = np.concatenate((cam_imgs[5], cam_imgs[3], cam_imgs[4]), axis=1)
         img_frame = np.concatenate((hori, ver), axis=0)
 
-        return img_frame, att_nobbx, og_imgs, bbox_cameras, self.labels
+        if not self.video_only.get():
+            return img_frame, att_nobbx, og_imgs, bbox_cameras, self.labels
+        else:
+            return img_frame
 
     def evaluate_expl(self):
         print(f"Evaluating {self.selected_expl_type.get()}...")
@@ -360,11 +388,11 @@ class App(UI):
         num_tokens = int(0.25 * 1450)
         layer = self.Attention.layers - 1
         outputs_pert = []
-        dataset = self.model.dataloader.dataset
+        dataset = self.ObjectDetector.dataloader.dataset
         prog_bar = mmcv.ProgressBar(evaluation_lenght)
 
         for i in range(initial_idx, initial_idx + evaluation_lenght):
-            data = self.model.dataloader.dataset[i]
+            data = self.ObjectDetector.dataloader.dataset[i]
             metas = [[data['img_metas'][0].data]]
             img = [data['img'][0].data.unsqueeze(0)] # img[0] = torch.Size([1, 6, 3, 928, 1600])
             data['img_metas'][0] = DC(metas, cpu_only=True)
@@ -376,7 +404,7 @@ class App(UI):
             else:
                 self.Attention.extract_attentions(data, bbox_idx)
 
-            nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes()
+            nms_idxs = self.ObjectDetector.module.pts_bbox_head.bbox_coder.get_indexes()
 
             topk_list = []
             
@@ -411,7 +439,7 @@ class App(UI):
 
             # Second forward
             with torch.no_grad():
-                output = self.model.model(return_loss=False, rescale=True, **data)
+                output = self.ObjectDetector.model(return_loss=False, rescale=True, **data)
 
             outputs_pert.extend(output)
             torch.cuda.empty_cache()
@@ -421,7 +449,7 @@ class App(UI):
         print("\nCompleted.\n")
 
         kwargs = {}
-        eval_kwargs = self.model.cfg.get('evaluation', {}).copy()
+        eval_kwargs = self.ObjectDetector.cfg.get('evaluation', {}).copy()
         # hard-code way to remove EvalHook args
         for key in [
                 'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',

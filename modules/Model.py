@@ -10,10 +10,10 @@ from mmdet.datasets import replace_ImageToTensor
 from mmcv.parallel import MMDataParallel
 
 
-
 class Model():
-    def init(self):
-        init = 1
+
+    def __init__(self):
+        self.layers = 0
 
     def load_from_config(self):
         with open("config.toml", mode="rb") as argsF:
@@ -53,32 +53,25 @@ class Model():
             args = {}
             args["config"] = cfg_file
             args["checkpoint"] = weights_file
-            model, dataloader, img_norm_cfg, cfg = self.init_model(args)
-                    
-            self.model = MMDataParallel(model, device_ids=[self.gpu_id])
-            self.dataloader = dataloader
-            #self.Attention = Attention(self.model)
-            self.img_norm_cfg = img_norm_cfg  # Used for image de-normalization
+            self.init_model(args)
             self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
             self.dataloader_name = self.dataloader.dataset.metadata['version']
             self.class_names = self.dataloader.dataset.CLASSES
-            self.cfg = cfg
+            for _ in self.model.module.pts_bbox_head.transformer.decoder.layers:
+                self.layers += 1
 
             print("\nModel loaded.")
         
         else:
-            self.show_message("No file selected.")
+            print("No file selected.")
 
     def init_model(self, args):
         ''' Loads the model from a config file and loads the weights from a trained checkpoint '''
 
         cfg = Config.fromfile(args["config"])
-
         if cfg.get('custom_imports', None):
             from mmcv.utils import import_modules_from_strings
             import_modules_from_strings(**cfg['custom_imports'])
-        
-        img_norm_cfg = cfg.get('img_norm_cfg')
         
         # import modules from plguin/xx, registry will be updated
         if hasattr(cfg, 'plugin'):
@@ -139,6 +132,7 @@ class Model():
         fp16_cfg = cfg.get('fp16', None)
         if fp16_cfg is not None:
             wrap_fp16_model(model)
+
         checkpoint = load_checkpoint(model, args["checkpoint"], map_location='cpu')
 
         # old versions did not save class info in checkpoints, this walkaround is for backward compatibility
@@ -154,7 +148,9 @@ class Model():
             # segmentation dataset has `PALETTE` attribute
             model.PALETTE = dataset.PALETTE
         
-        return model, data_loader, img_norm_cfg, cfg
+        self.model = MMDataParallel(model, device_ids=[self.gpu_id])
+        self.dataloader = data_loader
+        self.cfg = cfg
 
 
 

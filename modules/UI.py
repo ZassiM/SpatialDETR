@@ -15,7 +15,7 @@ from tkinter import scrolledtext
 from PIL import ImageGrab
 import matplotlib.pyplot as plt
 
-from modules.SyncedConfigs import SyncedConfigs
+from modules.Configs import Configs
 from modules.Attention import Attention
 from modules.Model import Model
 
@@ -39,8 +39,8 @@ class UI(tk.Tk):
         self.canvas, self.fig, self.spec, self.single_object_window, self.single_object_canvas = None, None, None, None, None
 
         # Model and dataloader objects
-        #self.model, self.model.dataloader = None, None
-        self.model = Model()
+        #self.model, self.ObjectDetector.dataloader = None, None
+        self.ObjectDetector = Model()
         self.started_app = False
         self.video_length = 5
         self.video_gen_bool = False
@@ -70,11 +70,11 @@ class UI(tk.Tk):
 
     def load_model(self, from_config=False):
         if not from_config:
-            self.model.load_model(gpu_id=self.gpu_id.get())
+            self.ObjectDetector.load_model(gpu_id=self.gpu_id.get())
         else:
-            self.model.load_from_config()
+            self.ObjectDetector.load_from_config()
 
-        self.Attention = Attention(self.model.model)
+        self.Attention = Attention(self.ObjectDetector)
 
         if not self.started_app:
             print("Starting app...")
@@ -94,8 +94,8 @@ class UI(tk.Tk):
 
         # Synced configurations: when a value is changed, the triggered function is called
         data_configs, expl_configs = [], []
-        self.data_configs = SyncedConfigs(data_configs, triggered_function=self.update_data, type=0)
-        self.expl_configs = SyncedConfigs(expl_configs, triggered_function=self.Attention.generate_explainability, type=1)
+        self.data_configs = Configs(data_configs, triggered_function=self.update_data, type=0)
+        self.expl_configs = Configs(expl_configs, triggered_function=self.Attention.generate_explainability, type=1)
 
         # Tkinter frame for visualizing model and GPU info
         frame = tk.Frame(self)
@@ -112,10 +112,15 @@ class UI(tk.Tk):
         dataidx_opt.add_command(label=" Select data index", command=lambda: self.select_data_idx(type=0))
         dataidx_opt.add_command(label=" Select random data", command=self.random_data_idx)
         dataidx_opt.add_separator()
+
+        self.video_only = tk.BooleanVar()
+        self.video_only.set(False)
         dataidx_opt.add_command(label=" Select video length", command=lambda: self.select_data_idx(type=1))
         dataidx_opt.add_command(label=" Select frame rate", command=lambda: self.select_data_idx(type=2))
         dataidx_opt.add_command(label=" Generate video", command=self.generate_video)
         dataidx_opt.add_command(label=" Save video", command=self.save_video)
+        dataidx_opt.add_checkbutton(label=" Video only", onvalue=1, offvalue=0, variable=self.video_only)
+
 
         # Cascade menus for Prediction threshold
         thr_opt = tk.Menu(self.menubar)
@@ -270,7 +275,7 @@ class UI(tk.Tk):
         Predict bboxes and extracts attentions.
         '''
         # Load selected data from dataloader, manual DataContainer fixes are needed
-        data = self.model.dataloader.dataset[self.data_idx]
+        data = self.ObjectDetector.dataloader.dataset[self.data_idx]
         metas = [[data['img_metas'][0].data]]
         img = [data['img'][0].data.unsqueeze(0)]
         data['img_metas'][0] = DC(metas, cpu_only=True)
@@ -284,7 +289,7 @@ class UI(tk.Tk):
             outputs = self.Attention.extract_attentions(self.data, self.bbox_idx)
 
         # Those are needed to index the bboxes decoded by the NMS-Free decoder
-        self.nms_idxs = self.model.model.module.pts_bbox_head.bbox_coder.get_indexes()
+        self.nms_idxs = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()
 
         # Extract predicted bboxes and their labels
         self.outputs = outputs[0]["pts_bbox"]
@@ -304,8 +309,9 @@ class UI(tk.Tk):
         imgs = imgs.transpose(0, 2, 3, 1)[:, :self.ori_shape[0], :self.ori_shape[1], :]  # [num_cams x height x width x channels]
         
         # Denormalize the images
-        mean = np.array(self.model.img_norm_cfg["mean"], dtype=np.float32)
-        std = np.array(self.model.img_norm_cfg["std"], dtype=np.float32)
+        img_norm_cfg = self.ObjectDetector.cfg.get('img_norm_cfg')
+        mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
+        std = np.array(img_norm_cfg["std"], dtype=np.float32)
 
         for i in range(len(imgs)):
             imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
@@ -333,10 +339,10 @@ class UI(tk.Tk):
     def show_model_info(self, event=None):
         popup = tk.Toplevel(self)
         popup.geometry("700x1000")
-        popup.title(f"Model {self.model.model_name}")
+        popup.title(f"Model {self.ObjectDetector.model_name}")
 
         text = scrolledtext.ScrolledText(popup, wrap=tk.WORD)
-        for k, v in self.model.module.__dict__["_modules"].items():
+        for k, v in self.ObjectDetector.module.__dict__["_modules"].items():
             text.insert(tk.END, f"{k.upper()}\n", 'key')
             text.insert(tk.END, f"{v}\n\n")
             text.tag_config('key', background="yellow", foreground="red")
@@ -358,16 +364,16 @@ class UI(tk.Tk):
     def close_entry(self, popup, type):
         idx = self.entry.get()
         if type == 0:
-            if idx.isnumeric() and int(idx) <= (len(self.model.dataloader)-1):
+            if idx.isnumeric() and int(idx) <= (len(self.ObjectDetector.dataloader)-1):
                 self.data_idx = int(idx)
                 self.update_info_label()
             else:
-                self.show_message(f"Insert an integer between 0 and {len(self.model.dataloader)-1}")
+                self.show_message(f"Insert an integer between 0 and {len(self.ObjectDetector.dataloader)-1}")
         elif type == 1:
-            if idx.isnumeric() and 2 <= int(idx) <= ((len(self.model.dataloader)-1) - self.data_idx):
+            if idx.isnumeric() and 2 <= int(idx) <= ((len(self.ObjectDetector.dataloader)-1) - self.data_idx):
                 self.video_length = int(idx)
             else:
-                self.show_message(f"Insert an integer between 2 and {(len(self.model.dataloader)-1) - self.data_idx}") 
+                self.show_message(f"Insert an integer between 2 and {(len(self.ObjectDetector.dataloader)-1) - self.data_idx}") 
         elif type == 2:
             max_frame_rate = 100
             if idx.isnumeric() and 1 <= int(idx) <= (max_frame_rate):
@@ -378,15 +384,16 @@ class UI(tk.Tk):
         popup.destroy()
 
     def random_data_idx(self):
-        idx = random.randint(0, len(self.model.dataloader)-1)
+        idx = random.randint(0, len(self.ObjectDetector.dataloader)-1)
         self.data_idx = idx
         self.update_info_label()
+
 
     def update_info_label(self, info=None, idx=None):
         if idx is None:
             idx = self.data_idx
         if info is None:
-            info = f"Model: {self.model.model_name} | Dataloader: {self.model.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
+            info = f"Model: {self.ObjectDetector.model_name} | Dataloader: {self.ObjectDetector.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
         self.info_text.set(info)
 
     def update_thr(self):
@@ -402,7 +409,7 @@ class UI(tk.Tk):
             view_bbox = tk.BooleanVar()
             view_bbox.set(False)
             self.bboxes.append(view_bbox)
-            self.bbox_opt.add_checkbutton(label=f" {self.model.class_names[labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
+            self.bbox_opt.add_checkbutton(label=f" {self.ObjectDetector.class_names[labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
 
     def single_bbox_select(self, idx=None, single_select=False):
         self.select_all_bboxes.set(False)
@@ -458,7 +465,7 @@ class UI(tk.Tk):
         y1 = y0 + self.canvas.get_width_height()[1]
         
         im = ImageGrab.grab((x0, y0, x1, y1))
-        path = f"screenshots/{self.model.model_name}_{self.data_idx}"
+        path = f"screenshots/{self.ObjectDetector.model_name}_{self.data_idx}"
 
         if os.path.exists(path+"_"+str(self.file_suffix)+".png"):
             self.file_suffix += 1

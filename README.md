@@ -22,7 +22,16 @@ git submodule update --init --recursive
 1. Download the [weights for FCOS3D](https://rwth-aachen.sciebo.de/s/asoSC5oMD1TNEsy) (which are used by SpatialDETR) and put them inside a directory called **pretrained**.
 2. Download the [weights for SpatialDETR](https://rwth-aachen.sciebo.de/s/fgmMdPEQKQu9hz) (query_proj_value_proj) and put them inside a directory called **checkpoints**.
 
+
 ### Docker Setup
+The docker container is based on the following packages:
+- `Python 3.7`
+- `Pytorch 1.9`
+- `Cuda 11.1`
+- `MMCV 1.5`
+- `MMDetection 2.23`
+- `MMSegmentation 0.20`
+
 To ease the setup of this project we provide a docker container and some convenience scripts (see `docker`). To setup use:
 - (if not done alread) setup [Docker](https://docs.docker.com/engine/install/ubuntu/) and [Nvidia-Docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker)
 - Run 

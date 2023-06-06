@@ -59,12 +59,10 @@ class Attention:
     '''
     Generates attention maps and different explainability features.
     '''
-    def __init__(self, model):
-        self.model = model
+    def __init__(self, Model):
+        self.model = Model.model
+        self.layers = Model.layers
         self.model.eval()
-        self.layers = 0
-        for _ in self.model.module.pts_bbox_head.transformer.decoder.layers:
-            self.layers += 1
         self.height_feats, self.width_feats = None, None
         
     def apply_self_attention_rules(self, cam_qq):
