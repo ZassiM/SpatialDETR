@@ -65,16 +65,18 @@ def evaluate_expl(Model, ExplGen, expl_type):
         img_norm_cfg = Model.cfg.get('img_norm_cfg')
         mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
         std = np.array(img_norm_cfg["std"], dtype=np.float32)
+        mask = (-mean[0]/std[0], -mean[1]/std[1], -mean[2]/std[2])
 
         # Denormalization is needed, because data is normalized
         img = img[0][0]
+        img = img[:, :, :Model.ori_shape[0], :Model.ori_shape[1]]
         for i in range(len(img)):
             img_og = img[i].permute(1, 2, 0)
             img_og_list.append(img_og)
             img_pert = img_og.clone()
             # Image perturbation by setting pixels to (0,0,0)
             for idx in topk_list[i]:
-                img_pert[idx[0], idx[1]] = 0
+                img_pert[idx[0], idx[1]] = mask
             img_pert_list.append(img_pert.permute(2, 0, 1))
 
         # Save the perturbed 6 camera images into the data input

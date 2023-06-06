@@ -62,6 +62,7 @@ class ExplainableTransformer:
     def __init__(self, Model):
         self.model = Model.model
         self.layers = Model.layers
+        self.ori_shape = Model.ori_shape
         self.model.eval()
         self.height_feats, self.width_feats = None, None
             
@@ -291,7 +292,7 @@ class ExplainableTransformer:
                 attn = attention_maps[layer][camidx].reshape(1, 1, self.height_feats, self.width_feats)
                 attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
                 attn = attn.reshape(attn.shape[2], attn.shape[3])
-                attn = attn[:900, :]
+                attn = attn[:self.ori_shape[0], :self.ori_shape[1]]
                 attention_maps_cameras.append(attn)
             attention_maps_inter.append(attention_maps_cameras)
 

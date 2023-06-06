@@ -48,27 +48,35 @@ class Model():
         if gpu_id is not None:
             self.gpu_id = gpu_id
 
-        if cfg_file and weights_file:
-            # Model configuration needs to load weights
-            args = {}
-            args["config"] = cfg_file
-            args["checkpoint"] = weights_file
-            self.init_model(args)
-            self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
-            self.dataloader_name = self.dataloader.dataset.metadata['version']
-            self.class_names = self.dataloader.dataset.CLASSES
-            for _ in self.model.module.pts_bbox_head.transformer.decoder.layers:
-                self.layers += 1
-
-            print("\nModel loaded.")
-        
-        else:
+        if not (cfg_file and weights_file):
             print("No file selected.")
+            return
+        
+        # Model configuration needs to load weights
+        args = {}
+        args["config"] = cfg_file
+        args["checkpoint"] = weights_file
+        self.init_model(args)
+        
+        self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
+        self.dataloader_name = self.dataloader.dataset.metadata['version']
+        self.class_names = self.dataloader.dataset.CLASSES
+        for _ in self.model.module.pts_bbox_head.transformer.decoder.layers:
+            self.layers += 1
+        self.ori_shape = self.dataloader.dataset[0]["img_metas"][0]._data["ori_shape"]
+
+        print("\nModel loaded.")
 
     def init_model(self, args):
         ''' Loads the model from a config file and loads the weights from a trained checkpoint '''
 
         cfg = Config.fromfile(args["config"])
+
+        # cfg.data.test["data_root"] = "data/nuscenes_mini/"
+        # cfg.db_sampler["data_root"] = "data/nuscenes_mini/"
+        # cfg.data.test["ann_file"] = "data/nuscenes_mini/nuscenes_infos_train.pkl"
+        # cfg.db_sampler["info_path"] = "data/nuscenes_mini/nuscenes_infos_train.pkl"
+
         if cfg.get('custom_imports', None):
             from mmcv.utils import import_modules_from_strings
             import_modules_from_strings(**cfg['custom_imports'])

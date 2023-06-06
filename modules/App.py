@@ -2,10 +2,10 @@ from PIL import Image, ImageTk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 
-from modules.UI import UI, tk, np, cv2, plt, mmcv, torch, DC
+from modules.BaseApp import BaseApp, tk, np, cv2, plt, mmcv, torch, DC
 
 
-class App(UI):
+class App(BaseApp):
     '''
     Application User Interface
     '''
@@ -378,83 +378,3 @@ class App(UI):
             return img_frame, att_nobbx, og_imgs, bbox_cameras, self.labels
         else:
             return img_frame
-
-    def evaluate_expl(self):
-        print(f"Evaluating {self.selected_expl_type.get()}...")
-
-        bbox_idx = [0]
-        initial_idx = 0
-        evaluation_lenght = 81
-        num_tokens = int(0.25 * 1450)
-        layer = self.ExplainableModel.layers - 1
-        outputs_pert = []
-        dataset = self.ObjectDetector.dataloader.dataset
-        prog_bar = mmcv.ProgressBar(evaluation_lenght)
-
-        for i in range(initial_idx, initial_idx + evaluation_lenght):
-            data = self.ObjectDetector.dataloader.dataset[i]
-            metas = [[data['img_metas'][0].data]]
-            img = [data['img'][0].data.unsqueeze(0)] # img[0] = torch.Size([1, 6, 3, 928, 1600])
-            data['img_metas'][0] = DC(metas, cpu_only=True)
-            data['img'][0] = DC(img)
-
-            # Attention scores are extracted, together with gradients if grad-CAM is selected
-            if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
-                self.ExplainableModel.extract_attentions(data)
-            else:
-                self.ExplainableModel.extract_attentions(data, bbox_idx)
-
-            nms_idxs = self.ObjectDetector.module.pts_bbox_head.bbox_coder.get_indexes()
-
-            topk_list = []
-            
-            attn_list = self.ExplainableModel.generate_explainability_cameras(self.selected_expl_type.get(), layer, bbox_idx, nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
-
-            #attn_max = attn_list.max()
-            for i in range(len(attn_list)):
-                attn = attn_list[i]
-                #attn /= attn_max
-                _, indices = torch.topk(attn.flatten(), k=num_tokens)
-                indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
-                topk_list.append(indices)
-
-            img_og_list = [] # list of original images
-            img_pert_list = [] # list of perturbed images
-
-            # Denormalization is needed, because data is normalized 
-            img = img[0][0]
-            for i in range(len(img)):
-                img_og = img[i].permute(1, 2, 0)
-
-                img_og_list.append(img_og)
-                img_pert = img_og.clone()
-                # Image perturbation by setting pixels to (0,0,0)
-                for idx in topk_list[i]:
-                    img_pert[idx[0], idx[1]] = 0
-                img_pert_list.append(img_pert.permute(2, 0, 1))
-
-            # Save the perturbed 6 camera images into the data input
-            img = [torch.stack((img_pert_list)).unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
-            data['img'][0] = DC(img)
-
-            # Second forward
-            with torch.no_grad():
-                output = self.ObjectDetector.model(return_loss=False, rescale=True, **data)
-
-            outputs_pert.extend(output)
-            torch.cuda.empty_cache()
-
-            prog_bar.update()
-        
-        print("\nCompleted.\n")
-
-        kwargs = {}
-        eval_kwargs = self.ObjectDetector.cfg.get('evaluation', {}).copy()
-        # hard-code way to remove EvalHook args
-        for key in [
-                'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
-                'rule'
-        ]:
-            eval_kwargs.pop(key, None)
-        eval_kwargs.update(dict(metric="bbox", **kwargs))
-        print(dataset.evaluate(outputs_pert, **eval_kwargs))
