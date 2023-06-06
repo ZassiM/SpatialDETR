@@ -9,10 +9,10 @@ def avg_heads(attn, head_fusion="min", discard_ratio=0.9):
     elif head_fusion == "min":
         attn = attn.min(dim=0)[0]
 
-    # flat = attn.view(-1)
-    # _, indices = flat.topk(int(flat.size(-1)*discard_ratio), -1, False)
-    # indices = indices[indices != 0]
-    # flat[indices] = 0
+    flat = attn.view(-1)
+    _, indices = flat.topk(int(flat.size(-1)*discard_ratio), -1, False)
+    indices = indices[indices != 0]
+    flat[indices] = 0
     return attn
 
 
@@ -55,7 +55,7 @@ def gradcam(cam, grad):
     return cam
 
 
-class Attention:
+class ExplainableTransformer:
     '''
     Generates attention maps and different explainability features.
     '''
@@ -64,34 +64,27 @@ class Attention:
         self.layers = Model.layers
         self.model.eval()
         self.height_feats, self.width_feats = None, None
-        
-    def apply_self_attention_rules(self, cam_qq):
-        self.R_q_i += torch.matmul(cam_qq, self.R_q_i)
-        self.R_q_q += torch.matmul(cam_qq, self.R_q_q)
-
-
-    def apply_mm_attention_rules(self, cam_qi, handle_residual_bool=True, apply_rule=True):
-        R_qq_normalized = self.R_q_q
-        if handle_residual_bool:
-            R_qq_normalized = handle_residual(self.R_q_q)
-        R_qi_addition = torch.matmul(R_qq_normalized.t(), cam_qi)
-        if not apply_rule:
-            R_qi_addition = cam_qi
-        R_qi_addition[torch.isnan(R_qi_addition)] = 0
-        self.R_q_i += R_qi_addition
             
     def handle_co_attn_self_query(self, layer):
         # grad = self.dec_self_attn_grads[layer]
         cam = self.dec_self_attn_weights[layer]
         # cam = avg_heads_og(cam, grad)
-        self.apply_self_attention_rules(cam)
+        self.R_q_i += torch.matmul(cam, self.R_q_i)
+        self.R_q_q += torch.matmul(cam, self.R_q_q)
 
-    def handle_co_attn_query(self, layer, camidx, handle_residual, apply_rule):
+    def handle_co_attn_query(self, layer, camidx, handle_residual_bool, apply_rule):
         cam_q_i = self.dec_cross_attn_weights[layer][camidx]
         grad_q_i = self.dec_cross_attn_grads[layer][camidx]
         cam_q_i = avg_heads_og(cam_q_i, grad_q_i)
-        self.apply_mm_attention_rules(cam_q_i, handle_residual, apply_rule)
-    
+        R_qq_normalized = self.R_q_q
+        if handle_residual_bool:
+            R_qq_normalized = handle_residual(self.R_q_q)
+        R_qi_addition = torch.matmul(R_qq_normalized.t(), cam_q_i)
+        if not apply_rule:
+            R_qi_addition = cam_q_i
+        R_qi_addition[torch.isnan(R_qi_addition)] = 0
+        self.R_q_i += R_qi_addition
+
     def extract_attentions(self, data, target_index=None):
         self.dec_cross_attn_weights, self.dec_cross_attn_grads, self.dec_self_attn_weights, self.dec_self_attn_grads = [], [], [], [] 
 
@@ -252,27 +245,32 @@ class Attention:
         return attention_maps
 
     def generate_explainability(self, expl_type, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
-        attention_maps = []
-        for layer in range(self.layers):
-            att_maps_cameras = []
+        attention_maps, att_maps_cameras = [], []
+
+        if expl_type == "Gradient Rollout":
             for camidx in range(6):
-                if expl_type == "Attention Rollout":
-                    self.generate_rollout(layer, camidx, head_fusion, discard_ratio, raw)
-                elif expl_type == "Grad-CAM":
-                    self.generate_gradcam(layer, camidx)
-                elif expl_type == "Gradient Rollout":
-                    self.generate_gradroll(camidx, handle_residual, apply_rule)
-                elif expl_type == "Partial-LRP":
-                    attention_maps = 0
+                self.generate_gradroll(camidx, handle_residual, apply_rule)
                 att_maps_cameras.append(self.R_q_i[indexes[bbox_idx]].detach().cpu())
             attention_maps.append(att_maps_cameras)
+        else:
+            for layer in range(self.layers):
+                att_maps_cameras = []
+                for camidx in range(6):
+                    if expl_type == "Attention Rollout":
+                        self.generate_rollout(layer, camidx, head_fusion, discard_ratio, raw)
+                    elif expl_type == "Grad-CAM":
+                        self.generate_gradcam(layer, camidx)
+                    elif expl_type == "Partial-LRP":
+                        attention_maps = 0
+                    att_maps_cameras.append(self.R_q_i[indexes[bbox_idx]].detach().cpu())
+                attention_maps.append(att_maps_cameras)
 
         # num_layers x num_cams x num_objects x 1450
             
         attention_maps = torch.stack([torch.stack(layer) for layer in attention_maps])
         attention_maps = attention_maps.permute(0, 2, 1, 3)  # num layers x num_objects x num_cams x 1450 # take only the selected objects
         # normalize across cameras
-        for layer in range(self.layers):
+        for layer in range(len(attention_maps)):
             for object in range(len(attention_maps[layer])):
                 attention_maps[layer][object] = (attention_maps[layer][object] - attention_maps[layer][object].min()) / (attention_maps[layer][object].max() - attention_maps[layer][object].min())
 
@@ -287,10 +285,10 @@ class Attention:
         if attention_maps.dim() == 1:
             attention_maps.unsqueeze_(0)
             attention_maps.unsqueeze_(0)
-        for layer in range(self.layers):
+        for layer in range(len(attention_maps)):
             attention_maps_cameras = []
-            for i in range(len(attention_maps[layer])):
-                attn = attention_maps[layer][i].reshape(1, 1, self.height_feats, self.width_feats)
+            for camidx in range(len(attention_maps[layer])):
+                attn = attention_maps[layer][camidx].reshape(1, 1, self.height_feats, self.width_feats)
                 attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
                 attn = attn.reshape(attn.shape[2], attn.shape[3])
                 attn = attn[:900, :]
@@ -305,8 +303,8 @@ class Attention:
         attention_maps_inter = []
         if attention_maps.dim() == 1:
             attention_maps.unsqueeze_(0)
-        for i in range(len(attention_maps)):
-            attn = attention_maps[i].reshape(1, 1, self.height_feats, self.width_feats)
+        for camidx in range(len(attention_maps)):
+            attn = attention_maps[camidx].reshape(1, 1, self.height_feats, self.width_feats)
             attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
             attn = attn.reshape(attn.shape[2], attn.shape[3])
             attn = attn[:900, :]

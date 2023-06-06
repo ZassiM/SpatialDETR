@@ -37,8 +37,10 @@ class App(UI):
         self.fig.clear()
 
         # Avoid selecting all layers and all cameras. Only the last layer will be visualized
-        if self.show_all_layers.get() and self.selected_camera.get() == -1:
+        if (self.show_all_layers.get() and self.selected_camera.get() == -1) or self.selected_expl_type.get() == "Gradient Rollout":
             self.show_all_layers.set(False)
+            if self.selected_expl_type.get() == "Gradient Rollout":
+                self.selected_layer.set(0)
 
         self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name]
 
@@ -46,9 +48,7 @@ class App(UI):
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
         if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
-            #self.Attention.extract_attentions(self.data, self.bbox_idx)
-            self.update_data()
-            self.show_all_layers.set(False)
+            self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
         
         self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get()]   
         self.attn_list = self.expl_configs.attn_list
@@ -129,7 +129,7 @@ class App(UI):
         else:
             fontsize = 12
             
-        for i in range(len(self.attn_list)):
+        for i in range(len(self.attn_list[0])):
             if self.show_all_layers.get() or self.selected_camera.get() == -1:
                 ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
             else:
@@ -333,7 +333,7 @@ class App(UI):
         if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
             self.update_data()
 
-        self.attn_list = self.Attention.generate_explainability(self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
+        self.attn_list = self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
 
         # Generate images list with bboxes on it
         cam_imgs, og_imgs, bbox_cameras, att_nobbx = [], [], [], []  # Used for video generation
@@ -344,7 +344,7 @@ class App(UI):
                 og_imgs.append(og_img)
                 og_img = self.imgs[camidx].astype(np.uint8)
                 att_nobbx_layers = []
-                for layer in range(self.Attention.layers):
+                for layer in range(self.ExplainableModel.layers):
                     attn = self.attn_list[layer][camidx]
                     attn_img = self.overlay_attention_on_image(og_img, attn)      
                     attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
@@ -386,7 +386,7 @@ class App(UI):
         initial_idx = 0
         evaluation_lenght = 81
         num_tokens = int(0.25 * 1450)
-        layer = self.Attention.layers - 1
+        layer = self.ExplainableModel.layers - 1
         outputs_pert = []
         dataset = self.ObjectDetector.dataloader.dataset
         prog_bar = mmcv.ProgressBar(evaluation_lenght)
@@ -400,15 +400,15 @@ class App(UI):
 
             # Attention scores are extracted, together with gradients if grad-CAM is selected
             if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
-                self.Attention.extract_attentions(data)
+                self.ExplainableModel.extract_attentions(data)
             else:
-                self.Attention.extract_attentions(data, bbox_idx)
+                self.ExplainableModel.extract_attentions(data, bbox_idx)
 
             nms_idxs = self.ObjectDetector.module.pts_bbox_head.bbox_coder.get_indexes()
 
             topk_list = []
             
-            attn_list = self.Attention.generate_explainability_cameras(self.selected_expl_type.get(), layer, bbox_idx, nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
+            attn_list = self.ExplainableModel.generate_explainability_cameras(self.selected_expl_type.get(), layer, bbox_idx, nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
 
             #attn_max = attn_list.max()
             for i in range(len(attn_list)):

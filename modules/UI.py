@@ -16,7 +16,7 @@ from PIL import ImageGrab
 import matplotlib.pyplot as plt
 
 from modules.Configs import Configs
-from modules.Attention import Attention
+from modules.Explainability import ExplainableTransformer
 from modules.Model import Model
 
 
@@ -31,16 +31,16 @@ class UI(tk.Tk):
         super().__init__()
 
         # Tkinter-related settings
-        self.tk.call("source", "theme/azure.tcl")
+        self.tk.call("source", "misc/theme/azure.tcl")
         self.tk.call("set_theme", "dark")
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
         self.protocol("WM_DELETE_WINDOW", self.quit)
         self.canvas, self.fig, self.spec, self.single_object_window, self.single_object_canvas = None, None, None, None, None
 
-        # Model and dataloader objects
-        #self.model, self.ObjectDetector.dataloader = None, None
+        # Model object
         self.ObjectDetector = Model()
+
         self.started_app = False
         self.video_length = 5
         self.video_gen_bool = False
@@ -74,7 +74,7 @@ class UI(tk.Tk):
         else:
             self.ObjectDetector.load_from_config()
 
-        self.Attention = Attention(self.ObjectDetector)
+        self.ExplainableModel = ExplainableTransformer(self.ObjectDetector)
 
         if not self.started_app:
             print("Starting app...")
@@ -95,7 +95,7 @@ class UI(tk.Tk):
         # Synced configurations: when a value is changed, the triggered function is called
         data_configs, expl_configs = [], []
         self.data_configs = Configs(data_configs, triggered_function=self.update_data, type=0)
-        self.expl_configs = Configs(expl_configs, triggered_function=self.Attention.generate_explainability, type=1)
+        self.expl_configs = Configs(expl_configs, triggered_function=self.ExplainableModel.generate_explainability, type=1)
 
         # Tkinter frame for visualizing model and GPU info
         frame = tk.Frame(self)
@@ -144,10 +144,10 @@ class UI(tk.Tk):
         layer_opt = tk.Menu(self.menubar)
         self.selected_layer = tk.IntVar()
         self.show_all_layers = tk.BooleanVar()
-        for i in range(self.Attention.layers):
+        for i in range(self.ExplainableModel.layers):
             layer_opt.add_radiobutton(label=i, variable=self.selected_layer, command=self.update_info_label)
         layer_opt.add_checkbutton(label="All", onvalue=1, offvalue=0, variable=self.show_all_layers)
-        self.selected_layer.set(self.Attention.layers - 1)
+        self.selected_layer.set(self.ExplainableModel.layers - 1)
 
         # Cascade menus for Explainable options
         expl_opt = tk.Menu(self.menubar)
@@ -284,9 +284,9 @@ class UI(tk.Tk):
 
         # Attention scores are extracted, together with gradients if grad-CAM is selected
         if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
-            outputs = self.Attention.extract_attentions(self.data)
+            outputs = self.ExplainableModel.extract_attentions(self.data)
         else:
-            outputs = self.Attention.extract_attentions(self.data, self.bbox_idx)
+            outputs = self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
 
         # Those are needed to index the bboxes decoded by the NMS-Free decoder
         self.nms_idxs = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()
@@ -342,7 +342,7 @@ class UI(tk.Tk):
         popup.title(f"Model {self.ObjectDetector.model_name}")
 
         text = scrolledtext.ScrolledText(popup, wrap=tk.WORD)
-        for k, v in self.ObjectDetector.module.__dict__["_modules"].items():
+        for k, v in self.ObjectDetector.model.module.__dict__["_modules"].items():
             text.insert(tk.END, f"{k.upper()}\n", 'key')
             text.insert(tk.END, f"{v}\n\n")
             text.tag_config('key', background="yellow", foreground="red")

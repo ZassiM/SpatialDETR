@@ -63,7 +63,7 @@ Otherwise, if working on a remote server, run:
 ## Application testing
 1. After the docker container is set-up, run the application:
 ```bash 
-python main.py
+python scripts/main.py
 ```
 2. A GUI will appear. Select **File-Load model** to load the model configuration and the checkpoints. Otherwise, if the same configurations are used each time, modify the **config.toml** file accordinly and select **File-Load from config file**.
 3. Change the visualization settings with the drop-down menus. Then, click **Visualize**. 
