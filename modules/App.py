@@ -16,7 +16,7 @@ class App(UI):
         super().__init__()
 
         # Speeding up the testing
-        self.load_from_config()
+        self.load_model(from_config=True)
 
     def visualize(self):
         '''
@@ -40,7 +40,7 @@ class App(UI):
         if self.show_all_layers.get() and self.selected_camera.get() == -1:
             self.show_all_layers.set(False)
 
-        self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.model_name]
+        self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.model.model_name]
 
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
@@ -71,7 +71,7 @@ class App(UI):
             
             # Extract Ground Truth bboxes if wanted
             if self.GT_bool.get():
-                self.gt_bbox = self.dataloader.dataset.get_ann_info(self.data_idx)['gt_bboxes_3d']
+                self.gt_bbox = self.model.dataloader.dataset.get_ann_info(self.data_idx)['gt_bboxes_3d']
                 img, _ = draw_lidar_bbox3d_on_img(
                         self.gt_bbox,
                         img,
@@ -288,7 +288,7 @@ class App(UI):
                 ax_attn = self.fig_obj.add_subplot(self.single_object_spec[i, 1])
 
                 ax_img.imshow(img_single_obj)
-                ax_img.set_title(f"{self.class_names[label].capitalize()}")
+                ax_img.set_title(f"{self.model.class_names[label].capitalize()}")
                 ax_attn.imshow(expl)
                 ax_attn.set_title(f"{self.expl_types[i]}, layer {self.selected_layer.get()}")
 
@@ -360,11 +360,11 @@ class App(UI):
         num_tokens = int(0.25 * 1450)
         layer = self.Attention.layers - 1
         outputs_pert = []
-        dataset = self.dataloader.dataset
+        dataset = self.model.dataloader.dataset
         prog_bar = mmcv.ProgressBar(evaluation_lenght)
 
         for i in range(initial_idx, initial_idx + evaluation_lenght):
-            data = self.dataloader.dataset[i]
+            data = self.model.dataloader.dataset[i]
             metas = [[data['img_metas'][0].data]]
             img = [data['img'][0].data.unsqueeze(0)] # img[0] = torch.Size([1, 6, 3, 928, 1600])
             data['img_metas'][0] = DC(metas, cpu_only=True)
@@ -411,7 +411,7 @@ class App(UI):
 
             # Second forward
             with torch.no_grad():
-                output = self.model(return_loss=False, rescale=True, **data)
+                output = self.model.model(return_loss=False, rescale=True, **data)
 
             outputs_pert.extend(output)
             torch.cuda.empty_cache()
@@ -421,7 +421,7 @@ class App(UI):
         print("\nCompleted.\n")
 
         kwargs = {}
-        eval_kwargs = self.cfg.get('evaluation', {}).copy()
+        eval_kwargs = self.model.cfg.get('evaluation', {}).copy()
         # hard-code way to remove EvalHook args
         for key in [
                 'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',

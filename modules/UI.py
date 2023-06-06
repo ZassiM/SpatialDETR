@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 from modules.SyncedConfigs import SyncedConfigs
 from modules.Attention import Attention
-from modules.Model import init_model
+from modules.Model import Model
 
 
 class UI(tk.Tk):
@@ -39,7 +39,8 @@ class UI(tk.Tk):
         self.canvas, self.fig, self.spec, self.single_object_window, self.single_object_canvas = None, None, None, None, None
 
         # Model and dataloader objects
-        self.model, self.dataloader = None, None
+        #self.model, self.model.dataloader = None, None
+        self.model = Model()
         self.started_app = False
         self.video_length = 5
         self.video_gen_bool = False
@@ -54,7 +55,7 @@ class UI(tk.Tk):
         self.gpu_id = tk.IntVar()
         self.gpu_id.set(0)
         file_opt.add_command(label=" Load model", command=self.load_model)
-        file_opt.add_command(label=" Load model from config file", command=self.load_from_config)
+        file_opt.add_command(label=" Load model from config file", command=lambda: self.load_model(from_config=True))
         file_opt.add_command(label=" Load video from pickle file", command=self.load_video)
         file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
         file_opt.add_separator()
@@ -66,6 +67,23 @@ class UI(tk.Tk):
             gpu_opt.add_radiobutton(label=f"GPU {i}", variable=self.gpu_id, value=i, command=lambda: self.show_message(message))
 
         self.menubar.add_cascade(label=" File", menu=file_opt)
+
+    def load_model(self, from_config=False):
+        if not from_config:
+            self.model.load_model(gpu_id=self.gpu_id.get())
+        else:
+            self.model.load_from_config()
+
+        self.Attention = Attention(self.model.model)
+
+        if not self.started_app:
+            print("Starting app...")
+            self.start_app()
+            self.random_data_idx()
+            self.started_app = True
+            print("Completed.\n")
+
+        self.update_info_label()
 
     def start_app(self):
         '''
@@ -228,68 +246,6 @@ class UI(tk.Tk):
 
         self.expl_types = ["Attention Rollout", "Grad-CAM"]
 
-    def load_from_config(self):
-        with open("config.toml", mode="rb") as argsF:
-            args = tomli.load(argsF)
-            
-        cfg_file = args["cfg_file"]
-        weights_file = args["weights_file"]
-        gpu_id = args["gpu_id"]
-
-        self.load_model(cfg_file, weights_file, gpu_id)
-
-    def load_model(self, cfg_file=None, weights_file=None, gpu_id=None):
-        cfg_filetypes = (
-            ('Config', '*.py'),
-        )
-        weights_filetypes = (
-            ('Pickle', '*.pth'),
-        )
-        
-        if cfg_file is None:
-            cfg_file = fd.askopenfilename(
-                title='Load model file',
-                initialdir='/workspace/configs/submission/',
-                filetypes=cfg_filetypes)
-        
-        if weights_file is None:
-            weights_file = fd.askopenfilename(
-                title='Load weights',
-                initialdir='/workspace/work_dirs/checkpoints/',
-                filetypes=weights_filetypes)  
-        
-        if gpu_id is not None:
-            self.gpu_id.set(gpu_id)
-
-        if cfg_file and weights_file:
-            # Model configuration needs to load weights
-            args = {}
-            args["config"] = cfg_file
-            args["checkpoint"] = weights_file
-            model, dataloader, img_norm_cfg, cfg = init_model(args)
-                    
-            self.model = MMDataParallel(model, device_ids=[self.gpu_id.get()])
-            self.dataloader = dataloader
-            self.Attention = Attention(self.model)
-            self.img_norm_cfg = img_norm_cfg  # Used for image de-normalization
-            self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
-            self.dataloader_name = self.dataloader.dataset.metadata['version']
-            self.class_names = self.dataloader.dataset.CLASSES
-            self.cfg = cfg
-
-            print("\nModel loaded.")
-            if not self.started_app:
-                print("Starting app...")
-                self.start_app()
-                self.random_data_idx()
-                self.started_app = True
-                print("Completed.\n")
-
-            self.update_info_label()
-        
-        else:
-            self.show_message("No file selected.")
-
     def show_car(self):
         img = plt.imread("misc/car.png")
         plt.imshow(img)
@@ -314,7 +270,7 @@ class UI(tk.Tk):
         Predict bboxes and extracts attentions.
         '''
         # Load selected data from dataloader, manual DataContainer fixes are needed
-        data = self.dataloader.dataset[self.data_idx]
+        data = self.model.dataloader.dataset[self.data_idx]
         metas = [[data['img_metas'][0].data]]
         img = [data['img'][0].data.unsqueeze(0)]
         data['img_metas'][0] = DC(metas, cpu_only=True)
@@ -328,7 +284,7 @@ class UI(tk.Tk):
             outputs = self.Attention.extract_attentions(self.data, self.bbox_idx)
 
         # Those are needed to index the bboxes decoded by the NMS-Free decoder
-        self.nms_idxs = self.model.module.pts_bbox_head.bbox_coder.get_indexes()
+        self.nms_idxs = self.model.model.module.pts_bbox_head.bbox_coder.get_indexes()
 
         # Extract predicted bboxes and their labels
         self.outputs = outputs[0]["pts_bbox"]
@@ -348,8 +304,8 @@ class UI(tk.Tk):
         imgs = imgs.transpose(0, 2, 3, 1)[:, :self.ori_shape[0], :self.ori_shape[1], :]  # [num_cams x height x width x channels]
         
         # Denormalize the images
-        mean = np.array(self.img_norm_cfg["mean"], dtype=np.float32)
-        std = np.array(self.img_norm_cfg["std"], dtype=np.float32)
+        mean = np.array(self.model.img_norm_cfg["mean"], dtype=np.float32)
+        std = np.array(self.model.img_norm_cfg["std"], dtype=np.float32)
 
         for i in range(len(imgs)):
             imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
@@ -377,7 +333,7 @@ class UI(tk.Tk):
     def show_model_info(self, event=None):
         popup = tk.Toplevel(self)
         popup.geometry("700x1000")
-        popup.title(f"Model {self.model_name}")
+        popup.title(f"Model {self.model.model_name}")
 
         text = scrolledtext.ScrolledText(popup, wrap=tk.WORD)
         for k, v in self.model.module.__dict__["_modules"].items():
@@ -402,16 +358,16 @@ class UI(tk.Tk):
     def close_entry(self, popup, type):
         idx = self.entry.get()
         if type == 0:
-            if idx.isnumeric() and int(idx) <= (len(self.dataloader)-1):
+            if idx.isnumeric() and int(idx) <= (len(self.model.dataloader)-1):
                 self.data_idx = int(idx)
                 self.update_info_label()
             else:
-                self.show_message(f"Insert an integer between 0 and {len(self.dataloader)-1}")
+                self.show_message(f"Insert an integer between 0 and {len(self.model.dataloader)-1}")
         elif type == 1:
-            if idx.isnumeric() and 2 <= int(idx) <= ((len(self.dataloader)-1) - self.data_idx):
+            if idx.isnumeric() and 2 <= int(idx) <= ((len(self.model.dataloader)-1) - self.data_idx):
                 self.video_length = int(idx)
             else:
-                self.show_message(f"Insert an integer between 2 and {(len(self.dataloader)-1) - self.data_idx}") 
+                self.show_message(f"Insert an integer between 2 and {(len(self.model.dataloader)-1) - self.data_idx}") 
         elif type == 2:
             max_frame_rate = 100
             if idx.isnumeric() and 1 <= int(idx) <= (max_frame_rate):
@@ -422,7 +378,7 @@ class UI(tk.Tk):
         popup.destroy()
 
     def random_data_idx(self):
-        idx = random.randint(0, len(self.dataloader)-1)
+        idx = random.randint(0, len(self.model.dataloader)-1)
         self.data_idx = idx
         self.update_info_label()
 
@@ -430,7 +386,7 @@ class UI(tk.Tk):
         if idx is None:
             idx = self.data_idx
         if info is None:
-            info = f"Model: {self.model_name} | Dataloader: {self.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
+            info = f"Model: {self.model.model_name} | Dataloader: {self.model.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
         self.info_text.set(info)
 
     def update_thr(self):
@@ -446,7 +402,7 @@ class UI(tk.Tk):
             view_bbox = tk.BooleanVar()
             view_bbox.set(False)
             self.bboxes.append(view_bbox)
-            self.bbox_opt.add_checkbutton(label=f" {self.class_names[labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
+            self.bbox_opt.add_checkbutton(label=f" {self.model.class_names[labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
 
     def single_bbox_select(self, idx=None, single_select=False):
         self.select_all_bboxes.set(False)
@@ -502,7 +458,7 @@ class UI(tk.Tk):
         y1 = y0 + self.canvas.get_width_height()[1]
         
         im = ImageGrab.grab((x0, y0, x1, y1))
-        path = f"screenshots/{self.model_name}_{self.data_idx}"
+        path = f"screenshots/{self.model.model_name}_{self.data_idx}"
 
         if os.path.exists(path+"_"+str(self.file_suffix)+".png"):
             self.file_suffix += 1
