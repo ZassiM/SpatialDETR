@@ -46,10 +46,7 @@ class App(BaseApp):
 
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
-
-        if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
-            self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
-        
+                
         self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get()]   
         self.attn_list = self.expl_configs.attn_list
         

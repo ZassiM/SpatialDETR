@@ -7,7 +7,6 @@ import os
 import random
 import pickle
 import tomli
-from mmcv.parallel import MMDataParallel
 from tkinter import filedialog as fd
 from mmcv.parallel import DataContainer as DC
 from tkinter.messagebox import showinfo
