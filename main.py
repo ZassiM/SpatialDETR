@@ -1,4 +1,4 @@
-from App.App import App
+from modules.App import App
 import warnings
 
 
