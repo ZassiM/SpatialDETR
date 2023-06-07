@@ -193,7 +193,7 @@ def main():
                 index=i,
                 save=False)
             
-            dataset.show(result, points[0]._data[0][0], gt_bboxes.tensor.numpy(), args["show_dir"], show=True, pipeline=None, score_thr = score_thr)
+            dataset.show_mod(result, points[0]._data[0][0], gt_bboxes.tensor.numpy(), args["show_dir"], show=True, pipeline=None, score_thr = score_thr)
         
             outputs.extend(result)
             batch_size = len(result)

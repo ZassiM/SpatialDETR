@@ -20,40 +20,53 @@ def main():
     ObjectDetector = Model()
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
-    eval_file = "eval_results/eval_rollout.txt"
 
-    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=False, save=False, eval_file=eval_file)
+    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=False, save_img=False)
 
-def evaluate(Model, ExplGen, expl_type, negative_pert, save, eval_file):
-    base_size = 29 * 50
-    pert_steps = [0, 0.25, 0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 1]
-
+def evaluate(Model, ExplGen, expl_type, negative_pert, save_img):
+    txt_del = "*" * (38 + len(expl_type))
+    info = txt_del
     if not negative_pert:
-        info = (f"Evaluating {expl_type} with positive perturbation.")
+        info += (f"\nEvaluating {expl_type} with positive perturbation\n")
     else:
-        info = (f"Evaluating {expl_type} with negative perturbation.")
+        info += (f"\nEvaluating {expl_type} with negative perturbation\n")
+    info += txt_del
 
-    with open(eval_file, "a") as file:
-        file.write("******************************************************************\n")
+    eval_folder = f"eval_results/{expl_type}"
+    if not os.path.exists(eval_folder):
+        os.makedirs(eval_folder)
+    file_name = f"{Model.model_name}_{Model.dataloader_name}"
+    file_path = os.path.join(eval_folder, file_name)
+    counter = 1
+    while os.path.exists(file_path+".txt"):
+        file_name_new = f"{file_name}_{counter}"
+        file_path = os.path.join(eval_folder, file_name_new)
+        counter += 1
+
+    file_path += ".txt"
+    with open(file_path, "a") as file:
         file.write(f"{info}\n")
-        file.write("******************************************************************\n")
+
+    base_size = 29 * 50
+    pert_steps = [0, 0.25, 0.5, 0.8, 0.85, 0.9, 0.95, 1]
 
     print(info)
     start_time = time.time()
     for step in range(len(pert_steps)):
         num_tokens = int(base_size * pert_steps[step])
         print(f"\nNumber of tokens removed: {num_tokens} ({pert_steps[step] * 100} %)")
-        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, negative_pert=negative_pert, save=save, eval_file=eval_file)
+        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, negative_pert=negative_pert, save_img=save_img, eval_file=file_path, remove_pad=False)
+        torch.cuda.empty_cache()
     end_time = time.time()
     total_time = end_time - start_time
     
     print(f"Completed (elapsed time {total_time} seconds).\n")
 
-    with open(eval_file, "a") as file:
+    with open(file_path, "a") as file:
         file.write("--------------------------\n")
         file.write(f"Elapsed time: {total_time}\n")
 
-def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save, eval_file):
+def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save_img, eval_file, remove_pad):
     pred_threshold = 0.5
     layer = Model.layers - 1
     head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule = \
@@ -75,12 +88,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save, ev
         data['img'][0] = DC(img)
 
         # Attention scores are extracted, together with gradients if grad-CAM is selected
-        if expl_type not in ["Grad-CAM", "Gradient Rollout"]:
-            output_og = ExplGen.extract_attentions(data)
-        else:
-            output_og = ExplGen.extract_attentions(data, bbox_idx)
-
-        nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes()
+        output_og = ExplGen.extract_attentions(data)
 
         # Extract predicted bboxes and their labels
         outputs = output_og[0]["pts_bbox"]
@@ -88,20 +96,24 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save, ev
         thr_idxs = outputs['scores_3d'] > pred_threshold
         pred_bboxes = outputs["boxes_3d"][thr_idxs]
         pred_bboxes.tensor.detach()
+        nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes()
         labels = outputs['labels_3d'][thr_idxs]
 
         img_norm_cfg = Model.cfg.get('img_norm_cfg')
         mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
         std = np.array(img_norm_cfg["std"], dtype=np.float32)
         
-
         bbox_idx = list(range(len(labels)))
-        attn_list = ExplGen.generate_explainability(expl_type, bbox_idx, nms_idxs, head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule, remove_pad=False)
+        if expl_type in ["Grad-CAM", "Gradient Rollout"]:
+            ExplGen.extract_attentions(data, bbox_idx)
+
+        attn_list = ExplGen.generate_explainability(expl_type, bbox_idx, nms_idxs, head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule, remove_pad)
         attn_list = attn_list[layer]
 
         # Perturbate the input image with the XAI maps
-        #img = img[0][0][:, :, :Model.ori_shape[0], :Model.ori_shape[1]]  # [num_cams x height x width x channels]
         img = img[0][0]
+        if remove_pad:
+            img = img[:, :, :Model.ori_shape[0], :Model.ori_shape[1]]  # [num_cams x height x width x channels]
         img_og_bboxes = []
         img_pert_den = []
         img_pert_list = []  # list of perturbed images
@@ -113,7 +125,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save, ev
             # Denormalize the images
             img_og = mmcv.imdenormalize(img_og, mean, std)
             # Draw the og bboxes to the image for visualization
-            if save:
+            if save_img:
                 img_og_bb, _ = draw_lidar_bbox3d_on_img(
                         pred_bboxes,
                         img_og,
@@ -137,7 +149,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save, ev
             # # Image perturbation by setting pixels to t (0,0,0)
             img_pert[cols, rows] = mask
 
-            if save:
+            if save_img:
                 img_pert_den.append(img_pert)
 
             # Normalize the perturbed images and append to the list
@@ -146,7 +158,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save, ev
         e_time = time.time()
         perturb_time = e_time - s_time
         
-        # Save the perturbed 6 camera images into the data input
+        # save_img the perturbed 6 camera images into the data input
         img_pert_list = torch.from_numpy(np.stack(img_pert_list))
         img = [img_pert_list.permute(0, 3, 1, 2).unsqueeze(0)] # img[0] = torch.Size([1, 6, 3, 928, 1600])
         #img_compare = data['img'][0].data[0][0]
@@ -163,7 +175,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save, ev
         pred_bboxes.tensor.detach()
         labels = outputs['labels_3d'][thr_idxs]
         
-        if save:
+        if save_img:
             img_pert_bboxes = []
             for cam in range(len(img_pert_den)):
                 img_pert = img_pert_den[cam]
@@ -177,7 +189,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save, ev
                         labels=labels)
                 img_pert_bboxes.append(img_pert_bb)
         
-        if save:
+        if save_img:
             screenshots_path = "screenshots_eval/"
             if os.path.exists(screenshots_path):
                 shutil.rmtree(screenshots_path)
@@ -206,10 +218,11 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save, ev
             img_pert.save(path_pert)
             
         outputs_pert.extend(output_pert)
-        torch.cuda.empty_cache()
 
         e_full_time = time.time()
         full_time = e_full_time - s_full_time
+        
+        torch.cuda.empty_cache()
         prog_bar.update()
     
     kwargs = {}
@@ -226,10 +239,10 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save, ev
     NDS = eval_results['pts_bbox_NuScenes/NDS']
 
     with open(eval_file, "a") as file:
-        file.write("--------------------------\n")
         file.write(f"Number of tokens: {num_tokens}\n")
         file.write(f"mAP: {mAP}\n")
         file.write(f"NDS: {NDS}\n")
+        file.write("--------------------------\n")
     
 
 if __name__ == '__main__':
