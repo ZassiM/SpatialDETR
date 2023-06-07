@@ -20,23 +20,29 @@ def main():
     ObjectDetector = Model()
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
-    eval_file = "eval_results/eval.txt"
+    eval_file = "eval_results/eval_rollout.txt"
 
-    evaluate_full(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=False, save=False, eval_file=eval_file)
+    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=False, save=False, eval_file=eval_file)
 
-def evaluate_full(Model, ExplGen, expl_type, negative_pert, save, eval_file):
+def evaluate(Model, ExplGen, expl_type, negative_pert, save, eval_file):
     base_size = 29 * 50
     pert_steps = [0, 0.25, 0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 1]
 
     if not negative_pert:
-        print(f"Evaluating {expl_type} with positive perturbation.")
+        info = (f"Evaluating {expl_type} with positive perturbation.")
     else:
-        print(f"Evaluating {expl_type} with negative perturbation.")
+        info = (f"Evaluating {expl_type} with negative perturbation.")
 
+    with open(eval_file, "a") as file:
+        file.write("******************************************************************\n")
+        file.write(f"{info}\n")
+        file.write("******************************************************************\n")
+
+    print(info)
     start_time = time.time()
     for step in range(len(pert_steps)):
         num_tokens = int(base_size * pert_steps[step])
-        print(f"\nNumber of tokens removed: {num_tokens} ({pert_steps[step] * 100}%)")
+        print(f"\nNumber of tokens removed: {num_tokens} ({pert_steps[step] * 100} %)")
         evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, negative_pert=negative_pert, save=save, eval_file=eval_file)
     end_time = time.time()
     total_time = end_time - start_time
@@ -44,13 +50,10 @@ def evaluate_full(Model, ExplGen, expl_type, negative_pert, save, eval_file):
     print(f"Completed (elapsed time {total_time} seconds).\n")
 
     with open(eval_file, "a") as file:
-        # Write the variables to the file
         file.write("--------------------------\n")
         file.write(f"Elapsed time: {total_time}\n")
 
-
 def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save, eval_file):
-
     pred_threshold = 0.5
     layer = Model.layers - 1
     head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule = \
@@ -223,7 +226,6 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save, ev
     NDS = eval_results['pts_bbox_NuScenes/NDS']
 
     with open(eval_file, "a") as file:
-        # Write the variables to the file
         file.write("--------------------------\n")
         file.write(f"Number of tokens: {num_tokens}\n")
         file.write(f"mAP: {mAP}\n")
