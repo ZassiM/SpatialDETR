@@ -29,6 +29,7 @@ class App(BaseApp):
                 self.canvas.pack_forget()
                 self.menubar.delete('end', 'end')
             self.fig = plt.figure()
+            self.fig.set_facecolor(self.bg_color)
             self.spec = self.fig.add_gridspec(3, 3)
             self.canvas = FigureCanvasTkAgg(self.fig, master=self)
             self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
@@ -86,11 +87,12 @@ class App(BaseApp):
 
                 img = self.overlay_attention_on_image(img, attn)            
 
-            # num_tokens = int(4000)
-            # _, indices = torch.topk(attn.flatten(), k=num_tokens)
-            # indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
-            # for idx in indices:
-            #     img[idx[0], idx[1]] = 0
+            num_tokens = int(4000)
+            _, indices = torch.topk(attn.flatten(), k=num_tokens)
+            indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
+            mask = torch.tensor([0, 0, 0])
+            for idx in indices:
+                img[idx[0], idx[1]] = mask
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.cam_imgs.append(img)
@@ -108,7 +110,7 @@ class App(BaseApp):
         self.fig.tight_layout(pad=0)
         self.canvas.draw()
 
-        # take a screenshot if the option is selected
+        # Take a screenshot if the option is selected
         if self.capture_bool.get():
             self.capture()
         
@@ -301,7 +303,10 @@ class App(BaseApp):
             all_expl = self.img_frames_attention_nobbx[self.idx_video-1]
 
             for i in range(len(all_expl)):
-                expl = all_expl[i][camidx][self.selected_layer.get()]
+                if self.expl_types[i] == "Gradient Rollout":
+                    expl = all_expl[i][camidx][0]
+                else:
+                    expl = all_expl[i][camidx][self.selected_layer.get()]
                 expl = expl[bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
 
                 ax_img = self.fig_obj.add_subplot(self.single_object_spec[i, 0])
@@ -309,10 +314,13 @@ class App(BaseApp):
 
                 ax_img.imshow(img_single_obj)
                 ax_img.set_title(f"{self.ObjectDetector.class_names[label].capitalize()}")
-                ax_attn.imshow(expl)
-                ax_attn.set_title(f"{self.expl_types[i]}, layer {self.selected_layer.get()}")
-
                 ax_img.axis('off')
+
+                ax_attn.imshow(expl)
+                title = f"{self.expl_types[i]}"
+                if self.expl_types[i] != "Gradient Rollout":
+                    title += f", layer {self.selected_layer.get()}"
+                ax_attn.set_title(title)
                 ax_attn.axis("off")
             
             self.fig_obj.tight_layout(pad=0)
@@ -327,9 +335,6 @@ class App(BaseApp):
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
-        if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
-            self.update_data()
-
         self.attn_list = self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get())
 
         # Generate images list with bboxes on it
@@ -341,7 +346,7 @@ class App(BaseApp):
                 og_imgs.append(og_img)
                 og_img = self.imgs[camidx].astype(np.uint8)
                 att_nobbx_layers = []
-                for layer in range(self.ExplainableModel.layers):
+                for layer in range(len(self.attn_list)):
                     attn = self.attn_list[layer][camidx]
                     attn_img = self.overlay_attention_on_image(og_img, attn)      
                     attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
@@ -361,7 +366,10 @@ class App(BaseApp):
             if not self.video_only.get():
                 bbox_cameras.append(bbox_camera)  
             
-            attn = self.attn_list[self.selected_layer.get()][camidx]
+            if self.selected_expl_type.get() == "Gradient Rollout":
+                attn = self.attn_list[0][camidx]
+            else:
+                attn = self.attn_list[self.selected_layer.get()][camidx]
             img = self.overlay_attention_on_image(img, attn, intensity=200)   
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 

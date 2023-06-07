@@ -1,6 +1,7 @@
 from modules.Model import Model
 from modules.Explainability import ExplainableTransformer
 from mmcv.parallel import DataContainer as DC
+from PIL import Image
 import torch
 import numpy as np
 import mmcv
@@ -11,17 +12,17 @@ def main():
     warnings.filterwarnings("ignore")
 
     expl_types = ["Attention Rollout", "Grad-CAM", "Gradient Rollout"]
-
     ObjectDetector = Model()
+    ObjectDetector.use_mini_dataset = True
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
-    evaluate_expl(ObjectDetector, ExplainabiliyGenerator, expl_types[0])
+    evaluate_expl(ObjectDetector, ExplainabiliyGenerator, expl_types[0], save=True)
 
 
-def evaluate_expl(Model, ExplGen, expl_type):
+def evaluate_expl(Model, ExplGen, expl_type, save=False):
     print(f"Evaluating {expl_type}...")
 
-    bbox_idx = [0]
+    bbox_idx = [0, 1, 2, 3, 4, 5, 6]
     layer = Model.layers - 1
     head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule = \
         "min", 0.5, True, True, True
@@ -31,11 +32,11 @@ def evaluate_expl(Model, ExplGen, expl_type):
     dataset = Model.dataloader.dataset
     evaluation_lenght = len(dataset)
     initial_idx = 0
-    num_tokens = int(0.75 * 1450)
+    num_tokens = int(0.5 * 1450)
     prog_bar = mmcv.ProgressBar(evaluation_lenght)
 
-    for i in range(initial_idx, initial_idx + evaluation_lenght):
-        data = dataset[i]
+    for dataidx in range(initial_idx, initial_idx + evaluation_lenght):
+        data = dataset[dataidx]
         metas = [[data['img_metas'][0].data]]
         img = [data['img'][0].data.unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
         data['img_metas'][0] = DC(metas, cpu_only=True)
@@ -51,10 +52,10 @@ def evaluate_expl(Model, ExplGen, expl_type):
 
         topk_list = []
         
-        attn_list = ExplGen.generate_explainability_cameras(expl_type, layer, bbox_idx, nms_idxs, head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule)
+        attn_list = ExplGen.generate_explainability_cameras(expl_type, layer, bbox_idx, nms_idxs, head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule, remove_pad=False)
 
-        for i in range(len(attn_list)):
-            attn = attn_list[i]
+        for cam in range(len(attn_list)):
+            attn = attn_list[cam]
             _, indices = torch.topk(attn.flatten(), k=num_tokens)
             indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
             topk_list.append(indices)
@@ -65,19 +66,31 @@ def evaluate_expl(Model, ExplGen, expl_type):
         img_norm_cfg = Model.cfg.get('img_norm_cfg')
         mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
         std = np.array(img_norm_cfg["std"], dtype=np.float32)
-        mask = (-mean[0]/std[0], -mean[1]/std[1], -mean[2]/std[2])
-
-        # Denormalization is needed, because data is normalized
+        
         img = img[0][0]
-        img = img[:, :, :Model.ori_shape[0], :Model.ori_shape[1]]
-        for i in range(len(img)):
-            img_og = img[i].permute(1, 2, 0)
+        for cam in range(len(img)):
+            img_og = img[cam].permute(1, 2, 0)
             img_og_list.append(img_og)
             img_pert = img_og.clone()
+            mask = torch.Tensor([img_og[:, :, 0].min().item(), img_og[:, :, 1].min().item(), img_og[:, :, 2].min().item()])
             # Image perturbation by setting pixels to (0,0,0)
-            for idx in topk_list[i]:
+            for idx in topk_list[cam]:
                 img_pert[idx[0], idx[1]] = mask
             img_pert_list.append(img_pert.permute(2, 0, 1))
+
+        if save:
+            for cam in range(len(img_og_list)):
+                path_og = f"screenshots_eval/{Model.model_name}_{expl_type}_{dataidx}__CAM{cam}_og.png"
+                path_pert = f"screenshots_eval/{Model.model_name}_{expl_type}_{dataidx}_CAM{cam}_pert.png"
+
+                img_og = mmcv.imdenormalize(img_og_list[cam].numpy(), mean, std, to_bgr=False)
+                img_pert = mmcv.imdenormalize(img_pert_list[cam].permute(1, 2, 0).numpy(), mean, std, to_bgr=False)
+
+                img_og = Image.fromarray(img_og.astype(np.uint8))
+                img_pert = Image.fromarray(img_pert.astype(np.uint8))
+
+                img_og.save(path_og)
+                img_pert.save(path_pert)
 
         # Save the perturbed 6 camera images into the data input
         img = [torch.stack((img_pert_list)).unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])

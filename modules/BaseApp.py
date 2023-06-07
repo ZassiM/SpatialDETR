@@ -106,6 +106,7 @@ class BaseApp(tk.Tk):
         self.info_label.bind("<Enter>", lambda event: self.red_text())
         self.info_label.bind("<Leave>", lambda event: self.black_text())
         self.info_label.pack(side=tk.TOP)
+        self.bg_color = self.info_label.cget("background")
 
         # Cascade menu for Data index
         dataidx_opt = tk.Menu(self.menubar)
@@ -249,7 +250,7 @@ class BaseApp(tk.Tk):
         self.add_separator("|")
         self.menubar.add_command(label="Show video", command=self.show_video)
 
-        self.expl_types = ["Attention Rollout", "Grad-CAM"]
+        self.expl_types = ["Attention Rollout", "Grad-CAM", "Gradient Rollout"]
 
     def show_car(self):
         img = plt.imread("misc/car.png")
@@ -375,10 +376,10 @@ class BaseApp(tk.Tk):
                 self.show_message(f"Insert an integer between 2 and {(len(self.ObjectDetector.dataloader)-1) - self.data_idx}") 
         elif type == 2:
             max_frame_rate = 100
-            if idx.isnumeric() and 1 <= int(idx) <= (max_frame_rate):
+            if idx.isnumeric() and 0 <= int(idx) <= (max_frame_rate):
                 self.frame_rate = int(idx)
             else:
-                self.show_message(f"Insert an integer between 1 and {max_frame_rate}") 
+                self.show_message(f"Insert an integer between 0 and {max_frame_rate}") 
 
         popup.destroy()
 
@@ -491,7 +492,7 @@ class BaseApp(tk.Tk):
             with open(file_path, 'wb') as f:
                 pickle.dump(data, f)
             
-            self.show_message(f"Video saved in {file_path}")
+            print(f"Video saved in {file_path}")
         else:
             self.show_message("You should first generate a video.")
 
@@ -514,4 +515,4 @@ class BaseApp(tk.Tk):
         self.bbox_cameras = data["bbox_cameras"]
         self.bbox_labels = data["bbox_labels"]
 
-        self.show_message(f"Video loaded from {video_pickle}.\n")
+        print(f"Video loaded from {video_pickle}.\n")

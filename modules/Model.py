@@ -14,6 +14,7 @@ class Model():
 
     def __init__(self):
         self.layers = 0
+        self.use_mini_dataset = False
 
     def load_from_config(self):
         with open("config.toml", mode="rb") as argsF:
@@ -72,10 +73,9 @@ class Model():
 
         cfg = Config.fromfile(args["config"])
 
-        # cfg.data.test["data_root"] = "data/nuscenes_mini/"
-        # cfg.db_sampler["data_root"] = "data/nuscenes_mini/"
-        # cfg.data.test["ann_file"] = "data/nuscenes_mini/nuscenes_infos_train.pkl"
-        # cfg.db_sampler["info_path"] = "data/nuscenes_mini/nuscenes_infos_train.pkl"
+        if self.use_mini_dataset:
+            cfg.data.test["data_root"] = "data/nuscenes_mini/"
+            cfg.data.test["ann_file"] = cfg.data.test["data_root"] + "nuscenes_infos_train.pkl"
 
         if cfg.get('custom_imports', None):
             from mmcv.utils import import_modules_from_strings

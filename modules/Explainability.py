@@ -188,7 +188,7 @@ class ExplainableTransformer:
             # encoder decoder attention
             self.handle_co_attn_query(layer, camidx, handle_residual, apply_rule)
 
-    def generate_explainability_cameras(self, expl_type, layer, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
+    def generate_explainability_cameras(self, expl_type, layer, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True, remove_pad=True):
         
         attention_maps = []
         for camidx in range(6):
@@ -213,11 +213,11 @@ class ExplainableTransformer:
         # now attention maps can be overlayed
         attention_maps = attention_maps.max(dim=0)[0]  # num_cams x [1450]
 
-        attention_maps = self.interpolate_expl_cameras(attention_maps)
+        attention_maps = self.interpolate_expl_cameras(attention_maps, remove_pad)
 
         return attention_maps
     
-    def generate_explainability_layers(self, expl_type, camidx, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
+    def generate_explainability_layers(self, expl_type, camidx, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True,  remove_pad=True):
         
         attention_maps = []
         for layer in range(6):
@@ -241,11 +241,11 @@ class ExplainableTransformer:
         for i in range(len(attention_maps)):
             attention_maps[i] /= attention_maps[i].max()
 
-        attention_maps = self.interpolate_expl_cameras(attention_maps)
+        attention_maps = self.interpolate_expl_cameras(attention_maps, remove_pad)
 
         return attention_maps
 
-    def generate_explainability(self, expl_type, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True):
+    def generate_explainability(self, expl_type, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, handle_residual=True, apply_rule=True,  remove_pad=True):
         attention_maps, att_maps_cameras = [], []
 
         if expl_type == "Gradient Rollout":
@@ -278,10 +278,10 @@ class ExplainableTransformer:
         # now attention maps can be overlayed
         if attention_maps.shape[1] > 0:
             attention_maps = attention_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
-            attention_maps = self.interpolate_expl(attention_maps)
+            attention_maps = self.interpolate_expl(attention_maps,  remove_pad)
         return attention_maps
 
-    def interpolate_expl(self, attention_maps):
+    def interpolate_expl(self, attention_maps, remove_pad):
         attention_maps_inter = []
         if attention_maps.dim() == 1:
             attention_maps.unsqueeze_(0)
@@ -292,7 +292,8 @@ class ExplainableTransformer:
                 attn = attention_maps[layer][camidx].reshape(1, 1, self.height_feats, self.width_feats)
                 attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
                 attn = attn.reshape(attn.shape[2], attn.shape[3])
-                attn = attn[:self.ori_shape[0], :self.ori_shape[1]]
+                if remove_pad:
+                    attn = attn[:self.ori_shape[0], :self.ori_shape[1]]
                 attention_maps_cameras.append(attn)
             attention_maps_inter.append(attention_maps_cameras)
 
@@ -300,7 +301,7 @@ class ExplainableTransformer:
 
         return attention_maps_inter
     
-    def interpolate_expl_cameras(self, attention_maps):
+    def interpolate_expl_cameras(self, attention_maps, remove_pad):
         attention_maps_inter = []
         if attention_maps.dim() == 1:
             attention_maps.unsqueeze_(0)
@@ -308,7 +309,8 @@ class ExplainableTransformer:
             attn = attention_maps[camidx].reshape(1, 1, self.height_feats, self.width_feats)
             attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
             attn = attn.reshape(attn.shape[2], attn.shape[3])
-            attn = attn[:900, :]
+            if remove_pad:
+                attn = attn[:self.ori_shape[0], :self.ori_shape[1]]
             attention_maps_inter.append(attn)
 
         attention_maps_inter = torch.stack(attention_maps_inter)
