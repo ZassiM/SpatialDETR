@@ -48,8 +48,12 @@ class App(BaseApp):
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
-        if self.selected_expl_type.get() == "Gradient Rollout":
-            self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
+        nms = self.nms_idxs
+
+        if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
+            self.update_data(initialize_bboxes=False)
+
+        new_mms = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()
                 
         self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get()]   
         self.attn_list = self.expl_configs.attn_list
@@ -89,13 +93,6 @@ class App(BaseApp):
                     attn = self.attn_list[self.selected_layer.get()][self.selected_camera.get()]
 
                 img = overlay_attention_on_image(img, attn)            
-
-            num_tokens = int(4000)
-            _, indices = torch.topk(attn.flatten(), k=num_tokens)
-            indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
-            mask = torch.tensor([0, 0, 0])
-            for idx in indices:
-                img[idx[0], idx[1]] = mask
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.cam_imgs.append(img)
@@ -218,7 +215,7 @@ class App(BaseApp):
         for i in range(self.data_idx, self.data_idx + self.video_length):
             self.data_idx = i
             img_frames, img_att_nobbx = [], []
-            for expl in self.expl_types:
+            for expl in self.expl_options:
                 self.selected_expl_type.set(expl)
                 imgs_att, imgs_att_nobbx, imgs_og, bbox_camera, labels = self.generate_video_frame()
                 img_frames.append(imgs_att)
@@ -244,7 +241,7 @@ class App(BaseApp):
         for i in range(self.data_idx, self.data_idx + self.video_length):
             self.data_idx = i
             img_frames = []
-            for expl in self.expl_types:
+            for expl in self.expl_options:
                 self.selected_expl_type.set(expl)
                 imgs_att = self.generate_video_frame()
                 img_frames.append(imgs_att)
@@ -310,7 +307,7 @@ class App(BaseApp):
             all_expl = self.img_frames_attention_nobbx[self.idx_video-1]
 
             for i in range(len(all_expl)):
-                if self.expl_types[i] == "Gradient Rollout":
+                if self.expl_options[i] == "Gradient Rollout":
                     expl = all_expl[i][camidx][0]
                 else:
                     expl = all_expl[i][camidx][self.selected_layer.get()]
@@ -324,8 +321,8 @@ class App(BaseApp):
                 ax_img.axis('off')
 
                 ax_attn.imshow(expl)
-                title = f"{self.expl_types[i]}"
-                if self.expl_types[i] != "Gradient Rollout":
+                title = f"{self.expl_options[i]}"
+                if self.expl_options[i] != "Gradient Rollout":
                     title += f", layer {self.selected_layer.get()}"
                 ax_attn.set_title(title)
                 ax_attn.axis("off")

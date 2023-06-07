@@ -18,7 +18,7 @@ from modules.Configs import Configs
 from modules.Explainability import ExplainableTransformer
 from modules.Explainability  import overlay_attention_on_image
 from modules.Model import Model
-from scripts.evaluate import evaluate_expl
+from scripts.evaluate import evaluate
 
 
 class BaseApp(tk.Tk):
@@ -202,8 +202,7 @@ class BaseApp(tk.Tk):
         for i in range(len(self.expl_options)):
             expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i], command=self.update_info_label)
 
-        expl_opt.add_command(label="Evaluate explainability", command=lambda: evaluate_expl(self.ObjectDetector, self.ExplainableModel, self.selected_expl_type.get()))
-
+        expl_opt.add_command(label="Evaluate explainability", command=lambda: evaluate(self.ObjectDetector, self.ExplainableModel, self.selected_expl_type.get()))
         # Cascade menus for object selection
         self.bbox_opt = tk.Menu(self.menubar)
         self.single_bbox = tk.BooleanVar()
@@ -251,8 +250,6 @@ class BaseApp(tk.Tk):
         self.add_separator("|")
         self.menubar.add_command(label="Show video", command=self.show_video)
 
-        self.expl_types = ["Attention Rollout", "Grad-CAM", "Gradient Rollout"]
-
     def show_car(self):
         img = plt.imread("misc/car.png")
         plt.imshow(img)
@@ -272,7 +269,7 @@ class BaseApp(tk.Tk):
         readme_text.configure(state='disabled')
         readme_text.pack()
 
-    def update_data(self):
+    def update_data(self, initialize_bboxes=True):
         '''
         Predict bboxes and extracts attentions.
         '''
@@ -289,7 +286,7 @@ class BaseApp(tk.Tk):
             outputs = self.ExplainableModel.extract_attentions(self.data)
         else:
             outputs = self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
-
+        
         # Those are needed to index the bboxes decoded by the NMS-Free decoder
         self.nms_idxs = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()
 
@@ -318,8 +315,9 @@ class BaseApp(tk.Tk):
             imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
         self.imgs = imgs.astype(np.uint8)
 
-        self.update_objects_list()
-        self.initialize_bboxes()
+        if initialize_bboxes:
+            self.update_objects_list()
+            self.initialize_bboxes()
 
     def add_separator(self, sep="|"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
@@ -422,10 +420,9 @@ class BaseApp(tk.Tk):
                     self.bboxes[i].set(False)
 
     def initialize_bboxes(self):
-        if self.single_bbox.get():
-            self.single_bbox.set(False)
         if hasattr(self, "bboxes"):
             if self.select_all_bboxes.get():
+                self.single_bbox.set(False)
                 for i in range(len(self.bboxes)):
                     self.bboxes[i].set(True)
             else:

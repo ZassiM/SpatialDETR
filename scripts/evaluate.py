@@ -23,7 +23,7 @@ def main():
 
     evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=False, save_img=False)
 
-def evaluate(Model, ExplGen, expl_type, negative_pert, save_img):
+def evaluate(Model, ExplGen, expl_type, negative_pert=False, save_img=False):
     txt_del = "*" * (38 + len(expl_type))
     info = txt_del
     if not negative_pert:
@@ -56,7 +56,6 @@ def evaluate(Model, ExplGen, expl_type, negative_pert, save_img):
         num_tokens = int(base_size * pert_steps[step])
         print(f"\nNumber of tokens removed: {num_tokens} ({pert_steps[step] * 100} %)")
         evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, negative_pert=negative_pert, save_img=save_img, eval_file=file_path, remove_pad=False)
-        torch.cuda.empty_cache()
     end_time = time.time()
     total_time = end_time - start_time
     
@@ -221,7 +220,9 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save_img
 
         e_full_time = time.time()
         full_time = e_full_time - s_full_time
-        
+
+        del output_og
+        del output_pert
         torch.cuda.empty_cache()
         prog_bar.update()
     
@@ -243,6 +244,9 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save_img
         file.write(f"mAP: {mAP}\n")
         file.write(f"NDS: {NDS}\n")
         file.write("--------------------------\n")
+    
+    del outputs_pert
+    torch.cuda.empty_cache()
     
 
 if __name__ == '__main__':
