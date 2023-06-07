@@ -62,6 +62,10 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
         pred_bboxes.tensor.detach()
         labels = outputs['labels_3d'][thr_idxs]
 
+        img_norm_cfg = Model.cfg.get('img_norm_cfg')
+        mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
+        std = np.array(img_norm_cfg["std"], dtype=np.float32)
+
         bbox_idx = list(range(len(labels)))
         mask = torch.Tensor([0,0,0])
         attn_list = ExplGen.generate_explainability_cameras(expl_type, layer, bbox_idx, nms_idxs, head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule, remove_pad=False)
@@ -96,9 +100,6 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
         img_og_list = []  # list of original images
         img_pert_list = []  # list of perturbed images
 
-        img_norm_cfg = Model.cfg.get('img_norm_cfg')
-        mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
-        std = np.array(img_norm_cfg["std"], dtype=np.float32)
         
         img = img[0][0]
         mask = torch.tensor([0, 0, 0])
