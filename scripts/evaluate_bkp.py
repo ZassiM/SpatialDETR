@@ -48,14 +48,14 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
 
         # Attention scores are extracted, together with gradients if grad-CAM is selected
         if expl_type not in ["Grad-CAM", "Gradient Rollout"]:
-            outputs_og = ExplGen.extract_attentions(data)
+            outputs = ExplGen.extract_attentions(data)
         else:
-            outputs_og = ExplGen.extract_attentions(data, bbox_idx)
+            outputs = ExplGen.extract_attentions(data, bbox_idx)
 
         nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes()
 
         # Extract predicted bboxes and their labels
-        outputs = outputs_og[0]["pts_bbox"]
+        outputs = outputs[0]["pts_bbox"]
         img_metas = data["img_metas"][0]._data[0][0]
         thr_idxs = outputs['scores_3d'] > pred_threshold
         pred_bboxes = outputs["boxes_3d"][thr_idxs]
@@ -63,35 +63,14 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
         labels = outputs['labels_3d'][thr_idxs]
 
         bbox_idx = list(range(len(labels)))
-        mask = torch.Tensor([0,0,0])
         attn_list = ExplGen.generate_explainability_cameras(expl_type, layer, bbox_idx, nms_idxs, head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule, remove_pad=False)
 
-        img = img[0][0]
+        topk_list = []
         for cam in range(len(attn_list)):
             attn = attn_list[cam]
             _, indices = torch.topk(attn.flatten(), k=num_tokens)
             indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
-
-            img_og = img[cam].permute(1, 2, 0).numpy()
-            img_og = mmcv.imdenormalize(img_og, mean, std, to_bgr=False)
-            img_pert = img_og.clone()
-            # Image perturbation by setting pixels to (0,0,0)
-            for idx in indices:
-                img_pert[idx[0], idx[1]] = mask
-            img_pert_list.append(img_pert)
-
-        # Save the perturbed 6 camera images into the data input
-        img = [torch.stack((img_pert_list)).unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
-        data['img'][0] = DC(img)
-
-        # Second forward
-        with torch.no_grad():
-            output = Model.model(return_loss=False, rescale=True, **data)
-
-        outputs_pert.extend(output)
-        torch.cuda.empty_cache()
-
-
+            topk_list.append(indices)
 
         img_og_list = []  # list of original images
         img_pert_list = []  # list of perturbed images
@@ -101,23 +80,19 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
         std = np.array(img_norm_cfg["std"], dtype=np.float32)
         
         img = img[0][0]
-        mask = torch.tensor([0, 0, 0])
         for camidx in range(len(img)):
             img_og = img[camidx].permute(1, 2, 0).numpy()
-            # Denormalize
-            img_og = mmcv.imdenormalize(img_og, mean, std, to_bgr=False)
-            # Add bboxes
+
             img_og, _ = draw_lidar_bbox3d_on_img(
                     pred_bboxes,
                     img_og,
                     img_metas['lidar2img'][camidx],
                     color=(0, 255, 0),
-                    with_label=True,
                     mode_2d=True)
+
             img_og_list.append(img_og)
-            
-            # Copy img and apply peturbation max to the topk indices
             img_pert = img_og.copy()
+            mask = torch.Tensor([img_og[:, :, 0].min().item(), img_og[:, :, 1].min().item(), img_og[:, :, 2].min().item()])
             for idx in topk_list[camidx]:
                 img_pert[idx[0], idx[1]] = mask
             #img_pert_list.append(img_pert.permute(2, 0, 1))
@@ -133,13 +108,16 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
             ver = np.concatenate((img_pert_list[5], img_pert_list[3], img_pert_list[4]), axis=1)
             img_pert = np.concatenate((hori, ver), axis=0)
 
+            # Denormalize
+            img_og = mmcv.imdenormalize(img_og, mean, std, to_bgr=False)
+            img_pert = mmcv.imdenormalize(img_pert, mean, std, to_bgr=False)
 
             # Convert to RGB
             img_og = cv2.cvtColor(img_og, cv2.COLOR_BGR2RGB)
             img_pert = cv2.cvtColor(img_pert, cv2.COLOR_BGR2RGB)
 
-            img_og = Image.fromarray(img_og)
-            img_pert = Image.fromarray(img_pert)
+            img_og = Image.fromarray(img_og.astype(np.uint8))
+            img_pert = Image.fromarray(img_pert.astype(np.uint8))
 
             path_og = f"screenshots_eval/{Model.model_name}_{expl_type}_{dataidx}_og.png"
             path_pert = f"screenshots_eval/{Model.model_name}_{expl_type}_{dataidx}_pert.png"
@@ -183,13 +161,6 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
         eval_kwargs.pop(key, None)
     eval_kwargs.update(dict(metric="bbox", **kwargs))
     print(dataset.evaluate(outputs_pert, **eval_kwargs))
-
-
-def compare_arrays(array1, array2):
-    comparison = np.not_equal(array1, array2)
-    diff_indices = np.where(comparison)[0]
-    count_diff = np.sum(comparison)
-    return count_diff, diff_indices
 
 
 if __name__ == '__main__':
