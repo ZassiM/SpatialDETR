@@ -465,7 +465,11 @@ class BaseApp(tk.Tk):
         y1 = y0 + self.canvas.get_width_height()[1]
         
         im = ImageGrab.grab((x0, y0, x1, y1))
-        path = f"screenshots/{self.ObjectDetector.model_name}_{self.data_idx}"
+        screenshots_path = "screenshots/"
+        if not os.path.exists(screenshots_path):
+            os.makedirs(screenshots_path)
+
+        path = screenshots_path + f"{self.ObjectDetector.model_name}_{self.data_idx}"
 
         if os.path.exists(path+"_"+str(self.file_suffix)+".png"):
             self.file_suffix += 1

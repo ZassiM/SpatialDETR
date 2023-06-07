@@ -137,6 +137,7 @@ mmdet3d/core/evaluation/waymo_utils/compute_detection_metrics_main
 # Others
 testing.py
 screenshots/
+screenshots_eval/
 training_logs/*
 model_info/*
 config.toml

@@ -8,9 +8,6 @@ import numpy as np
 import mmcv
 import warnings
 import cv2
-import time
-import os
-import shutil
 
 
 def main():
@@ -21,7 +18,7 @@ def main():
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
 
-    evaluate_expl(ObjectDetector, ExplainabiliyGenerator, expl_types[0], save=True)
+    evaluate_expl(ObjectDetector, ExplainabiliyGenerator, expl_types[0], save=False)
 
 
 def evaluate_expl(Model, ExplGen, expl_type, save=False):
@@ -42,10 +39,6 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
     num_tokens = int(pert_steps[1] * 1450)
     prog_bar = mmcv.ProgressBar(evaluation_lenght)
 
-    screenshots_path = "screenshots_eval/"
-    if os.path.exists(screenshots_path):
-        shutil.rmtree(screenshots_path)
-
     for dataidx in range(initial_idx, initial_idx + evaluation_lenght):
         data = dataset[dataidx]
         metas = [[data['img_metas'][0].data]]
@@ -53,7 +46,6 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
         data['img_metas'][0] = DC(metas, cpu_only=True)
         data['img'][0] = DC(img)
 
-        s_time = time.time()
         # Attention scores are extracted, together with gradients if grad-CAM is selected
         if expl_type not in ["Grad-CAM", "Gradient Rollout"]:
             output_og = ExplGen.extract_attentions(data)
@@ -73,22 +65,15 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
         img_norm_cfg = Model.cfg.get('img_norm_cfg')
         mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
         std = np.array(img_norm_cfg["std"], dtype=np.float32)
-        e_time = time.time()
 
-        extr_att_time = e_time - s_time
-
-        s_time = time.time()
         bbox_idx = list(range(len(labels)))
         mask = torch.Tensor([0,0,0])
         attn_list = ExplGen.generate_explainability_cameras(expl_type, layer, bbox_idx, nms_idxs, head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule, remove_pad=False)
-        e_time = time.time()
-        expl_gen_time = e_time - s_time
 
-        s_time = time.time()
+
         # Perturbate the input image with the XAI maps
         img = img[0][0]
         img_og_bboxes = []
-        img_pert_den = []
         img_pert_list = []  # list of perturbed images
         for cam in range(len(attn_list)):
             attn = attn_list[cam]
@@ -98,17 +83,17 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
             img_og = img[cam].permute(1, 2, 0).numpy()
 
             # Denormalize the images
-            img_og = mmcv.imdenormalize(img_og, mean, std, to_bgr=False)
+            #img_og = mmcv.imdenormalize(img_og, mean, std, to_bgr=False)
 
             # Draw the og bboxes to the image for visualization
-            img_og_bb, _ = draw_lidar_bbox3d_on_img(
-                    pred_bboxes,
-                    img_og,
-                    img_metas['lidar2img'][cam],
-                    color=(0, 255, 0),
-                    with_label=True,
-                    mode_2d=True)
-            img_og_bboxes.append(img_og_bb)
+            # img_og_bb, _ = draw_lidar_bbox3d_on_img(
+            #         pred_bboxes,
+            #         img_og,
+            #         img_metas['lidar2img'][cam],
+            #         color=(0, 255, 0),
+            #         with_label=True,
+            #         mode_2d=True)
+            # img_og_bboxes.append(img_og_bb)
 
             # Copy the normalized original images without bboxes
             img_pert = img_og.copy()
@@ -116,17 +101,12 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
             for idx in indices:
                 img_pert[idx[0], idx[1]] = mask
 
-            img_pert_den.append(img_pert)
             # Normalize the perturbed images and append to the list
-            img_pert = mmcv.imnormalize(img_pert, mean, std)
+            #img_pert = mmcv.imnormalize(img_pert, mean, std)
             img_pert_list.append(img_pert)
-        
-        e_time = time.time()
-        pert_time = e_time - s_time
 
         # Save the perturbed 6 camera images into the data input
-        s_time = time.time()
-        img_pert_list = torch.from_numpy(np.stack(img_pert_list))
+        img_pert_list = torch.Tensor(img_pert_list)
         img = [img_pert_list.permute(0, 3, 1, 2).unsqueeze(0)] # img[0] = torch.Size([1, 6, 3, 928, 1600])
         data['img'][0] = DC(img)
 
@@ -134,60 +114,39 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
         with torch.no_grad():
             output_pert = Model.model(return_loss=False, rescale=True, **data)
 
-        outputs = output_pert[0]["pts_bbox"]
-        img_metas = data["img_metas"][0]._data[0][0]
-        thr_idxs = outputs['scores_3d'] > pred_threshold
-        pred_bboxes = outputs["boxes_3d"][thr_idxs]
-        pred_bboxes.tensor.detach()
-        labels = outputs['labels_3d'][thr_idxs]
-        e_time = time.time()
-        pert_model_time = e_time - s_time
+        # outputs = output_pert[0]["pts_bbox"]
+        # img_metas = data["img_metas"][0]._data[0][0]
+        # thr_idxs = outputs['scores_3d'] > pred_threshold
+        # pred_bboxes = outputs["boxes_3d"][thr_idxs]
+        # pred_bboxes.tensor.detach()
+        # labels = outputs['labels_3d'][thr_idxs]
 
-        img_pert_bboxes = []
-        for cam in range(len(img_pert_den)):
-            img_pert = img_pert_den[cam]
-            img_pert_bb, _ = draw_lidar_bbox3d_on_img(
-                    pred_bboxes,
-                    img_pert,
-                    img_metas['lidar2img'][cam],
-                    color=(0, 255, 0),
-                    with_label=True,
-                    mode_2d=True)
-            img_pert_bboxes.append(img_pert_bb)
-
-        s_time = time.time()
         if save:
-            if not os.path.exists(screenshots_path):
-                os.makedirs(screenshots_path)
             # Create image with all 6 cameras
             hori = np.concatenate((img_og_bboxes[2], img_og_bboxes[0], img_og_bboxes[1]), axis=1)
             ver = np.concatenate((img_og_bboxes[5], img_og_bboxes[3], img_og_bboxes[4]), axis=1)
             img_og = np.concatenate((hori, ver), axis=0)
 
-            hori = np.concatenate((img_pert_bboxes[2], img_pert_bboxes[0], img_pert_bboxes[1]), axis=1)
-            ver = np.concatenate((img_pert_bboxes[5], img_pert_bboxes[3], img_pert_bboxes[4]), axis=1)
+            hori = np.concatenate((img_pert_list[2], img_pert_list[0], img_pert_list[1]), axis=1)
+            ver = np.concatenate((img_pert_list[5], img_pert_list[3], img_pert_list[4]), axis=1)
             img_pert = np.concatenate((hori, ver), axis=0)
 
 
-            #Convert to RGB
+            # Convert to RGB
             img_og = cv2.cvtColor(img_og, cv2.COLOR_BGR2RGB)
             img_pert = cv2.cvtColor(img_pert, cv2.COLOR_BGR2RGB)
 
             img_og = Image.fromarray(img_og)
             img_pert = Image.fromarray(img_pert)
 
-            path_og = screenshots_path + f"{Model.model_name}_{expl_type}_{dataidx}_og.png"
-            path_pert = screenshots_path + f"{Model.model_name}_{expl_type}_{dataidx}_pert.png"
+            path_og = f"screenshots_eval/{Model.model_name}_{expl_type}_{dataidx}_og.png"
+            path_pert = f"screenshots_eval/{Model.model_name}_{expl_type}_{dataidx}_pert.png"
 
             img_og.save(path_og)
             img_pert.save(path_pert)
-            
-        e_time = time.time()
-        saving_time = e_time - s_time
-        print(f"\n{saving_time}")
 
 
-        #outputs_pert.extend(output_pert)
+        outputs_pert.extend(output_pert)
         torch.cuda.empty_cache()
 
         prog_bar.update()
