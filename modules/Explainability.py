@@ -1,4 +1,6 @@
 import torch
+import cv2
+import numpy as np
 
 
 def avg_heads(attn, head_fusion="min", discard_ratio=0.9):
@@ -33,7 +35,14 @@ def handle_residual(orig_self_attention):
     self_attention += torch.eye(self_attention.shape[-1]).to(self_attention.device)
     return self_attention
 
-
+def overlay_attention_on_image(img, attn, intensity=255):
+    attn = cv2.applyColorMap(np.uint8(attn * intensity), cv2.COLORMAP_JET)
+    attn = np.float32(attn) 
+    attn = cv2.resize(attn, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
+    img = attn + np.float32(img)
+    img = img / np.max(img)
+    return img
+    
 def compute_rollout_attention(all_layer_matrices, start_layer=0):
     num_tokens = all_layer_matrices[0].shape[1]
     eye = torch.eye(num_tokens).to(all_layer_matrices[0].device)

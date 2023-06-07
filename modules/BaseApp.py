@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 
 from modules.Configs import Configs
 from modules.Explainability import ExplainableTransformer
+from modules.Explainability  import overlay_attention_on_image
 from modules.Model import Model
 from scripts.evaluate import evaluate_expl
 
@@ -449,14 +450,6 @@ class BaseApp(tk.Tk):
             return scores_perc[idx]
         else:
             return 0
-
-    def overlay_attention_on_image(self, img, attn, intensity=255):
-        attn = cv2.applyColorMap(np.uint8(attn * intensity), cv2.COLORMAP_JET)
-        attn = np.float32(attn) 
-        attn = cv2.resize(attn, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
-        img = attn + np.float32(img)
-        img = img / np.max(img)
-        return img
 
     def capture(self):
         x0 = self.winfo_rootx()

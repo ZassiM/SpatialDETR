@@ -142,3 +142,4 @@ training_logs/*
 model_info/*
 config.toml
 
+eval_results.txt

@@ -2,7 +2,7 @@ from PIL import Image, ImageTk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 
-from modules.BaseApp import BaseApp, tk, np, cv2, plt, mmcv, torch, DC
+from modules.BaseApp import BaseApp, tk, np, cv2, plt, mmcv, torch, DC, overlay_attention_on_image
 
 
 class App(BaseApp):
@@ -65,7 +65,7 @@ class App(BaseApp):
                     self.imgs[camidx],
                     self.img_metas['lidar2img'][camidx],
                     color=(0, 255, 0),
-                    with_label=self.show_labels.get(),
+                    with_bbox_id=self.show_labels.get(),
                     all_bbx=self.BB_bool.get(),
                     bbx_idx=self.bbox_idx,
                     mode_2d=self.bbox_2d.get())
@@ -88,7 +88,7 @@ class App(BaseApp):
                 else:
                     attn = self.attn_list[self.selected_layer.get()][self.selected_camera.get()]
 
-                img = self.overlay_attention_on_image(img, attn)            
+                img = overlay_attention_on_image(img, attn)            
 
             num_tokens = int(4000)
             _, indices = torch.topk(attn.flatten(), k=num_tokens)
@@ -355,7 +355,7 @@ class App(BaseApp):
                 att_nobbx_layers = []
                 for layer in range(len(self.attn_list)):
                     attn = self.attn_list[layer][camidx]
-                    attn_img = self.overlay_attention_on_image(og_img, attn)      
+                    attn_img = overlay_attention_on_image(og_img, attn)      
                     attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
                     att_nobbx_layers.append(attn_img)
                 att_nobbx.append(att_nobbx_layers)
@@ -365,7 +365,7 @@ class App(BaseApp):
                     self.imgs[camidx],
                     self.img_metas['lidar2img'][camidx],
                     color=(0, 255, 0),
-                    with_label=self.show_labels.get(),
+                    with_bbox_id=self.show_labels.get(),
                     all_bbx=self.BB_bool.get(),
                     bbx_idx=self.bbox_idx,
                     mode_2d=self.bbox_2d.get())
@@ -377,7 +377,7 @@ class App(BaseApp):
                 attn = self.attn_list[0][camidx]
             else:
                 attn = self.attn_list[self.selected_layer.get()][camidx]
-            img = self.overlay_attention_on_image(img, attn, intensity=200)   
+            img = overlay_attention_on_image(img, attn, intensity=200)   
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
             cam_imgs.append(img)     
