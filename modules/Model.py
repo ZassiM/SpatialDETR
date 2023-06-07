@@ -66,7 +66,7 @@ class Model():
             self.layers += 1
         self.ori_shape = self.dataloader.dataset[0]["img_metas"][0]._data["ori_shape"]
 
-        print("\nModel loaded.")
+        print("\nModel loaded.\n")
 
     def init_model(self, args):
         ''' Loads the model from a config file and loads the weights from a trained checkpoint '''

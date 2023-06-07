@@ -1,6 +1,5 @@
 from modules.Model import Model
 from modules.Explainability import ExplainableTransformer
-from modules.Explainability import overlay_attention_on_image
 from mmcv.parallel import DataContainer as DC
 from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 from PIL import Image
@@ -21,35 +20,51 @@ def main():
     ObjectDetector = Model()
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
+    eval_file = "eval_results/eval.txt"
 
-    evaluate_expl(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=False, save=False)
+    evaluate_full(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=False, save=False, eval_file=eval_file)
 
-
-def evaluate_expl(Model, ExplGen, expl_type, negative_pert=False, save=False):
-    print(f"Evaluating {expl_type}...")
-
-    bbox_idx = [0, 1, 2, 3, 4, 5, 6]
+def evaluate_full(Model, ExplGen, expl_type, negative_pert, save, eval_file):
+    base_size = 29 * 50
     pert_steps = [0, 0.25, 0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 1]
+
+    if not negative_pert:
+        print(f"Evaluating {expl_type} with positive perturbation.")
+    else:
+        print(f"Evaluating {expl_type} with negative perturbation.")
+
+    start_time = time.time()
+    for step in range(len(pert_steps)):
+        num_tokens = int(base_size * pert_steps[step])
+        print(f"\nNumber of tokens removed: {num_tokens} ({pert_steps[step] * 100}%)")
+        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, negative_pert=negative_pert, save=save, eval_file=eval_file)
+    end_time = time.time()
+    total_time = end_time - start_time
+    
+    print(f"Completed (elapsed time {total_time} seconds).\n")
+
+    with open(eval_file, "a") as file:
+        # Write the variables to the file
+        file.write("--------------------------\n")
+        file.write(f"Elapsed time: {total_time}\n")
+
+
+def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save, eval_file):
+
     pred_threshold = 0.5
     layer = Model.layers - 1
     head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule = \
         "max", 0.5, True, True, True
-
     class_names = Model.class_names
-    base_size = 29 * 50
-    outputs_pert = []
-    initial_idx = 0
-    num_tokens = int(base_size * pert_steps[0])
-    screenshots_path = "screenshots_eval/"
-    if os.path.exists(screenshots_path):
-        shutil.rmtree(screenshots_path)
 
     dataset = Model.dataloader.dataset
     evaluation_lenght = len(dataset)
+    outputs_pert = []
+
     prog_bar = mmcv.ProgressBar(evaluation_lenght)
 
-    for dataidx in range(initial_idx, initial_idx + evaluation_lenght):
-
+    for dataidx in range(evaluation_lenght):
+        s_full_time = time.time()
         data = dataset[dataidx]
         metas = [[data['img_metas'][0].data]]
         img = [data['img'][0].data.unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
@@ -78,7 +93,6 @@ def evaluate_expl(Model, ExplGen, expl_type, negative_pert=False, save=False):
         
 
         bbox_idx = list(range(len(labels)))
-        mask = torch.Tensor([0,0,0])
         attn_list = ExplGen.generate_explainability(expl_type, bbox_idx, nms_idxs, head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule, remove_pad=False)
         attn_list = attn_list[layer]
 
@@ -88,20 +102,24 @@ def evaluate_expl(Model, ExplGen, expl_type, negative_pert=False, save=False):
         img_og_bboxes = []
         img_pert_den = []
         img_pert_list = []  # list of perturbed images
+        mask = torch.Tensor([0,0,0])
+
+        s_time = time.time()
         for cam in range(len(attn_list)):
             img_og = img[cam].permute(1, 2, 0).numpy()
             # Denormalize the images
             img_og = mmcv.imdenormalize(img_og, mean, std)
             # Draw the og bboxes to the image for visualization
-            img_og_bb, _ = draw_lidar_bbox3d_on_img(
-                    pred_bboxes,
-                    img_og,
-                    img_metas['lidar2img'][cam],
-                    color=(0, 255, 0),
-                    mode_2d=True,
-                    class_names=class_names,
-                    labels=labels)
-            img_og_bboxes.append(img_og_bb)
+            if save:
+                img_og_bb, _ = draw_lidar_bbox3d_on_img(
+                        pred_bboxes,
+                        img_og,
+                        img_metas['lidar2img'][cam],
+                        color=(0, 255, 0),
+                        mode_2d=True,
+                        class_names=class_names,
+                        labels=labels)
+                img_og_bboxes.append(img_og_bb)
 
             # Get the attention for the camera and negate it if doing negative perturbation
             attn = attn_list[cam]
@@ -113,13 +131,17 @@ def evaluate_expl(Model, ExplGen, expl_type, negative_pert=False, save=False):
             cols, rows = indices[:, 0], indices[:, 1]
             # Copy the normalized original images without bboxes
             img_pert = img_og.copy()
-            # # Image perturbation by setting pixels to (0,0,0)
+            # # Image perturbation by setting pixels to t (0,0,0)
             img_pert[cols, rows] = mask
 
-            img_pert_den.append(img_og)
+            if save:
+                img_pert_den.append(img_pert)
+
             # Normalize the perturbed images and append to the list
             img_pert = mmcv.imnormalize(img_pert, mean, std)
             img_pert_list.append(img_pert)
+        e_time = time.time()
+        perturb_time = e_time - s_time
         
         # Save the perturbed 6 camera images into the data input
         img_pert_list = torch.from_numpy(np.stack(img_pert_list))
@@ -138,22 +160,24 @@ def evaluate_expl(Model, ExplGen, expl_type, negative_pert=False, save=False):
         pred_bboxes.tensor.detach()
         labels = outputs['labels_3d'][thr_idxs]
         
-
-        img_pert_bboxes = []
-        for cam in range(len(img_pert_den)):
-            img_pert = img_pert_den[cam]
-            img_pert_bb, _ = draw_lidar_bbox3d_on_img(
-                    pred_bboxes,
-                    img_pert,
-                    img_metas['lidar2img'][cam],
-                    color=(0, 255, 0),
-                    mode_2d=True,
-                    class_names=class_names,
-                    labels=labels)
-            img_pert_bboxes.append(img_pert_bb)
+        if save:
+            img_pert_bboxes = []
+            for cam in range(len(img_pert_den)):
+                img_pert = img_pert_den[cam]
+                img_pert_bb, _ = draw_lidar_bbox3d_on_img(
+                        pred_bboxes,
+                        img_pert,
+                        img_metas['lidar2img'][cam],
+                        color=(0, 255, 0),
+                        mode_2d=True,
+                        class_names=class_names,
+                        labels=labels)
+                img_pert_bboxes.append(img_pert_bb)
         
         if save:
-            if not os.path.exists(screenshots_path):
+            screenshots_path = "screenshots_eval/"
+            if os.path.exists(screenshots_path):
+                shutil.rmtree(screenshots_path)
                 os.makedirs(screenshots_path)
 
             # Create image with all 6 cameras
@@ -181,10 +205,10 @@ def evaluate_expl(Model, ExplGen, expl_type, negative_pert=False, save=False):
         outputs_pert.extend(output_pert)
         torch.cuda.empty_cache()
 
+        e_full_time = time.time()
+        full_time = e_full_time - s_full_time
         prog_bar.update()
     
-    print("\nCompleted.\n")
-
     kwargs = {}
     eval_kwargs = Model.cfg.get('evaluation', {}).copy()
     # hard-code way to remove EvalHook args
@@ -198,15 +222,13 @@ def evaluate_expl(Model, ExplGen, expl_type, negative_pert=False, save=False):
     mAP = eval_results['pts_bbox_NuScenes/mAP']
     NDS = eval_results['pts_bbox_NuScenes/NDS']
 
-    eval_file = "eval_results/eval.txt"
-    with open(eval_file, "w") as file:
+    with open(eval_file, "a") as file:
         # Write the variables to the file
-        file.write(f"\nNumber of tokens: {num_tokens}\n")
+        file.write("--------------------------\n")
+        file.write(f"Number of tokens: {num_tokens}\n")
         file.write(f"mAP: {mAP}\n")
         file.write(f"NDS: {NDS}\n")
     
-    print(f"\nResults written to {eval_file}.\n")
-
 
 if __name__ == '__main__':
     main()
