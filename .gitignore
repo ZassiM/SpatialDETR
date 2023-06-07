@@ -143,3 +143,4 @@ model_info/*
 config.toml
 
 eval_results.txt
+eval_results/

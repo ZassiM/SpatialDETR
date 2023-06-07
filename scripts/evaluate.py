@@ -22,10 +22,10 @@ def main():
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
 
-    evaluate_expl(ObjectDetector, ExplainabiliyGenerator, expl_types[0], save=False)
+    evaluate_expl(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=False, save=False)
 
 
-def evaluate_expl(Model, ExplGen, expl_type, save=False):
+def evaluate_expl(Model, ExplGen, expl_type, negative_pert=False, save=False):
     print(f"Evaluating {expl_type}...")
 
     bbox_idx = [0, 1, 2, 3, 4, 5, 6]
@@ -39,7 +39,7 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
     base_size = 29 * 50
     outputs_pert = []
     initial_idx = 0
-    num_tokens = int(0)
+    num_tokens = int(base_size * pert_steps[0])
     screenshots_path = "screenshots_eval/"
     if os.path.exists(screenshots_path):
         shutil.rmtree(screenshots_path)
@@ -101,10 +101,12 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
                     mode_2d=True,
                     class_names=class_names,
                     labels=labels)
-            
-            attn = attn_list[cam]
             img_og_bboxes.append(img_og_bb)
-      
+
+            # Get the attention for the camera and negate it if doing negative perturbation
+            attn = attn_list[cam]
+            if negative_pert:
+                attn = -attn
             # Extract topk attention
             _, indices = torch.topk(attn.flatten(), k=num_tokens)
             indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
@@ -122,7 +124,7 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
         # Save the perturbed 6 camera images into the data input
         img_pert_list = torch.from_numpy(np.stack(img_pert_list))
         img = [img_pert_list.permute(0, 3, 1, 2).unsqueeze(0)] # img[0] = torch.Size([1, 6, 3, 928, 1600])
-        img_compare = data['img'][0].data[0][0]
+        #img_compare = data['img'][0].data[0][0]
         data['img'][0] = DC(img)
 
         # Apply perturbated images to the model
@@ -192,7 +194,18 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
     ]:
         eval_kwargs.pop(key, None)
     eval_kwargs.update(dict(metric="bbox", **kwargs))
-    print(dataset.evaluate(outputs_pert, out_dir="eval_results/", **eval_kwargs))
+    eval_results = dataset.evaluate(outputs_pert, **eval_kwargs)
+    mAP = eval_results['pts_bbox_NuScenes/mAP']
+    NDS = eval_results['pts_bbox_NuScenes/NDS']
+
+    eval_file = "eval_results/eval.txt"
+    with open(eval_file, "w") as file:
+        # Write the variables to the file
+        file.write(f"\nNumber of tokens: {num_tokens}\n")
+        file.write(f"mAP: {mAP}\n")
+        file.write(f"NDS: {NDS}\n")
+    
+    print(f"\nResults written to {eval_file}.\n")
 
 
 if __name__ == '__main__':
