@@ -479,8 +479,14 @@ class BaseApp(tk.Tk):
     def change_theme(self):
         if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
             self.tk.call("set_theme", "light")
+            self.bg_color = "white"
         else:
             self.tk.call("set_theme", "dark")
+            self.bg_color = self.info_label.cget("background")
+
+        self.fig.set_facecolor(self.bg_color)
+        self.canvas.draw()
+
 
     def save_video(self):
         if hasattr(self, "img_frames"):

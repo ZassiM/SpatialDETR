@@ -13,7 +13,6 @@ def main():
 
     expl_types = ["Attention Rollout", "Grad-CAM", "Gradient Rollout"]
     ObjectDetector = Model()
-    ObjectDetector.use_mini_dataset = True
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
     evaluate_expl(ObjectDetector, ExplainabiliyGenerator, expl_types[0], save=True)
@@ -23,6 +22,8 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
     print(f"Evaluating {expl_type}...")
 
     bbox_idx = [0, 1, 2, 3, 4, 5, 6]
+    pert_steps = [0, 0.25, 0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 1]
+    pred_threshold = 0.5
     layer = Model.layers - 1
     head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule = \
         "min", 0.5, True, True, True
@@ -32,7 +33,7 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
     dataset = Model.dataloader.dataset
     evaluation_lenght = len(dataset)
     initial_idx = 0
-    num_tokens = int(0.5 * 1450)
+    num_tokens = int(pert_steps[1] * 1450)
     prog_bar = mmcv.ProgressBar(evaluation_lenght)
 
     for dataidx in range(initial_idx, initial_idx + evaluation_lenght):
@@ -44,16 +45,24 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
 
         # Attention scores are extracted, together with gradients if grad-CAM is selected
         if expl_type not in ["Grad-CAM", "Gradient Rollout"]:
-            ExplGen.extract_attentions(data)
+            output = ExplGen.extract_attentions(data)
         else:
-            ExplGen.extract_attentions(data, bbox_idx)
+            output = ExplGen.extract_attentions(data, bbox_idx)
 
         nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes()
 
-        topk_list = []
-        
+        # Extract predicted bboxes and their labels
+        outputs = outputs[0]["pts_bbox"]
+        thr_idxs = outputs['scores_3d'] > pred_threshold
+
+        pred_bboxes = outputs["boxes_3d"][thr_idxs]
+        pred_bboxes.tensor.detach()
+        labels = outputs['labels_3d'][thr_idxs]
+
+        bbox_idx = list(range(len(labels)))
         attn_list = ExplGen.generate_explainability_cameras(expl_type, layer, bbox_idx, nms_idxs, head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule, remove_pad=False)
 
+        topk_list = []
         for cam in range(len(attn_list)):
             attn = attn_list[cam]
             _, indices = torch.topk(attn.flatten(), k=num_tokens)
@@ -78,6 +87,17 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
                 img_pert[idx[0], idx[1]] = mask
             img_pert_list.append(img_pert.permute(2, 0, 1))
 
+
+        # for cam in range(len(img)):
+        #     img_og = img[cam].permute(1, 2, 0)
+        #     img_og_list.append(img_og)
+        #     img_pert = img_og.clone()
+        #     mask = torch.Tensor([img_og[:, :, 0].min().item(), img_og[:, :, 1].min().item(), img_og[:, :, 2].min().item()])
+        #     # Image perturbation by setting pixels to (0,0,0)
+        #     for idx in topk_list[cam]:
+        #         img_pert[idx[0], idx[1]] = mask
+        #     img_pert_list.append(img_pert.permute(2, 0, 1))
+
         if save:
             for cam in range(len(img_og_list)):
                 path_og = f"screenshots_eval/{Model.model_name}_{expl_type}_{dataidx}__CAM{cam}_og.png"
@@ -92,16 +112,16 @@ def evaluate_expl(Model, ExplGen, expl_type, save=False):
                 img_og.save(path_og)
                 img_pert.save(path_pert)
 
-        # Save the perturbed 6 camera images into the data input
-        img = [torch.stack((img_pert_list)).unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
-        data['img'][0] = DC(img)
+        # # Save the perturbed 6 camera images into the data input
+        # img = [torch.stack((img_pert_list)).unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
+        # data['img'][0] = DC(img)
 
-        # Second forward
-        with torch.no_grad():
-            output = Model.model(return_loss=False, rescale=True, **data)
+        # # Second forward
+        # with torch.no_grad():
+        #     output = Model.model(return_loss=False, rescale=True, **data)
 
-        outputs_pert.extend(output)
-        torch.cuda.empty_cache()
+        # outputs_pert.extend(output)
+        # torch.cuda.empty_cache()
 
         prog_bar.update()
     

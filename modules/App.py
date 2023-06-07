@@ -47,6 +47,9 @@ class App(BaseApp):
 
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
+
+        if self.selected_expl_type.get() == "Gradient Rollout":
+            self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
                 
         self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get()]   
         self.attn_list = self.expl_configs.attn_list
@@ -164,7 +167,11 @@ class App(BaseApp):
                 ax_attn.axhline(y=0, color='black', linewidth=10)
                 ax_attn.axhline(y=0, color='green', linewidth=10, xmax=score/100)
 
-            ax_attn.set_title(title, fontsize=fontsize, pad=0)
+            if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
+                title_color = "white"
+            else:
+                title_color = "black"
+            ax_attn.set_title(title, fontsize=fontsize, color=title_color, pad=0)
             ax_attn.axis('off')   
             self.fig.tight_layout()
    
