@@ -37,28 +37,20 @@ class App(BaseApp):
 
         self.fig.clear()
 
-        # Avoid selecting all layers and all cameras. Only the last layer will be visualized
-        if (self.show_all_layers.get() and self.selected_camera.get() == -1) or self.selected_expl_type.get() == "Gradient Rollout":
-            self.show_all_layers.set(False)
-            if self.selected_expl_type.get() == "Gradient Rollout":
-                self.selected_layer.set(0)
-
         self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name]
 
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
-
-        nms = self.nms_idxs
-
-        if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
-            self.update_data(initialize_bboxes=False)
-
-        new_mms = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()
-                
-        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get()]   
-        self.attn_list = self.expl_configs.attn_list
         
-        self.show_attention_maps()
+        if self.selected_expl_type.get() == "All":
+            for i in range(len(self.expl_options)):
+                self.selected_expl_type.set(self.expl_options[i])
+                self.update_explainability()
+                self.show_attention_maps(grid_column=i)      
+
+        else:
+            self.update_explainability()
+            self.show_attention_maps()
 
         # Generate images list with bboxes on it
         print("Generating camera images...")
@@ -116,15 +108,28 @@ class App(BaseApp):
         
         print("Done.\n")
 
-    def show_attention_maps(self, grid_clm=1):
+    def update_explainability(self):
+        # Avoid selecting all layers and all cameras. Only the last layer will be visualized
+        if (self.show_all_layers.get() and self.selected_camera.get() == -1) or self.selected_expl_type.get() == "Gradient Rollout":
+            self.show_all_layers.set(False)
+            if self.selected_expl_type.get() == "Gradient Rollout":
+                self.selected_layer.set(0)
+
+        if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
+            self.update_data(initialize_bboxes=False)
+                
+        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get()]   
+        self.attn_list = self.expl_configs.attn_list
+
+    def show_attention_maps(self, grid_column=1):
         '''
         Shows the attention map for explainability.
         '''
         # If we want to visualize all layers or all cameras:
         if self.show_all_layers.get() or self.selected_camera.get() == -1:
             # Select the center of the grid to plot the attentions and add 2x2 subgrid
-            layer_grid = self.spec[1, grid_clm].subgridspec(2, 3)
-            fontsize = 8
+            layer_grid = self.spec[1, grid_column].subgridspec(2, 3)
+            fontsize = 6
         else:
             fontsize = 12
             
@@ -132,7 +137,7 @@ class App(BaseApp):
             if self.show_all_layers.get() or self.selected_camera.get() == -1:
                 ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
             else:
-                ax_attn = self.fig.add_subplot(self.spec[1, grid_clm])
+                ax_attn = self.fig.add_subplot(self.spec[1, grid_column])
             
             if self.show_all_layers.get():
                 attn = self.attn_list[i][self.selected_camera.get()]
@@ -147,20 +152,20 @@ class App(BaseApp):
             if self.show_all_layers.get() or self.selected_camera.get() != -1:
                 title = f'{list(self.cameras.keys())[self.selected_camera.get()]}'
                 if self.selected_expl_type.get() != "Gradient Rollout":
-                    title += f' , layer {i}'
+                    title += f' | layer {i} '
             else:
                 title = f'{list(self.cameras.keys())[self.cam_idx[i]]}'
                 if self.selected_expl_type.get() != "Gradient Rollout":
-                    title += f' , layer {self.selected_layer.get()}'
+                    title += f' | layer {self.selected_layer.get()}'
 
             # If doing Attention Rollout, visualize head fusion type
             if self.selected_expl_type.get() == "Attention Rollout":
-                title += f', {self.selected_head_fusion.get()}'
+                title += f' | head {self.selected_head_fusion.get()}'
 
             # Show attention camera contributon if all cameras are selected
             if self.attn_contr.get() and self.selected_camera.get() == -1:
                 score = self.update_scores(self.cam_idx[i])
-                title += f', {score}%'
+                title += f'| {score}%'
                 ax_attn.axhline(y=0, color='black', linewidth=10)
                 ax_attn.axhline(y=0, color='green', linewidth=10, xmax=score/100)
 
@@ -174,7 +179,11 @@ class App(BaseApp):
    
             if not self.show_all_layers.get() and self.selected_camera.get() != -1:
                 break
- 
+
+    def show_lidar(self):
+        gt_bboxes = self.ObjectDetector.dataloader.dataset.get_ann_info(self.data_idx)['gt_bboxes_3d']
+        self.ObjectDetector.dataloader.dataset.show_mod(self.outputs, self.lidar_points[0]._data[0][0], gt_bboxes.tensor.numpy(), out_dir="points/", show=True, pipeline=None, score_thr = score_thr)
+
     def show_video(self):
         if self.canvas and not self.video_gen_bool or not self.canvas:
             if self.canvas:

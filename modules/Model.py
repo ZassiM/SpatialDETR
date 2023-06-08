@@ -13,7 +13,7 @@ from mmcv.parallel import MMDataParallel
 class Model():
 
     def __init__(self):
-        self.layers = 0
+        self.num_layers = 0
         self.use_mini_dataset = False
 
     def load_from_config(self):
@@ -62,8 +62,8 @@ class Model():
         self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
         self.dataloader_name = self.dataloader.dataset.metadata['version']
         self.class_names = self.dataloader.dataset.CLASSES
-        for _ in self.model.module.pts_bbox_head.transformer.decoder.layers:
-            self.layers += 1
+        self.num_layers = self.cfg.model.pts_bbox_head.transformer.decoder.num_layers
+        self.num_heads = self.cfg.model.pts_bbox_head.transformer.decoder.transformerlayers.attn_cfgs[0].num_heads
         self.ori_shape = self.dataloader.dataset[0]["img_metas"][0]._data["ori_shape"]
 
         print("\nModel loaded.\n")

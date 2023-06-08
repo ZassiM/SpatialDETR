@@ -138,18 +138,18 @@ class BaseApp(tk.Tk):
         self.cam_idx = [2, 0, 1, 5, 3, 4]  # Used for visualizing camera outputs properly
         self.selected_camera = tk.IntVar()
         for value, key in enumerate(self.cameras):
-            camera_opt.add_radiobutton(label=key, variable=self.selected_camera, value=value, command=self.update_info_label)
-        camera_opt.add_radiobutton(label="All", variable=self.selected_camera, value=-1, command=self.update_info_label)
+            camera_opt.add_radiobutton(label=key, variable=self.selected_camera, value=value)
+        camera_opt.add_radiobutton(label="All", variable=self.selected_camera, value=-1)
         self.selected_camera.set(-1) # Default: visualize all cameras
 
         # Cascade menu for Attention layer
         layer_opt = tk.Menu(self.menubar)
         self.selected_layer = tk.IntVar()
         self.show_all_layers = tk.BooleanVar()
-        for i in range(self.ExplainableModel.layers):
-            layer_opt.add_radiobutton(label=i, variable=self.selected_layer, command=self.update_info_label)
+        for i in range(self.ObjectDetector.num_layers):
+            layer_opt.add_radiobutton(label=i, variable=self.selected_layer)
         layer_opt.add_checkbutton(label="All", onvalue=1, offvalue=0, variable=self.show_all_layers)
-        self.selected_layer.set(self.ExplainableModel.layers - 1)
+        self.selected_layer.set(self.ExplainableModel.num_layers - 1)
 
         # Cascade menus for Explainable options
         expl_opt = tk.Menu(self.menubar)
@@ -158,21 +158,20 @@ class BaseApp(tk.Tk):
 
         # Attention Rollout
         expl_opt.add_cascade(label=self.expl_options[0], menu=attn_rollout)
-        self.head_types = ["mean", "min", "max"]
+        self.head_fusion_types = ["max", "min", "mean"]
         self.selected_head_fusion = tk.StringVar()
-        self.selected_head_fusion.set(self.head_types[2])
+        self.selected_head_fusion.set(self.head_fusion_types[0])
         self.raw_attn = tk.BooleanVar()
         self.raw_attn.set(True)
-        dr_opt, hf_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
+        hf_opt = tk.Menu(self.menubar)
         self.selected_discard_ratio = tk.DoubleVar()
         self.selected_discard_ratio.set(0.5)
         values = np.arange(0.0, 1, 0.1).round(1)
-        for i in values:
-            dr_opt.add_radiobutton(label=i, variable=self.selected_discard_ratio)
-        for i in range(len(self.head_types)):
-            hf_opt.add_radiobutton(label=self.head_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_types[i], command=self.update_info_label)
+        for i in range(len(self.head_fusion_types)):
+            hf_opt.add_radiobutton(label=self.head_fusion_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_fusion_types[i])
+        for head in range(self.ObjectDetector.num_heads):
+            hf_opt.add_radiobutton(label=str(head), variable=self.selected_head_fusion, value = str(head))
         attn_rollout.add_cascade(label=" Head fusion", menu=hf_opt)
-        attn_rollout.add_cascade(label=" Discard ratio", menu=dr_opt)
         attn_rollout.add_checkbutton(label=" Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
 
         # Grad-CAM
@@ -201,7 +200,13 @@ class BaseApp(tk.Tk):
         self.old_expl_type = self.expl_options[0]
         for i in range(len(self.expl_options)):
             expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i], command=self.update_info_label)
+        expl_type_opt.add_radiobutton(label="All", variable=self.selected_expl_type, value="All", command=self.update_info_label)
 
+        # Discard ratio for attention weights
+        dr_opt = tk.Menu(self.menubar)
+        for i in values:
+            dr_opt.add_radiobutton(label=i, variable=self.selected_discard_ratio)
+        expl_opt.add_cascade(label="Discard ratio", menu=dr_opt)
         expl_opt.add_command(label="Evaluate explainability", command=lambda: evaluate(self.ObjectDetector, self.ExplainableModel, self.selected_expl_type.get()))
         # Cascade menus for object selection
         self.bbox_opt = tk.Menu(self.menubar)
@@ -248,6 +253,8 @@ class BaseApp(tk.Tk):
         self.add_separator("|")
         self.menubar.add_command(label="Visualize", command=self.visualize)
         self.add_separator("|")
+        self.menubar.add_command(label="Show LIDAR", command=self.show_lidar)
+        self.add_separator("|")
         self.menubar.add_command(label="Show video", command=self.show_video)
 
     def show_car(self):
@@ -280,6 +287,9 @@ class BaseApp(tk.Tk):
         data['img_metas'][0] = DC(metas, cpu_only=True)
         data['img'][0] = DC(img)
         self.data = data
+
+        if "points" in self.data.keys():
+            self.lidar_points = self.data.pop("points")
 
         # Attention scores are extracted, together with gradients if grad-CAM is selected
         if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
