@@ -1,16 +1,12 @@
 from modules.Model import Model
 from modules.Explainability import ExplainableTransformer
 from mmcv.parallel import DataContainer as DC
-from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
-from PIL import Image
 import torch
 import numpy as np
 import mmcv
 import warnings
-import cv2
 import time
 import os
-import shutil
 
 
 def main():
@@ -19,12 +15,11 @@ def main():
     expl_types = ["Attention Rollout", "Grad-CAM", "Gradient Rollout", "RandExpl"]
     ObjectDetector = Model()
     ObjectDetector.load_from_config()
-    
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
 
-    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=False, save_img=False)
+    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=False)
 
-def evaluate(Model, ExplGen, expl_type, negative_pert=False, save_img=False):
+def evaluate(Model, ExplGen, expl_type, negative_pert=False):
     txt_del = "*" * (38 + len(expl_type))
     info = txt_del
     if not negative_pert:
@@ -56,7 +51,7 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False, save_img=False):
     for step in range(len(pert_steps)):
         num_tokens = int(base_size * pert_steps[step])
         print(f"\nNumber of tokens removed: {num_tokens} ({pert_steps[step] * 100} %)")
-        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, negative_pert=negative_pert, save_img=save_img, eval_file=file_path, remove_pad=False)
+        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, negative_pert=negative_pert, eval_file=file_path, remove_pad=False)
         # delete
     end_time = time.time()
     total_time = end_time - start_time
@@ -67,14 +62,12 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False, save_img=False):
         file.write("--------------------------\n")
         file.write(f"Elapsed time: {total_time}\n")
 
-def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save_img, eval_file, remove_pad):
+def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, eval_file, remove_pad):
     pred_threshold = 0.5
     #layer = Model.num_layers - 1
     layer = 0
     head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule = \
         "max", 0.5, True, True, True
-    class_names = Model.class_names
-
     dataset = Model.dataset
     evaluation_lenght = len(dataset)
     outputs_pert = []
@@ -82,7 +75,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save_img
     prog_bar = mmcv.ProgressBar(evaluation_lenght)
 
     for dataidx in range(evaluation_lenght):
-        s_full_time = time.time()
+
         data = dataset[dataidx]
         metas = [[data['img_metas'][0].data]]
         img = [data['img'][0].data.unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
@@ -97,16 +90,9 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save_img
 
         # Extract predicted bboxes and their labels
         outputs = output_og[0]["pts_bbox"]
-        img_metas = data["img_metas"][0]._data[0][0]
         thr_idxs = outputs['scores_3d'] > pred_threshold
-        pred_bboxes = outputs["boxes_3d"][thr_idxs]
-        pred_bboxes.tensor.detach()
         nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes()
         labels = outputs['labels_3d'][thr_idxs]
-
-        img_norm_cfg = Model.cfg.get('img_norm_cfg')
-        mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
-        std = np.array(img_norm_cfg["std"], dtype=np.float32)
         
         bbox_idx = list(range(len(labels)))
         if expl_type in ["Grad-CAM", "Gradient Rollout"]:
@@ -119,49 +105,38 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save_img
         img = img[0][0]
         if remove_pad:
             img = img[:, :, :Model.ori_shape[0], :Model.ori_shape[1]]  # [num_cams x height x width x channels]
-        img_og_bboxes = []
-        img_pert_den = []
-        img_pert_list = []  # list of perturbed images
-        mask = torch.Tensor([0,0,0])
 
-        s_time = time.time()
+        img_norm_cfg = Model.cfg.get('img_norm_cfg')
+        mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
+        std = np.array(img_norm_cfg["std"], dtype=np.float32)
+        mask = torch.Tensor([0,0,0])
+        #mask = torch.Tensor(mean)
+
+        img_pert_list = []  # list of perturbed images
         for cam in range(len(attn_list)):
             img_og = img[cam].permute(1, 2, 0).numpy()
+
             # Denormalize the images
             img_og = mmcv.imdenormalize(img_og, mean, std)
-            # Draw the og bboxes to the image for visualization
-            if save_img:
-                img_og_bb, _ = draw_lidar_bbox3d_on_img(
-                        pred_bboxes,
-                        img_og,
-                        img_metas['lidar2img'][cam],
-                        color=(0, 255, 0),
-                        mode_2d=True,
-                        class_names=class_names,
-                        labels=labels)
-                img_og_bboxes.append(img_og_bb)
 
             # Get the attention for the camera and negate it if doing negative perturbation
             attn = attn_list[cam]
             if negative_pert:
                 attn = -attn
+
             # Extract topk attention
             _, indices = torch.topk(attn.flatten(), k=num_tokens)
             indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
             cols, rows = indices[:, 0], indices[:, 1]
             # Copy the normalized original images without bboxes
             img_pert = img_og.copy()
+
             # # Image perturbation by setting pixels to t (0,0,0)
             img_pert[cols, rows] = mask
-
-            if save_img:
-                img_pert_den.append(img_pert)
 
             # Normalize the perturbed images and append to the list
             img_pert = mmcv.imnormalize(img_pert, mean, std)
             img_pert_list.append(img_pert)
-        e_time = time.time()
-        perturb_time = e_time - s_time
         
         # save_img the perturbed 6 camera images into the data input
         img_pert_list = torch.from_numpy(np.stack(img_pert_list))
@@ -173,59 +148,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save_img
         with torch.no_grad():
             output_pert = Model.model(return_loss=False, rescale=True, **data)
 
-        outputs = output_pert[0]["pts_bbox"]
-        img_metas = data["img_metas"][0]._data[0][0]
-        thr_idxs = outputs['scores_3d'] > pred_threshold
-        pred_bboxes = outputs["boxes_3d"][thr_idxs]
-        pred_bboxes.tensor.detach()
-        labels = outputs['labels_3d'][thr_idxs]
-        
-        if save_img:
-            img_pert_bboxes = []
-            for cam in range(len(img_pert_den)):
-                img_pert = img_pert_den[cam]
-                img_pert_bb, _ = draw_lidar_bbox3d_on_img(
-                        pred_bboxes,
-                        img_pert,
-                        img_metas['lidar2img'][cam],
-                        color=(0, 255, 0),
-                        mode_2d=True,
-                        class_names=class_names,
-                        labels=labels)
-                img_pert_bboxes.append(img_pert_bb)
-        
-        if save_img:
-            screenshots_path = "screenshots_eval/"
-            if os.path.exists(screenshots_path):
-                shutil.rmtree(screenshots_path)
-                os.makedirs(screenshots_path)
-
-            # Create image with all 6 cameras
-            hori = np.concatenate((img_og_bboxes[2], img_og_bboxes[0], img_og_bboxes[1]), axis=1)
-            ver = np.concatenate((img_og_bboxes[5], img_og_bboxes[3], img_og_bboxes[4]), axis=1)
-            img_og = np.concatenate((hori, ver), axis=0)
-
-            hori = np.concatenate((img_pert_bboxes[2], img_pert_bboxes[0], img_pert_bboxes[1]), axis=1)
-            ver = np.concatenate((img_pert_bboxes[5], img_pert_bboxes[3], img_pert_bboxes[4]), axis=1)
-            img_pert = np.concatenate((hori, ver), axis=0)
-
-            #Convert to RGB
-            img_og = cv2.cvtColor(img_og, cv2.COLOR_BGR2RGB)
-            img_pert = cv2.cvtColor(img_pert, cv2.COLOR_BGR2RGB)
-
-            img_og = Image.fromarray(img_og)
-            img_pert = Image.fromarray(img_pert)
-
-            path_og = screenshots_path + f"{Model.model_name}_{expl_type}_{dataidx}_og.png"
-            path_pert = screenshots_path + f"{Model.model_name}_{expl_type}_{dataidx}_pert.png"
-
-            img_og.save(path_og)
-            img_pert.save(path_pert)
-            
         outputs_pert.extend(output_pert)
-
-        e_full_time = time.time()
-        full_time = e_full_time - s_full_time
 
         del output_og
         del output_pert
@@ -252,6 +175,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save_img
         file.write(f"NDS: {NDS}\n")
         file.write("--------------------------\n")
     
+    print(f"File {eval_file} updated.\n")
     del outputs_pert
     torch.cuda.empty_cache()
     

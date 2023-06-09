@@ -106,6 +106,8 @@ class App(BaseApp):
         if self.capture_bool.get():
             self.capture()
         
+        del self
+        torch.cuda.empty_cache()
         print("Done.\n")
 
     def update_explainability(self):
@@ -181,7 +183,16 @@ class App(BaseApp):
                 break
 
     def show_lidar(self):
-        self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show_gt=False, show=True, score_thr = self.selected_threshold.get())
+        # self.attn_list[layer] = 6x900x1600
+        '''
+        For each attn camera, i have one attention value for each pixel. I have a matrix 6x1450x3 of depth values with respect to the 
+        ref coordinate for each pixel. I can generate a point cloud for the attention maps in which I use xyz from the depth value for each
+        pixel in each camera, and color it depending on the attention value
+        '''
+        #self.outputs, index=self.data_idx, out_dir="points/", show_gt=False, show=True, pipeline=None, score_thr = self.selected_threshold.get()))
+        o3d_vis_id = self.after(0, self.ObjectDetector.dataset.show_mod, self.outputs, self.data_idx, "points/", False, True, None, 0.5)
+        #self.after_cancel(o3d_vis_id)
+        debug=0
 
     def show_video(self):
         if self.canvas and not self.video_gen_bool or not self.canvas:
