@@ -24,8 +24,8 @@ def compute_rollout_attention(all_layer_matrices, start_layer=0):
     num_tokens = all_layer_matrices[0].shape[1]
     eye = torch.eye(num_tokens).to(all_layer_matrices[0].device)
     all_layer_matrices = [all_layer_matrices[i] + eye for i in range(len(all_layer_matrices))]
-    all_layer_matrices = [all_layer_matrices[i] / all_layer_matrices[i].sum(dim=-1, keepdim=True)
-                          for i in range(len(all_layer_matrices))]
+    # all_layer_matrices = [all_layer_matrices[i] / all_layer_matrices[i].sum(dim=-1, keepdim=True)
+    #                       for i in range(len(all_layer_matrices))]
     matrices_aug = all_layer_matrices
     joint_attention = matrices_aug[start_layer]
     for i in range(start_layer+1, len(matrices_aug)):
@@ -166,6 +166,7 @@ class ExplainableTransformer:
         else:
             self.R_q_q = compute_rollout_attention(self.dec_self_attn_weights)
             self.R_q_i = torch.matmul(self.R_q_q, cam_q_i)
+
 
     def generate_gradcam(self, layer, camidx, discard_ratio):
         ''' Generates Grad-CAM for XAI. '''      

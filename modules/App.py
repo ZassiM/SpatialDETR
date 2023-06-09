@@ -131,7 +131,7 @@ class App(BaseApp):
         if self.show_all_layers.get() or self.selected_camera.get() == -1:
             # Select the center of the grid to plot the attentions and add 2x2 subgrid
             layer_grid = self.spec[1, grid_column].subgridspec(2, 3)
-            fontsize = 6
+            fontsize = 7
         else:
             fontsize = 12
             
@@ -141,6 +141,11 @@ class App(BaseApp):
             else:
                 ax_attn = self.fig.add_subplot(self.spec[1, grid_column])
             
+            if self.single_bbox.get() and (self.show_all_layers.get() or self.selected_camera.get() != -1):
+                # Extract camera with highest attention
+                scores = self.update_scores()
+                cam_obj = scores.index(max(scores))
+                self.selected_camera.set(cam_obj)
             if self.show_all_layers.get():
                 attn = self.attn_list[i][self.selected_camera.get()]
             elif self.selected_camera.get() == -1:
@@ -166,8 +171,8 @@ class App(BaseApp):
 
             # Show attention camera contributon if all cameras are selected
             if self.attn_contr.get() and self.selected_camera.get() == -1:
-                score = self.update_scores(self.cam_idx[i])
-                title += f'| {score}%'
+                score = self.update_scores()[self.cam_idx[i]]
+                title += f' | {score}%'
                 ax_attn.axhline(y=0, color='black', linewidth=10)
                 ax_attn.axhline(y=0, color='green', linewidth=10, xmax=score/100)
 
@@ -189,10 +194,9 @@ class App(BaseApp):
         ref coordinate for each pixel. I can generate a point cloud for the attention maps in which I use xyz from the depth value for each
         pixel in each camera, and color it depending on the attention value
         '''
-        #self.outputs, index=self.data_idx, out_dir="points/", show_gt=False, show=True, pipeline=None, score_thr = self.selected_threshold.get()))
-        o3d_vis_id = self.after(0, self.ObjectDetector.dataset.show_mod, self.outputs, self.data_idx, "points/", False, True, None, 0.5)
+        self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, pipeline=None, score_thr=self.selected_threshold.get())
+        #self.after(0, self.ObjectDetector.dataset.show_mod, self.outputs, self.data_idx, "points/", self.GT_bool.get(), True, None, 0.5)
         #self.after_cancel(o3d_vis_id)
-        debug=0
 
     def show_video(self):
         if self.canvas and not self.video_gen_bool or not self.canvas:

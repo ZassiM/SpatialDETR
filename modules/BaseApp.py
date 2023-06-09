@@ -439,7 +439,7 @@ class BaseApp(tk.Tk):
                 if len(self.bboxes) > 0:
                     self.bboxes[0].set(True)
 
-    def update_scores(self, idx):
+    def update_scores(self):
         scores = []
         scores_perc = []
 
@@ -454,7 +454,7 @@ class BaseApp(tk.Tk):
             for i in range(len(scores)):
                 score_perc = round(((scores[i]/sum_scores)*100))
                 scores_perc.append(score_perc)
-            return scores_perc[idx]
+            return scores_perc
         else:
             return 0
 
