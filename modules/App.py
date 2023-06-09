@@ -68,7 +68,7 @@ class App(BaseApp):
             
             # Extract Ground Truth bboxes if wanted
             if self.GT_bool.get():
-                self.gt_bbox = self.ObjectDetector.dataloader.dataset.get_ann_info(self.data_idx)['gt_bboxes_3d']
+                self.gt_bbox = self.ObjectDetector.dataset.get_ann_info(self.data_idx)['gt_bboxes_3d']
                 img, _ = draw_lidar_bbox3d_on_img(
                         self.gt_bbox,
                         img,
@@ -181,8 +181,7 @@ class App(BaseApp):
                 break
 
     def show_lidar(self):
-        gt_bboxes = self.ObjectDetector.dataloader.dataset.get_ann_info(self.data_idx)['gt_bboxes_3d']
-        self.ObjectDetector.dataloader.dataset.show_mod(self.outputs, self.lidar_points[0]._data[0][0], gt_bboxes.tensor.numpy(), out_dir="points/", show=True, pipeline=None, score_thr = score_thr)
+        self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show=False, score_thr = self.selected_threshold.get())
 
     def show_video(self):
         if self.canvas and not self.video_gen_bool or not self.canvas:

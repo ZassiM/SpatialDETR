@@ -60,11 +60,12 @@ class Model():
         self.init_model(args)
         
         self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
-        self.dataloader_name = self.dataloader.dataset.metadata['version']
-        self.class_names = self.dataloader.dataset.CLASSES
+        self.dataloader_name = self.dataset.metadata['version']
+        self.class_names = self.dataset.CLASSES
         self.num_layers = self.cfg.model.pts_bbox_head.transformer.decoder.num_layers
         self.num_heads = self.cfg.model.pts_bbox_head.transformer.decoder.transformerlayers.attn_cfgs[0].num_heads
-        self.ori_shape = self.dataloader.dataset[0]["img_metas"][0]._data["ori_shape"]
+        self.ori_shape = self.dataset[0]["img_metas"][0]._data["ori_shape"]
+
 
         print("\nModel loaded.\n")
 
@@ -157,7 +158,7 @@ class Model():
             model.PALETTE = dataset.PALETTE
         
         self.model = MMDataParallel(model, device_ids=[self.gpu_id])
-        self.dataloader = data_loader
+        self.dataset = data_loader.dataset
         self.cfg = cfg
 
 

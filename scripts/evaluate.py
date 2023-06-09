@@ -67,12 +67,12 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False, save_img=False):
 
 def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save_img, eval_file, remove_pad):
     pred_threshold = 0.5
-    layer = Model.layers - 1
+    layer = Model.num_layers - 1
     head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule = \
         "max", 0.5, True, True, True
     class_names = Model.class_names
 
-    dataset = Model.dataloader.dataset
+    dataset = Model.dataset
     evaluation_lenght = len(dataset)
     outputs_pert = []
 
@@ -85,6 +85,9 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save_img
         img = [data['img'][0].data.unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
         data['img_metas'][0] = DC(metas, cpu_only=True)
         data['img'][0] = DC(img)
+    
+        if "points" in data.keys():
+            data.pop("points")
 
         # Attention scores are extracted, together with gradients if grad-CAM is selected
         output_og = ExplGen.extract_attentions(data)

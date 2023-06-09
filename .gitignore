@@ -141,6 +141,6 @@ screenshots_eval/
 training_logs/*
 model_info/*
 config.toml
-
+points/
 eval_results.txt
 eval_results/

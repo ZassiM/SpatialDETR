@@ -78,7 +78,7 @@ class BaseApp(tk.Tk):
         self.ExplainableModel = ExplainableTransformer(self.ObjectDetector)
 
         if not self.started_app:
-            print("Starting app...")
+            print("Starting app...\n")
             self.start_app()
             self.random_data_idx()
             self.started_app = True
@@ -253,8 +253,8 @@ class BaseApp(tk.Tk):
         self.add_separator("|")
         self.menubar.add_command(label="Visualize", command=self.visualize)
         self.add_separator("|")
-        self.menubar.add_command(label="Show LIDAR", command=self.show_lidar)
-        self.add_separator("|")
+        # self.menubar.add_command(label="Show LIDAR", command=self.show_lidar)
+        # self.add_separator("|")
         self.menubar.add_command(label="Show video", command=self.show_video)
 
     def show_car(self):
@@ -281,7 +281,7 @@ class BaseApp(tk.Tk):
         Predict bboxes and extracts attentions.
         '''
         # Load selected data from dataloader, manual DataContainer fixes are needed
-        data = self.ObjectDetector.dataloader.dataset[self.data_idx]
+        data = self.ObjectDetector.dataset[self.data_idx]
         metas = [[data['img_metas'][0].data]]
         img = [data['img'][0].data.unsqueeze(0)]
         data['img_metas'][0] = DC(metas, cpu_only=True)
@@ -289,7 +289,7 @@ class BaseApp(tk.Tk):
         self.data = data
 
         if "points" in self.data.keys():
-            self.lidar_points = self.data.pop("points")
+            self.data.pop("points")
 
         # Attention scores are extracted, together with gradients if grad-CAM is selected
         if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
@@ -304,6 +304,7 @@ class BaseApp(tk.Tk):
         self.outputs = outputs[0]["pts_bbox"]
         self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
 
+        # [cx, cy, cz, l, w, h, rot, vx, vy]
         self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
         self.pred_bboxes.tensor.detach()
         self.labels = self.outputs['labels_3d'][self.thr_idxs]
@@ -373,16 +374,16 @@ class BaseApp(tk.Tk):
     def close_entry(self, popup, type):
         idx = self.entry.get()
         if type == 0:
-            if idx.isnumeric() and int(idx) <= (len(self.ObjectDetector.dataloader)-1):
+            if idx.isnumeric() and int(idx) <= (len(self.ObjectDetector.dataset)-1):
                 self.data_idx = int(idx)
                 self.update_info_label()
             else:
-                self.show_message(f"Insert an integer between 0 and {len(self.ObjectDetector.dataloader)-1}")
+                self.show_message(f"Insert an integer between 0 and {len(self.ObjectDetector.dataset)-1}")
         elif type == 1:
-            if idx.isnumeric() and 2 <= int(idx) <= ((len(self.ObjectDetector.dataloader)-1) - self.data_idx):
+            if idx.isnumeric() and 2 <= int(idx) <= ((len(self.ObjectDetector.dataset)-1) - self.data_idx):
                 self.video_length = int(idx)
             else:
-                self.show_message(f"Insert an integer between 2 and {(len(self.ObjectDetector.dataloader)-1) - self.data_idx}") 
+                self.show_message(f"Insert an integer between 2 and {(len(self.ObjectDetector.dataset)-1) - self.data_idx}") 
         elif type == 2:
             max_frame_rate = 100
             if idx.isnumeric() and 0 <= int(idx) <= (max_frame_rate):
@@ -393,7 +394,7 @@ class BaseApp(tk.Tk):
         popup.destroy()
 
     def random_data_idx(self):
-        idx = random.randint(0, len(self.ObjectDetector.dataloader)-1)
+        idx = random.randint(0, len(self.ObjectDetector.dataset)-1)
         self.data_idx = idx
         self.update_info_label()
 

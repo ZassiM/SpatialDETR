@@ -6,7 +6,7 @@
 1. Clone the repository together with its submodules: 
 
 ```bash
-git clone --recurse-submodules git@gitlab.ika.rwth-aachen.de:ma-zahr/spatialdetr.git SpatialDETR
+git clone --recurse-submodules https://gitlab.ika.rwth-aachen.de/ma-zahr/xai.git 
 ```
 
 2. If you have already cloned the repository without the --recurse-submodules flag, initialize all submodules manually: 
