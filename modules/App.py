@@ -181,7 +181,7 @@ class App(BaseApp):
                 break
 
     def show_lidar(self):
-        self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show=False, score_thr = self.selected_threshold.get())
+        self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show_gt=False, show=True, score_thr = self.selected_threshold.get())
 
     def show_video(self):
         if self.canvas and not self.video_gen_bool or not self.canvas:

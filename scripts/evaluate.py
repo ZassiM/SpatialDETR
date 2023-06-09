@@ -16,9 +16,10 @@ import shutil
 def main():
     warnings.filterwarnings("ignore")
 
-    expl_types = ["Attention Rollout", "Grad-CAM", "Gradient Rollout"]
+    expl_types = ["Attention Rollout", "Grad-CAM", "Gradient Rollout", "RandExpl"]
     ObjectDetector = Model()
     ObjectDetector.load_from_config()
+    
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
 
     evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=False, save_img=False)
@@ -48,7 +49,7 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False, save_img=False):
         file.write(f"{info}\n")
 
     base_size = 29 * 50
-    pert_steps = [0, 0.25, 0.5, 0.8, 0.85, 0.9, 0.95, 1]
+    pert_steps = [0.25, 0.5, 0.75, 1]
 
     print(info)
     start_time = time.time()
@@ -56,6 +57,7 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False, save_img=False):
         num_tokens = int(base_size * pert_steps[step])
         print(f"\nNumber of tokens removed: {num_tokens} ({pert_steps[step] * 100} %)")
         evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, negative_pert=negative_pert, save_img=save_img, eval_file=file_path, remove_pad=False)
+        # delete
     end_time = time.time()
     total_time = end_time - start_time
     
@@ -67,7 +69,8 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False, save_img=False):
 
 def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save_img, eval_file, remove_pad):
     pred_threshold = 0.5
-    layer = Model.num_layers - 1
+    #layer = Model.num_layers - 1
+    layer = 0
     head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule = \
         "max", 0.5, True, True, True
     class_names = Model.class_names
@@ -226,6 +229,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, save_img
 
         del output_og
         del output_pert
+        del attn_list
         torch.cuda.empty_cache()
         prog_bar.update()
     

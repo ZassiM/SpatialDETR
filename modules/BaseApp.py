@@ -253,8 +253,8 @@ class BaseApp(tk.Tk):
         self.add_separator("|")
         self.menubar.add_command(label="Visualize", command=self.visualize)
         self.add_separator("|")
-        # self.menubar.add_command(label="Show LIDAR", command=self.show_lidar)
-        # self.add_separator("|")
+        self.menubar.add_command(label="Show LIDAR", command=self.show_lidar)
+        self.add_separator("|")
         self.menubar.add_command(label="Show video", command=self.show_video)
 
     def show_car(self):
@@ -398,7 +398,6 @@ class BaseApp(tk.Tk):
         self.data_idx = idx
         self.update_info_label()
 
-
     def update_info_label(self, info=None, idx=None):
         if idx is None:
             idx = self.data_idx
@@ -491,7 +490,6 @@ class BaseApp(tk.Tk):
 
         self.fig.set_facecolor(self.bg_color)
         self.canvas.draw()
-
 
     def save_video(self):
         if hasattr(self, "img_frames"):

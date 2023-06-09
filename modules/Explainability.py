@@ -222,6 +222,7 @@ class ExplainableTransformer:
             
         attention_maps = torch.stack([torch.stack(layer) for layer in attention_maps])
         attention_maps = attention_maps.permute(0, 2, 1, 3)  # num layers x num_objects x num_cams x 1450 # take only the selected objects
+        
         # normalize across cameras
         for layer in range(len(attention_maps)):
             for object in range(len(attention_maps[layer])):
