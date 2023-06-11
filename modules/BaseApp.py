@@ -184,11 +184,14 @@ class BaseApp(tk.Tk):
 
         # Gradient Rollout
         expl_opt.add_cascade(label=self.expl_options[2], menu=grad_rollout)
-        self.handle_residual, self.apply_rule = tk.BooleanVar(),tk.BooleanVar()
+        self.handle_residual, self.apply_rule, self.apply_rollout = tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.apply_rollout.set(True)
         self.handle_residual.set(True)
         self.apply_rule.set(True)
+        grad_rollout.add_checkbutton(label=" Apply rollout", variable=self.apply_rollout, onvalue=1, offvalue=0)
         grad_rollout.add_checkbutton(label=" Handle residual", variable=self.handle_residual, onvalue=1, offvalue=0)
         grad_rollout.add_checkbutton(label=" Apply rule 10", variable=self.apply_rule, onvalue=1, offvalue=0)
+
 
         expl_opt.add_separator()
 
@@ -219,13 +222,15 @@ class BaseApp(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.BB_bool, self.points_bool, self.attn_contr, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d = \
-            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.show_attn, self.GT_bool, self.BB_bool, self.points_bool, self.attn_contr, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.show_attn.set(True)
         self.BB_bool.set(True)
         self.show_labels.set(True)
         self.overlay_bool.set(True)
         self.bbox_2d.set(True)
         self.attn_contr.set(True)
+        add_opt.add_checkbutton(label=" Show attention maps", onvalue=1, offvalue=0, variable=self.show_attn)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
         add_opt.add_checkbutton(label=" Show attention camera contributions", onvalue=1, offvalue=0, variable=self.attn_contr)

@@ -46,11 +46,13 @@ class App(BaseApp):
             for i in range(len(self.expl_options)):
                 self.selected_expl_type.set(self.expl_options[i])
                 self.update_explainability()
-                self.show_attention_maps(grid_column=i)      
+                if self.show_attn.get():
+                    self.show_attention_maps(grid_column=i)      
 
         else:
             self.update_explainability()
-            self.show_attention_maps()
+            if self.show_attn.get():
+                self.show_attention_maps()
 
         # Generate images list with bboxes on it
         print("Generating camera images...")
@@ -95,7 +97,7 @@ class App(BaseApp):
                 ax = self.fig.add_subplot(self.spec[0, i])
             else:
                 ax = self.fig.add_subplot(self.spec[2, i-3])
-            
+                
             ax.imshow(self.cam_imgs[self.cam_idx[i]])
             ax.axis('off')
 
@@ -119,8 +121,7 @@ class App(BaseApp):
 
         if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
             self.update_data(initialize_bboxes=False)
-                
-        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.handle_residual.get(), self.apply_rule.get()]   
+        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.apply_rollout.get(), self.handle_residual.get(), self.apply_rule.get()]   
         self.attn_list = self.expl_configs.attn_list
 
     def show_attention_maps(self, grid_column=1):
@@ -169,8 +170,8 @@ class App(BaseApp):
             if self.selected_expl_type.get() == "Attention Rollout":
                 title += f' | head {self.selected_head_fusion.get()}'
 
-            # Show attention camera contributon if all cameras are selected
-            if self.attn_contr.get() and self.selected_camera.get() == -1:
+            # Show attention camera contributon if all cameras are selected and one object is selected
+            if self.attn_contr.get() and self.selected_camera.get() == -1 and self.single_bbox.get():
                 score = self.update_scores()[self.cam_idx[i]]
                 title += f' | {score}%'
                 ax_attn.axhline(y=0, color='black', linewidth=10)
@@ -194,8 +195,8 @@ class App(BaseApp):
         ref coordinate for each pixel. I can generate a point cloud for the attention maps in which I use xyz from the depth value for each
         pixel in each camera, and color it depending on the attention value
         '''
-        self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, pipeline=None, score_thr=self.selected_threshold.get())
-        #self.after(0, self.ObjectDetector.dataset.show_mod, self.outputs, self.data_idx, "points/", self.GT_bool.get(), True, None, 0.5)
+        #self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, pipeline=None, score_thr=self.selected_threshold.get())
+        self.after(100, self.ObjectDetector.dataset.show_mod, self.outputs, self.data_idx, "points/", self.GT_bool.get(), True, None, 0.5)
         #self.after_cancel(o3d_vis_id)
 
     def show_video(self):
