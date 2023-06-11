@@ -42,23 +42,39 @@ class App(BaseApp):
         # Extract the selected bounding box indexes from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
         
+        self.attn_list = []
         if self.selected_expl_type.get() == "All":
             for i in range(len(self.expl_options)):
                 self.selected_expl_type.set(self.expl_options[i])
-                self.update_explainability()
-                if self.show_attn.get():
-                    self.show_attention_maps(grid_column=i)      
-
+                attn_expl = self.update_explainability()
+                self.attn_list.append(attn_expl)
+            self.selected_expl_type.set("All") 
         else:
-            self.update_explainability()
-            if self.show_attn.get():
-                self.show_attention_maps()
+            attn_expl = self.update_explainability()
+            self.attn_list.append(attn_expl)
+
+        if self.show_attn.get():
+            self.show_attention_maps()
 
         # Generate images list with bboxes on it
         print("Generating camera images...")
-        self.cam_imgs = []
+        self.cam_imgs, self.bbox_coords, self.att_nobbx_all = [], [], []
         for camidx in range(len(self.imgs)):
-            img, _ = draw_lidar_bbox3d_on_img(
+            
+            if not self.show_attn.get():
+                og_img = self.imgs[camidx].astype(np.uint8)
+                att_nobbx_expl = []
+                for expl in range(len(self.attn_list)):
+                    att_nobbx_layers = []
+                    for layer in range(len(self.attn_list[expl])):
+                        attn = self.attn_list[expl][layer][camidx]
+                        attn_img = overlay_attention_on_image(og_img, attn)      
+                        attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
+                        att_nobbx_layers.append(attn_img)
+                    att_nobbx_expl.append(att_nobbx_layers)
+                self.att_nobbx_all.append(att_nobbx_expl)              
+
+            img, bbox_coords = draw_lidar_bbox3d_on_img(
                     self.pred_bboxes,
                     self.imgs[camidx],
                     self.img_metas['lidar2img'][camidx],
@@ -67,7 +83,10 @@ class App(BaseApp):
                     all_bbx=self.BB_bool.get(),
                     bbx_idx=self.bbox_idx,
                     mode_2d=self.bbox_2d.get())
-            
+
+            if not self.show_attn.get():
+                self.bbox_coords.append(bbox_coords)
+
             # Extract Ground Truth bboxes if wanted
             if self.GT_bool.get():
                 self.gt_bbox = self.ObjectDetector.dataset.get_ann_info(self.data_idx)['gt_bboxes_3d']
@@ -80,11 +99,11 @@ class App(BaseApp):
                 
             if self.overlay_bool.get() and ((self.selected_camera.get() != -1 and camidx == self.selected_camera.get()) or (self.selected_camera.get() == -1)):
                 if self.show_all_layers.get():
-                    attn = self.attn_list[self.selected_layer.get()][self.selected_camera.get()]
+                    attn = self.attn_list[-1][self.selected_layer.get()][self.selected_camera.get()]
                 elif self.selected_camera.get() == -1:
-                    attn = self.attn_list[self.selected_layer.get()][camidx]
+                    attn = self.attn_list[-1][self.selected_layer.get()][camidx]
                 else:
-                    attn = self.attn_list[self.selected_layer.get()][self.selected_camera.get()]
+                    attn = self.attn_list[-1][self.selected_layer.get()][self.selected_camera.get()]
 
                 img = overlay_attention_on_image(img, attn)            
 
@@ -97,9 +116,17 @@ class App(BaseApp):
                 ax = self.fig.add_subplot(self.spec[0, i])
             else:
                 ax = self.fig.add_subplot(self.spec[2, i-3])
-                
+
             ax.imshow(self.cam_imgs[self.cam_idx[i]])
+            if not self.show_attn.get() and self.single_bbox.get():
+                score = self.update_scores()[self.cam_idx[i]]
+                ax.axhline(y=0, color='black', linewidth=10)
+                ax.axhline(y=0, color='green', linewidth=10, xmax=score/100)
             ax.axis('off')
+        
+        if not self.show_attn.get() and self.single_bbox.get():
+            self.att_nobbx_all = [[sublst[i] for sublst in self.att_nobbx_all] for i in range(len(self.att_nobbx_all[0]))]
+            self.show_obj_attn()
 
         self.fig.tight_layout(pad=0)
         self.canvas.draw()
@@ -112,6 +139,44 @@ class App(BaseApp):
         torch.cuda.empty_cache()
         print("Done.\n")
 
+    def show_obj_attn(self):
+        scores = self.update_scores()
+        cam_obj = scores.index(max(scores))
+        bbox_coords = self.bbox_coords[cam_obj]
+
+        for b in bbox_coords:
+            if self.bbox_idx[0] == b[0]:
+                bbox_coord = b[1]
+                break
+
+        if self.selected_expl_type.get() != "All":
+            grid_column = 1
+
+        for i in range(len(self.att_nobbx_all)):
+            if self.selected_expl_type.get() == "All":
+                grid_column = i
+            attn_expl = self.att_nobbx_all[i]
+
+            if self.show_all_layers.get():
+                layer_grid = self.spec[1, grid_column].subgridspec(2, 3)
+                for i in range(len(attn_expl)):
+                    ax_obj_layer = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
+
+                    att_nobbx_obj = attn_expl[cam_obj][i]
+                    att_nobbx_obj = attn_expl[bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
+                    ax_obj_layer.imshow(att_nobbx_obj, vmin=0, vmax=1)   
+                    ax_obj_layer.set_title(f"layer {i}")
+                    ax_obj_layer.axis('off')
+
+            else:
+                att_nobbx_obj = attn_expl[cam_obj][self.selected_layer.get()]
+                att_nobbx_obj = att_nobbx_obj[bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
+                ax_obj = self.fig.add_subplot(self.spec[1, grid_column])
+                ax_obj.imshow(att_nobbx_obj, vmin=0, vmax=1)   
+                ax_obj.set_title(f"layer {self.selected_layer.get()}")
+                ax_obj.axis('off')
+
+
     def update_explainability(self):
         # Avoid selecting all layers and all cameras. Only the last layer will be visualized
         if (self.show_all_layers.get() and self.selected_camera.get() == -1) or self.selected_expl_type.get() == "Gradient Rollout":
@@ -122,71 +187,79 @@ class App(BaseApp):
         if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
             self.update_data(initialize_bboxes=False)
         self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.apply_rollout.get(), self.handle_residual.get(), self.apply_rule.get()]   
-        self.attn_list = self.expl_configs.attn_list
+        return self.expl_configs.attn_list
 
-    def show_attention_maps(self, grid_column=1):
+    def show_attention_maps(self):
         '''
         Shows the attention map for explainability.
         '''
-        # If we want to visualize all layers or all cameras:
-        if self.show_all_layers.get() or self.selected_camera.get() == -1:
-            # Select the center of the grid to plot the attentions and add 2x2 subgrid
-            layer_grid = self.spec[1, grid_column].subgridspec(2, 3)
-            fontsize = 7
-        else:
-            fontsize = 12
+        if self.selected_expl_type.get() != "All":
+            grid_column = 1
+
+        for i in range(len(self.attn_list)):
+            if self.selected_expl_type.get() == "All":
+                grid_column = i
+            attn_expl = self.attn_list[i]
             
-        for i in range(len(self.attn_list[0])):
+            # If we want to visualize all layers or all cameras:
             if self.show_all_layers.get() or self.selected_camera.get() == -1:
-                ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
+                # Select the center of the grid to plot the attentions and add 2x2 subgrid
+                layer_grid = self.spec[1, grid_column].subgridspec(2, 3)
+                fontsize = 7
             else:
-                ax_attn = self.fig.add_subplot(self.spec[1, grid_column])
-            
-            if self.single_bbox.get() and (self.show_all_layers.get() or self.selected_camera.get() != -1):
-                # Extract camera with highest attention
-                scores = self.update_scores()
-                cam_obj = scores.index(max(scores))
-                self.selected_camera.set(cam_obj)
-            if self.show_all_layers.get():
-                attn = self.attn_list[i][self.selected_camera.get()]
-            elif self.selected_camera.get() == -1:
-                attn = self.attn_list[self.selected_layer.get()][self.cam_idx[i]]
-            else:
-                attn = self.attn_list[self.selected_layer.get()][self.selected_camera.get()]
+                fontsize = 12
+                
+            for i in range(len(attn_expl[0])):
+                if self.show_all_layers.get() or self.selected_camera.get() == -1:
+                    ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
+                else:
+                    ax_attn = self.fig.add_subplot(self.spec[1, grid_column])
+                
+                if self.single_bbox.get() and (self.show_all_layers.get() or self.selected_camera.get() != -1):
+                    # Extract camera with highest attention
+                    scores = self.update_scores()
+                    cam_obj = scores.index(max(scores))
+                    self.selected_camera.set(cam_obj)
+                if self.show_all_layers.get():
+                    attn = attn_expl[i][self.selected_camera.get()]
+                elif self.selected_camera.get() == -1:
+                    attn = attn_expl[self.selected_layer.get()][self.cam_idx[i]]
+                else:
+                    attn = attn_expl[self.selected_layer.get()][self.selected_camera.get()]
 
-            ax_attn.imshow(attn, vmin=0, vmax=1)      
+                ax_attn.imshow(attn, vmin=0, vmax=1)      
 
-            # Set title accordinly
-            if self.show_all_layers.get() or self.selected_camera.get() != -1:
-                title = f'{list(self.cameras.keys())[self.selected_camera.get()]}'
-                if self.selected_expl_type.get() != "Gradient Rollout":
-                    title += f' | layer {i} '
-            else:
-                title = f'{list(self.cameras.keys())[self.cam_idx[i]]}'
-                if self.selected_expl_type.get() != "Gradient Rollout":
-                    title += f' | layer {self.selected_layer.get()}'
+                # Set title accordinly
+                if self.show_all_layers.get() or self.selected_camera.get() != -1:
+                    title = f'{list(self.cameras.keys())[self.selected_camera.get()]}'
+                    if self.selected_expl_type.get() != "Gradient Rollout":
+                        title += f' | layer {i} '
+                else:
+                    title = f'{list(self.cameras.keys())[self.cam_idx[i]]}'
+                    if self.selected_expl_type.get() != "Gradient Rollout":
+                        title += f' | layer {self.selected_layer.get()}'
 
-            # If doing Attention Rollout, visualize head fusion type
-            if self.selected_expl_type.get() == "Attention Rollout":
-                title += f' | head {self.selected_head_fusion.get()}'
+                # If doing Attention Rollout, visualize head fusion type
+                if self.selected_expl_type.get() == "Attention Rollout":
+                    title += f' | head {self.selected_head_fusion.get()}'
 
-            # Show attention camera contributon if all cameras are selected and one object is selected
-            if self.attn_contr.get() and self.selected_camera.get() == -1 and self.single_bbox.get():
-                score = self.update_scores()[self.cam_idx[i]]
-                title += f' | {score}%'
-                ax_attn.axhline(y=0, color='black', linewidth=10)
-                ax_attn.axhline(y=0, color='green', linewidth=10, xmax=score/100)
+                # Show attention camera contributon if all cameras are selected and one object is selected
+                if self.selected_camera.get() == -1 and self.single_bbox.get():
+                    score = self.update_scores()[self.cam_idx[i]]
+                    title += f' | {score}%'
+                    ax_attn.axhline(y=0, color='black', linewidth=10)
+                    ax_attn.axhline(y=0, color='green', linewidth=10, xmax=score/100)
 
-            if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
-                title_color = "white"
-            else:
-                title_color = "black"
-            ax_attn.set_title(title, fontsize=fontsize, color=title_color, pad=0)
-            ax_attn.axis('off')   
-            self.fig.tight_layout()
-   
-            if not self.show_all_layers.get() and self.selected_camera.get() != -1:
-                break
+                if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
+                    title_color = "white"
+                else:
+                    title_color = "black"
+                ax_attn.set_title(title, fontsize=fontsize, color=title_color, pad=0)
+                ax_attn.axis('off')   
+                self.fig.tight_layout()
+    
+                if not self.show_all_layers.get() and self.selected_camera.get() != -1:
+                    break
 
     def show_lidar(self):
         # self.attn_list[layer] = 6x900x1600

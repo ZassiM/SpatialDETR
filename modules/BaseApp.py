@@ -148,7 +148,7 @@ class BaseApp(tk.Tk):
         self.show_all_layers = tk.BooleanVar()
         for i in range(self.ObjectDetector.num_layers):
             layer_opt.add_radiobutton(label=i, variable=self.selected_layer)
-        layer_opt.add_checkbutton(label="All", onvalue=1, offvalue=0, variable=self.show_all_layers)
+        layer_opt.add_checkbutton(label="All", onvalue=1, offvalue=0, variable=self.show_all_layers, command=self.check_layers)
         self.selected_layer.set(self.ExplainableModel.num_layers - 1)
 
         # Cascade menus for Explainable options
@@ -222,18 +222,16 @@ class BaseApp(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.show_attn, self.GT_bool, self.BB_bool, self.points_bool, self.attn_contr, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d = \
-            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.show_attn, self.GT_bool, self.BB_bool, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.show_attn.set(True)
         self.BB_bool.set(True)
         self.show_labels.set(True)
         self.overlay_bool.set(True)
         self.bbox_2d.set(True)
-        self.attn_contr.set(True)
-        add_opt.add_checkbutton(label=" Show attention maps", onvalue=1, offvalue=0, variable=self.show_attn)
+        add_opt.add_checkbutton(label=" Show attention maps", onvalue=1, offvalue=0, variable=self.show_attn, command=self.disable_attn)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
-        add_opt.add_checkbutton(label=" Show attention camera contributions", onvalue=1, offvalue=0, variable=self.attn_contr)
         add_opt.add_checkbutton(label=" Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay_bool)
         add_opt.add_checkbutton(label=" Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
         add_opt.add_checkbutton(label=" Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
@@ -259,8 +257,8 @@ class BaseApp(tk.Tk):
         self.menubar.add_command(label="Visualize", command=self.visualize)
         self.add_separator("|")
         self.menubar.add_command(label="Show LIDAR", command=self.show_lidar)
-        self.add_separator("|")
-        self.menubar.add_command(label="Show video", command=self.show_video)
+        # self.add_separator("|")
+        # self.menubar.add_command(label="Show video", command=self.show_video)
 
     def show_car(self):
         img = plt.imread("misc/car.png")
@@ -427,7 +425,9 @@ class BaseApp(tk.Tk):
 
     def single_bbox_select(self, idx=None, single_select=False):
         self.select_all_bboxes.set(False)
-        if self.single_bbox.get() or single_select:
+        if single_select:
+            self.single_bbox.set(True)
+        if self.single_bbox.get():
             if idx is None:
                 idx = 0
             for i in range(len(self.bboxes)):
@@ -444,12 +444,22 @@ class BaseApp(tk.Tk):
                 if len(self.bboxes) > 0:
                     self.bboxes[0].set(True)
 
+    def check_layers(self):
+        if self.selected_camera.get() == -1 or not self.show_attn.get():
+            scores = self.update_scores()
+            self.selected_camera.set(scores.index(max(scores)))
+    
+    def disable_attn(self):
+        if not self.show_attn.get():
+            self.overlay_bool.set(False)
+            self.single_bbox_select(single_select=True)
+
     def update_scores(self):
         scores = []
         scores_perc = []
 
-        for camidx in range(len(self.attn_list[self.selected_layer.get()])):
-            attn = self.attn_list[self.selected_layer.get()][camidx]
+        for camidx in range(len(self.attn_list[-1][self.selected_layer.get()])):
+            attn = self.attn_list[-1][self.selected_layer.get()][camidx]
             attn = attn.clamp(min=0)
             score = round(attn.sum().item(), 2)
             scores.append(score)
