@@ -43,7 +43,7 @@ class BaseApp(tk.Tk):
         self.ObjectDetector = Model()
 
         self.started_app = False
-        self.video_length = 5
+        self.video_length = 15
         self.video_gen_bool = False
         self.frame_rate = 1
         
@@ -58,6 +58,7 @@ class BaseApp(tk.Tk):
         file_opt.add_command(label=" Load model", command=self.load_model)
         file_opt.add_command(label=" Load model from config file", command=lambda: self.load_model(from_config=True))
         file_opt.add_command(label=" Load video from pickle file", command=self.load_video)
+        file_opt.add_command(label=" Save video", command=self.save_video)
         file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
         file_opt.add_separator()
         file_opt.add_command(label=" Show car setup", command=self.show_car)
@@ -115,14 +116,9 @@ class BaseApp(tk.Tk):
         dataidx_opt.add_command(label=" Select random data", command=self.random_data_idx)
         dataidx_opt.add_separator()
 
-        self.video_only = tk.BooleanVar()
-        self.video_only.set(False)
         dataidx_opt.add_command(label=" Select video length", command=lambda: self.select_data_idx(type=1))
         dataidx_opt.add_command(label=" Select frame rate", command=lambda: self.select_data_idx(type=2))
         dataidx_opt.add_command(label=" Generate video", command=self.generate_video)
-        dataidx_opt.add_command(label=" Save video", command=self.save_video)
-        dataidx_opt.add_checkbutton(label=" Video only", onvalue=1, offvalue=0, variable=self.video_only)
-
 
         # Cascade menus for Prediction threshold
         thr_opt = tk.Menu(self.menubar)
@@ -203,7 +199,6 @@ class BaseApp(tk.Tk):
         self.old_expl_type = self.expl_options[0]
         for i in range(len(self.expl_options)):
             expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i], command=self.update_info_label)
-        expl_type_opt.add_radiobutton(label="All", variable=self.selected_expl_type, value="All", command=self.update_info_label)
 
         # Discard ratio for attention weights
         dr_opt = tk.Menu(self.menubar)
@@ -257,8 +252,8 @@ class BaseApp(tk.Tk):
         self.menubar.add_command(label="Visualize", command=self.visualize)
         self.add_separator("|")
         self.menubar.add_command(label="Show LIDAR", command=self.show_lidar)
-        # self.add_separator("|")
-        # self.menubar.add_command(label="Show video", command=self.show_video)
+        self.add_separator("|")
+        self.menubar.add_command(label="Show video", command=self.show_video)
 
     def show_car(self):
         img = plt.imread("misc/car.png")
@@ -329,9 +324,10 @@ class BaseApp(tk.Tk):
             imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
         self.imgs = imgs.astype(np.uint8)
 
-        if initialize_bboxes:
+        if initialize_bboxes and not self.video_gen_bool:
             self.update_objects_list()
             self.initialize_bboxes()
+
 
     def add_separator(self, sep="|"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
@@ -381,12 +377,12 @@ class BaseApp(tk.Tk):
                 self.data_idx = int(idx)
                 self.update_info_label()
             else:
-                self.show_message(f"Insert an integer between 0 and {len(self.ObjectDetector.dataset)-1}")
+                self.show_message(f"Insert an integer between 0 and {len(self.ObjectDetector.dataset)}")
         elif type == 1:
             if idx.isnumeric() and 2 <= int(idx) <= ((len(self.ObjectDetector.dataset)-1) - self.data_idx):
                 self.video_length = int(idx)
             else:
-                self.show_message(f"Insert an integer between 2 and {(len(self.ObjectDetector.dataset)-1) - self.data_idx}") 
+                self.show_message(f"Insert an integer between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
         elif type == 2:
             max_frame_rate = 100
             if idx.isnumeric() and 0 <= int(idx) <= (max_frame_rate):
@@ -444,22 +440,29 @@ class BaseApp(tk.Tk):
                 if len(self.bboxes) > 0:
                     self.bboxes[0].set(True)
 
+
+    def get_camera_object(self):
+        scores = self.update_scores()
+        cam_obj = scores.index(max(scores))
+        return cam_obj
+
     def check_layers(self):
         if self.selected_camera.get() == -1 or not self.show_attn.get():
-            scores = self.update_scores()
-            self.selected_camera.set(scores.index(max(scores)))
+            cam_obj = self.get_camera_object()
+            self.selected_camera.set(cam_obj)
     
     def disable_attn(self):
         if not self.show_attn.get():
             self.overlay_bool.set(False)
             self.single_bbox_select(single_select=True)
+            self.show_all_layers.set(True)
 
     def update_scores(self):
         scores = []
         scores_perc = []
 
-        for camidx in range(len(self.attn_list[-1][self.selected_layer.get()])):
-            attn = self.attn_list[-1][self.selected_layer.get()][camidx]
+        for camidx in range(len(self.ExplainableModel.attn_list[self.selected_layer.get()])):
+            attn = self.ExplainableModel.attn_list[self.selected_layer.get()][camidx]
             attn = attn.clamp(min=0)
             score = round(attn.sum().item(), 2)
             scores.append(score)
@@ -508,7 +511,7 @@ class BaseApp(tk.Tk):
 
     def save_video(self):
         if hasattr(self, "img_frames"):
-            data = {'img_frames': self.img_frames, 'img_frames_attention_nobbx': self.img_frames_attention_nobbx, 'og_imgs_frames': self.og_imgs_frames, 'bbox_cameras': self.bbox_cameras, 'bbox_labels': self.bbox_labels}
+            data = {'img_frames': self.img_frames, "video_idx": self.start_video_idx}
 
             file_path = fd.asksaveasfilename(defaultextension=".pkl", filetypes=[("All Files", "*.*")])
 
@@ -516,7 +519,7 @@ class BaseApp(tk.Tk):
             with open(file_path, 'wb') as f:
                 pickle.dump(data, f)
             
-            print(f"Video saved in {file_path}")
+            print(f"Video saved.")
         else:
             self.show_message("You should first generate a video.")
 
@@ -534,9 +537,6 @@ class BaseApp(tk.Tk):
             data = pickle.load(f)
 
         self.img_frames = data["img_frames"]
-        self.img_frames_attention_nobbx = data["img_frames_attention_nobbx"]
-        self.og_imgs_frames = data["og_imgs_frames"]
-        self.bbox_cameras = data["bbox_cameras"]
-        self.bbox_labels = data["bbox_labels"]
+        self.start_video_idx = data["video_idx"]
 
         print(f"Video loaded from {video_pickle}.\n")

@@ -238,7 +238,8 @@ class ExplainableTransformer:
             attention_maps = attention_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
             discard_attn(attention_maps, discard_ratio)
             attention_maps = self.interpolate_expl(attention_maps, remove_pad)
-        return attention_maps
+
+        self.attn_list = attention_maps
 
     def interpolate_expl(self, attention_maps, remove_pad):
         attention_maps_inter = []

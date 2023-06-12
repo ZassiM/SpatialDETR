@@ -141,7 +141,7 @@ screenshots_eval/
 training_logs/*
 config.toml
 points/
-eval_results.txt
+video_gen/
 eval_results/
 backups/*
 eval_denormvsmean.txt
