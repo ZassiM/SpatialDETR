@@ -118,6 +118,7 @@ class ExplainableTransformer:
         if target_index is None:
             with torch.no_grad():
                 outputs = self.model(return_loss=False, rescale=True, **data)
+                torch.cuda.empty_cache()
 
         else:
             for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
@@ -223,7 +224,6 @@ class ExplainableTransformer:
                 attention_maps.append(att_maps_cameras)
 
         # num_layers x num_cams x num_objects x 1450
-            
         attention_maps = torch.stack([torch.stack(layer) for layer in attention_maps])
         attention_maps = attention_maps.permute(0, 2, 1, 3)  # num layers x num_objects x num_cams x 1450 # take only the selected objects
         

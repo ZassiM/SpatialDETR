@@ -7,6 +7,7 @@ import mmcv
 import warnings
 import time
 import os
+import gc
 
 
 def main():
@@ -44,7 +45,7 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False):
         file.write(f"{info}\n")
 
     base_size = 29 * 50
-    pert_steps = [0.25, 0.5, 0.75, 1]
+    pert_steps = [0, 0.25, 0.5, 0.75, 1]
 
     print(info)
     start_time = time.time()
@@ -52,7 +53,8 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False):
         num_tokens = int(base_size * pert_steps[step])
         print(f"\nNumber of tokens removed: {num_tokens} ({pert_steps[step] * 100} %)")
         evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, negative_pert=negative_pert, eval_file=file_path, remove_pad=False)
-        # delete
+        gc.collect()
+        torch.cuda.empty_cache()
     end_time = time.time()
     total_time = end_time - start_time
     
@@ -62,7 +64,7 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False):
         file.write("--------------------------\n")
         file.write(f"Elapsed time: {total_time}\n")
 
-def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, eval_file, remove_pad):
+def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, negative_pert=False, remove_pad=False):
     pred_threshold = 0.5
     #layer = Model.num_layers - 1
     layer = 0
@@ -90,16 +92,18 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, eval_fil
 
         # Extract predicted bboxes and their labels
         outputs = output_og[0]["pts_bbox"]
+        del output_og
+        torch.cuda.empty_cache()
         thr_idxs = outputs['scores_3d'] > pred_threshold
-        nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes()
+        nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes().cpu()
         labels = outputs['labels_3d'][thr_idxs]
         
         bbox_idx = list(range(len(labels)))
         if expl_type in ["Grad-CAM", "Gradient Rollout"]:
             ExplGen.extract_attentions(data, bbox_idx)
 
-        attn_list = ExplGen.generate_explainability(expl_type, bbox_idx, nms_idxs, head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule, remove_pad)
-        attn_list = attn_list[layer]
+        ExplGen.generate_explainability(expl_type, bbox_idx, nms_idxs, head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule, remove_pad)
+        attn_list = ExplGen.attn_list[layer]
 
         # Perturbate the input image with the XAI maps
         img = img[0][0]
@@ -108,16 +112,11 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, eval_fil
 
         img_norm_cfg = Model.cfg.get('img_norm_cfg')
         mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
-        std = np.array(img_norm_cfg["std"], dtype=np.float32)
-        mask = torch.Tensor([0,0,0])
-        #mask = torch.Tensor(mean)
+        mask = torch.Tensor(-mean)
 
         img_pert_list = []  # list of perturbed images
         for cam in range(len(attn_list)):
             img_og = img[cam].permute(1, 2, 0).numpy()
-
-            # Denormalize the images
-            img_og = mmcv.imdenormalize(img_og, mean, std)
 
             # Get the attention for the camera and negate it if doing negative perturbation
             attn = attn_list[cam]
@@ -134,8 +133,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, eval_fil
             # # Image perturbation by setting pixels to t (0,0,0)
             img_pert[cols, rows] = mask
 
-            # Normalize the perturbed images and append to the list
-            img_pert = mmcv.imnormalize(img_pert, mean, std)
+            # Append the perturbed images to the list
             img_pert_list.append(img_pert)
         
         # save_img the perturbed 6 camera images into the data input
@@ -150,9 +148,10 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, eval_fil
 
         outputs_pert.extend(output_pert)
 
-        del output_og
+        #del output_og
         del output_pert
         del attn_list
+        gc.collect()
         torch.cuda.empty_cache()
         prog_bar.update()
     
@@ -176,8 +175,8 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, negative_pert, eval_fil
         file.write("--------------------------\n")
     
     print(f"File {eval_file} updated.\n")
+    gc.collect()
     del outputs_pert
-    torch.cuda.empty_cache()
     
 
 if __name__ == '__main__':

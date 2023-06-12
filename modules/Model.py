@@ -16,13 +16,14 @@ class Model():
         self.num_layers = 0
         self.use_mini_dataset = False
 
-    def load_from_config(self):
+    def load_from_config(self, gpu_id=None):
         with open("config.toml", mode="rb") as argsF:
             args = tomli.load(argsF)
             
         cfg_file = args["cfg_file"]
         weights_file = args["weights_file"]
-        gpu_id = args["gpu_id"]
+        if gpu_id is None:
+            gpu_id = args["gpu_id"]
 
         self.load_model(cfg_file, weights_file, gpu_id)
 

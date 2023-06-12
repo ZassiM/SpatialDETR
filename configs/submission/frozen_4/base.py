@@ -35,7 +35,7 @@ class_names = [
 ]
 
 input_modality = dict(
-    use_lidar=False, use_camera=True, use_radar=False, use_map=False, use_external=False
+    use_lidar=True, use_camera=True, use_radar=False, use_map=False, use_external=False
 )
 
 model_cls = "Detr3D"

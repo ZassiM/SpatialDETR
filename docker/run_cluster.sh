@@ -3,8 +3,8 @@
 DOCKER_NAME=spatial_detr_ma_zahr
 
 # path to directory where nusenes data is stored
-#nusc_data_dir="/work/data01/beemelmanns/nuscenes"
-nusc_data_dir="/work/data01/zahr/datasets/nuscenes"
+nusc_data_dir="/work/data01/beemelmanns/nuscenes"
+#nusc_data_dir="/work/data01/zahr/datasets/nuscenes"
 # path to directory where model weights are stored
 work_dirs="/work/data01/zahr/work_dirs"
 # path to this repository root
