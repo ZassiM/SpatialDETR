@@ -45,7 +45,7 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False):
         file.write(f"{info}\n")
 
     base_size = 29 * 50
-    pert_steps = [0, 0.25, 0.5, 0.75, 1]
+    pert_steps = [0.25, 0.5, 1]
 
     print(info)
     start_time = time.time()
@@ -73,6 +73,8 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, negative_per
     dataset = Model.dataset
     evaluation_lenght = len(dataset)
     outputs_pert = []
+
+    Model.model.eval()
 
     prog_bar = mmcv.ProgressBar(evaluation_lenght)
 
@@ -166,12 +168,22 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, negative_per
     eval_kwargs.update(dict(metric="bbox", **kwargs))
     eval_results = dataset.evaluate(outputs_pert, **eval_kwargs)
     mAP = eval_results['pts_bbox_NuScenes/mAP']
-    NDS = eval_results['pts_bbox_NuScenes/NDS']
+    mATE = eval_results['pts_bbox_NuScenes/mATE']
+    mASE = eval_results['pts_bbox_NuScenes/mASE']
+    mAOE = eval_results['pts_bbox_NuScenes/mAOE']
+    mAVE = eval_results['pts_bbox_NuScenes/mAVE']
+    mAAE = eval_results['pts_bbox_NuScenes/mAAE']
+    NDScore = eval_results['pts_bbox_NuScenes/NDS']
 
     with open(eval_file, "a") as file:
         file.write(f"Number of tokens: {num_tokens}\n")
         file.write(f"mAP: {mAP}\n")
-        file.write(f"NDS: {NDS}\n")
+        file.write(f"mATE: {mATE}\n")
+        file.write(f"mASE: {mASE}\n")
+        file.write(f"mAOE: {mAOE}\n")
+        file.write(f"mAVE: {mAVE}\n")
+        file.write(f"mAAE: {mAAE}\n")
+        file.write(f"NDS: {NDScore}\n")
         file.write("--------------------------\n")
     
     print(f"File {eval_file} updated.\n")

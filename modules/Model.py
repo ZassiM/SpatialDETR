@@ -6,8 +6,9 @@ import tomli
 from mmcv.runner import (load_checkpoint, wrap_fp16_model)
 from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_model
+from mmcv.runner import init_dist
 from mmdet.datasets import replace_ImageToTensor
-from mmcv.parallel import MMDataParallel
+from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 
 
 class Model():
@@ -22,12 +23,13 @@ class Model():
             
         cfg_file = args["cfg_file"]
         weights_file = args["weights_file"]
+        launcher = args["launcher"]
         if gpu_id is None:
             gpu_id = args["gpu_id"]
 
-        self.load_model(cfg_file, weights_file, gpu_id)
+        self.load_model(cfg_file, weights_file, gpu_id, launcher)
 
-    def load_model(self, cfg_file=None, weights_file=None, gpu_id=None):
+    def load_model(self, cfg_file=None, weights_file=None, gpu_id=None, launcher="single"):
         cfg_filetypes = (
             ('Config', '*.py'),
         )
@@ -58,6 +60,7 @@ class Model():
         args = {}
         args["config"] = cfg_file
         args["checkpoint"] = weights_file
+        args["launcher"] = launcher
         self.init_model(args)
         
         self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
@@ -124,12 +127,18 @@ class Model():
                 for ds_cfg in cfg.data.test:
                     ds_cfg.pipeline = replace_ImageToTensor(ds_cfg.pipeline)
 
+        if args["launcher"] == 'single':
+            distributed = False
+        else:
+            distributed = True
+            init_dist(args["launcher"], **cfg.dist_params)
+
         dataset = build_dataset(cfg.data.test)
         data_loader = build_dataloader(
             dataset,
             samples_per_gpu=samples_per_gpu,
             workers_per_gpu=cfg.data.workers_per_gpu,
-            dist=False,
+            dist=distributed,
             shuffle=False)
 
         # build the model and load checkpoint
@@ -154,7 +163,11 @@ class Model():
             # segmentation dataset has `PALETTE` attribute
             model.PALETTE = dataset.PALETTE
         
-        self.model = MMDataParallel(model, device_ids=[self.gpu_id])
+        if not distributed:
+            self.model = MMDataParallel(model, device_ids=[self.gpu_id])
+        else:
+            self.model = MMDistributedDataParallel(model.cuda(), device_ids=[torch.cuda.current_device()], broadcast_buffers=False)
+
         self.dataset = data_loader.dataset
         self.cfg = cfg
 

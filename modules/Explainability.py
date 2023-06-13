@@ -69,10 +69,10 @@ class ExplainableTransformer:
     Generates attention maps and different explainability features.
     '''
     def __init__(self, Model):
-        self.model = Model.model
+        self.Model = Model
         self.num_layers = Model.num_layers
         self.ori_shape = Model.ori_shape
-        self.model.eval()
+        self.Model.model.eval()
         self.height_feats, self.width_feats = None, None
             
     def handle_co_attn_self_query(self, layer):
@@ -99,7 +99,7 @@ class ExplainableTransformer:
         self.dec_cross_attn_weights, self.dec_cross_attn_grads, self.dec_self_attn_weights, self.dec_self_attn_grads = [], [], [], [] 
 
         hooks = []
-        for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
+        for layer in self.Model.model.module.pts_bbox_head.transformer.decoder.layers:
             hooks.append(
                 layer.attentions[0].attn.register_forward_hook(
                     lambda _, input, output: self.dec_self_attn_weights.append(output[1][0].cpu())
@@ -111,23 +111,22 @@ class ExplainableTransformer:
         
         if self.height_feats is None:
             conv_feats = []
-            self.model.module.img_backbone.register_forward_hook(
+            self.Model.model.module.img_backbone.register_forward_hook(
                 lambda _, input, output: conv_feats.append(output)
             )
 
         if target_index is None:
             with torch.no_grad():
-                outputs = self.model(return_loss=False, rescale=True, **data)
-                torch.cuda.empty_cache()
+                outputs = self.Model.model(return_loss=False, rescale=True, **data)
 
         else:
-            for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
+            for layer in self.Model.model.module.pts_bbox_head.transformer.decoder.layers:
                 hooks.append(
                     layer.attentions[0].attn.register_backward_hook(
                         lambda _, grad_input, grad_output: self.dec_self_attn_grads.append(grad_input[0].permute(1, 0, 2)[0].cpu())
                     ))
      
-            outputs = self.model(return_loss=False, rescale=True, **data)
+            outputs = self.Model.model(return_loss=False, rescale=True, **data)
 
             output_scores = outputs[0]["pts_bbox"]["scores_3d"]
             one_hot = torch.zeros_like(output_scores).to(output_scores.device)
@@ -135,10 +134,10 @@ class ExplainableTransformer:
             one_hot.requires_grad_(True)
             one_hot = torch.sum(one_hot * output_scores)
 
-            self.model.zero_grad()
-            one_hot.backward(retain_graph=True)
-
-            for layer in self.model.module.pts_bbox_head.transformer.decoder.layers:
+            self.Model.model.zero_grad()
+            #one_hot.backward(retain_graph=True)
+            one_hot.backward()
+            for layer in self.Model.model.module.pts_bbox_head.transformer.decoder.layers:
                 self.dec_cross_attn_grads.append(layer.attentions[1].attn.get_attn_gradients().cpu())
 
         if self.height_feats is None:
@@ -146,7 +145,8 @@ class ExplainableTransformer:
                                                                      
         for hook in hooks:
             hook.remove()
-        
+            
+        torch.cuda.empty_cache()
         return outputs
         
     def generate_rollout(self, layer, camidx, head_fusion="min", raw=True):  
