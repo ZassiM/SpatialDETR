@@ -18,7 +18,7 @@ class Model():
         self.use_mini_dataset = False
 
     def load_from_config(self, gpu_id=None):
-        with open("config.toml", mode="rb") as argsF:
+        with open("/workspace/config.toml", mode="rb") as argsF:
             args = tomli.load(argsF)
             
         cfg_file = args["cfg_file"]

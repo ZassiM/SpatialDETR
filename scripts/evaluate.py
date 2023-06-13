@@ -8,17 +8,19 @@ import warnings
 import time
 import os
 import gc
-
+ 
 
 def main():
     warnings.filterwarnings("ignore")
+    expl_types = ['Attention Rollout', 'Grad-CAM', 'Gradient Rollout', 'Random']
 
-    expl_types = ["Attention Rollout", "Grad-CAM", "Gradient Rollout", "RandExpl"]
+
     ObjectDetector = Model()
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
 
-    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=False)
+    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[2], negative_pert=False)
+
 
 def evaluate(Model, ExplGen, expl_type, negative_pert=False):
     txt_del = "*" * (38 + len(expl_type))
@@ -45,14 +47,15 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False):
         file.write(f"{info}\n")
 
     base_size = 29 * 50
-    pert_steps = [0.25, 0.5, 1]
+    pert_steps = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
 
     print(info)
     start_time = time.time()
     for step in range(len(pert_steps)):
         num_tokens = int(base_size * pert_steps[step])
-        print(f"\nNumber of tokens removed: {num_tokens} ({pert_steps[step] * 100} %)")
-        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, negative_pert=negative_pert, eval_file=file_path, remove_pad=False)
+        perc = pert_steps[step] * 100
+        print(f"\nNumber of tokens removed: {num_tokens} ({perc} %)")
+        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, perc=perc, negative_pert=negative_pert, eval_file=file_path, remove_pad=False)
         gc.collect()
         torch.cuda.empty_cache()
     end_time = time.time()
@@ -64,12 +67,12 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False):
         file.write("--------------------------\n")
         file.write(f"Elapsed time: {total_time}\n")
 
-def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, negative_pert=False, remove_pad=False):
+def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negative_pert=False, remove_pad=False):
     pred_threshold = 0.5
     #layer = Model.num_layers - 1
     layer = 0
     head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule = \
-        "max", 0.5, True, True, True
+        "max", 0.9, True, True, True
     dataset = Model.dataset
     evaluation_lenght = len(dataset)
     outputs_pert = []
@@ -176,7 +179,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, negative_per
     NDScore = eval_results['pts_bbox_NuScenes/NDS']
 
     with open(eval_file, "a") as file:
-        file.write(f"Number of tokens: {num_tokens}\n")
+        file.write(f"Number of tokens: {num_tokens} ({perc} %)\n")
         file.write(f"mAP: {mAP}\n")
         file.write(f"mATE: {mATE}\n")
         file.write(f"mASE: {mASE}\n")
