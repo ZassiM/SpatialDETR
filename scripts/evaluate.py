@@ -19,10 +19,10 @@ def main():
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
 
-    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[2], negative_pert=False)
+    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[2], negative_pert=False, pred_threshold=0.1)
 
 
-def evaluate(Model, ExplGen, expl_type, negative_pert=False):
+def evaluate(Model, ExplGen, expl_type, negative_pert=False, pred_threshold=0.1):
     txt_del = "*" * (38 + len(expl_type))
     info = txt_del
     if not negative_pert:
@@ -55,7 +55,7 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False):
         num_tokens = int(base_size * pert_steps[step])
         perc = pert_steps[step] * 100
         print(f"\nNumber of tokens removed: {num_tokens} ({perc} %)")
-        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, perc=perc, negative_pert=negative_pert, eval_file=file_path, remove_pad=False)
+        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, perc=perc, negative_pert=negative_pert, eval_file=file_path, remove_pad=False, pred_threshold=pred_threshold)
         gc.collect()
         torch.cuda.empty_cache()
     end_time = time.time()
@@ -67,12 +67,16 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False):
         file.write("--------------------------\n")
         file.write(f"Elapsed time: {total_time}\n")
 
-def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negative_pert=False, remove_pad=False):
-    pred_threshold = 0.5
-    #layer = Model.num_layers - 1
-    layer = 0
+def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negative_pert=False, pred_threshold=0.1, remove_pad=False):
+   
+    if expl_type == "Gradient Rollout":
+        layer = 0
+    else:
+        layer = Model.num_layers - 1
+
     head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule = \
         "max", 0.9, True, True, True
+    
     dataset = Model.dataset
     evaluation_lenght = len(dataset)
     outputs_pert = []
@@ -82,7 +86,6 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
     prog_bar = mmcv.ProgressBar(evaluation_lenght)
 
     for dataidx in range(evaluation_lenght):
-
         data = dataset[dataidx]
         metas = [[data['img_metas'][0].data]]
         img = [data['img'][0].data.unsqueeze(0)]  # img[0] = torch.Size([1, 6, 3, 928, 1600])
@@ -97,10 +100,8 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
 
         # Extract predicted bboxes and their labels
         outputs = output_og[0]["pts_bbox"]
-        del output_og
-        torch.cuda.empty_cache()
-        thr_idxs = outputs['scores_3d'] > pred_threshold
         nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes().cpu()
+        thr_idxs = outputs['scores_3d'] > pred_threshold
         labels = outputs['labels_3d'][thr_idxs]
         
         bbox_idx = list(range(len(labels)))
@@ -119,6 +120,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
         mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
         mask = torch.Tensor(-mean)
 
+        # defect data: 475
         img_pert_list = []  # list of perturbed images
         for cam in range(len(attn_list)):
             img_og = img[cam].permute(1, 2, 0).numpy()
@@ -132,6 +134,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
             _, indices = torch.topk(attn.flatten(), k=num_tokens)
             indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
             cols, rows = indices[:, 0], indices[:, 1]
+
             # Copy the normalized original images without bboxes
             img_pert = img_og.copy()
 
@@ -141,11 +144,12 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
             # Append the perturbed images to the list
             img_pert_list.append(img_pert)
         
-        # save_img the perturbed 6 camera images into the data input
-        img_pert_list = torch.from_numpy(np.stack(img_pert_list))
-        img = [img_pert_list.permute(0, 3, 1, 2).unsqueeze(0)] # img[0] = torch.Size([1, 6, 3, 928, 1600])
-        #img_compare = data['img'][0].data[0][0]
-        data['img'][0] = DC(img)
+        # if there are detected objects, apply the perturbated images to the data input
+        if len(img_pert_list) > 0:
+            # save_img the perturbed 6 camera images into the data input
+            img_pert_list = torch.from_numpy(np.stack(img_pert_list))
+            img = [img_pert_list.permute(0, 3, 1, 2).unsqueeze(0)] # img = [torch.Size([1, 6, 3, 928, 1600])
+            data['img'][0] = DC(img)
 
         # Apply perturbated images to the model
         with torch.no_grad():
