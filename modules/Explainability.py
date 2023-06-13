@@ -111,9 +111,10 @@ class ExplainableTransformer:
         
         if self.height_feats is None:
             conv_feats = []
+            hooks.append(
             self.Model.model.module.img_backbone.register_forward_hook(
                 lambda _, input, output: conv_feats.append(output)
-            )
+            ))
 
         if target_index is None:
             with torch.no_grad():
