@@ -14,7 +14,6 @@ def main():
     warnings.filterwarnings("ignore")
     expl_types = ['Attention Rollout', 'Grad-CAM', 'Gradient Rollout', 'Random']
 
-
     ObjectDetector = Model()
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
