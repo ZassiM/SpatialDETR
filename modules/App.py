@@ -280,7 +280,7 @@ class App(BaseApp):
             folder = "video_gen"
             if os.path.exists(folder):
                 shutil.rmtree(folder)
-                os.makedirs(folder)
+            os.makedirs(folder)
 
         self.select_all_bboxes.set(True)
         self.img_frames, self.img_labels = [], []
@@ -290,7 +290,7 @@ class App(BaseApp):
         prog_bar = mmcv.ProgressBar(self.video_length)
         for i in range(self.data_idx, self.data_idx + self.video_length):
             self.data_idx = i
-            imgs_att, labels = self.generate_video_frame(save_img=save_img)
+            imgs_att, labels = self.generate_video_frame(folder=folder, save_img=save_img)
             self.img_frames.append(imgs_att)  # Image frame of all 6 cameras with attention maps and bboxes overlayed
             self.img_labels.append(labels)
             prog_bar.update()
@@ -326,7 +326,7 @@ class App(BaseApp):
             self.paused = False
             self.show_sequence()
 
-    def generate_video_frame(self, save_img=True):
+    def generate_video_frame(self, folder, save_img=True):
 
         self.update_data(initialize_bboxes=False)
 
@@ -369,7 +369,6 @@ class App(BaseApp):
             img = (img_frame * 255).astype(np.uint8)
             img = Image.fromarray(img)
             file_name = f"{self.selected_expl_type.get()}_{self.data_idx}.jpeg"
-            folder = "video_gen"
             file_path = os.path.join(folder, file_name)
             img.save(file_path)
 

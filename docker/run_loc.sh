@@ -1,6 +1,6 @@
 #!/bin/bash
-
-DOCKER_NAME=spatial_detr
+IMAGE_NAME=xai_ma_zahr
+CONTAINER_NAME=xai
 
 # path to directory where nusenes data is stored
 nusc_data_dir="/home/zahr/Documents/datasets/nuscenes"
@@ -12,7 +12,7 @@ repo_dir=$PWD
 xhost +
 
 docker run \
---name $DOCKER_NAME \
+--name $CONTAINER_NAME \
 --rm \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
 --env DISPLAY=${DISPLAY} \
@@ -22,6 +22,6 @@ docker run \
 --mount source=$nusc_data_dir,target=/workspace/data/nuscenes,type=bind,consistency=cached \
 --mount source=$work_dirs,target=/workspace/work_dirs,type=bind,consistency=cached \
 -it \
-$DOCKER_NAME
+$IMAGE_NAME
 
 xhost -

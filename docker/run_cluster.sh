@@ -1,7 +1,8 @@
 #!/bin/bash
 
-DOCKER_NAME=spatial_detr_ma_zahr
-CONTAINER_NAME=spatial_detr
+IMAGE_NAME=xai_ma_zahr
+CONTAINER_NAME=xai
+
 # path to directory where nusenes data is stored
 nusc_data_dir="/work/data01/beemelmanns/nuscenes"
 #nusc_data_dir="/work/data01/zahr/datasets/nuscenes"
@@ -24,4 +25,4 @@ docker run \
 --mount source=$nusc_data_dir,target=/workspace/data/nuscenes,type=bind,consistency=cached \
 --mount source=$work_dirs,target=/workspace/work_dirs,type=bind,consistency=cached \
 -it \
-$DOCKER_NAME
+$IMAGE_NAME

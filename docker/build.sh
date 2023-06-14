@@ -1,2 +1,2 @@
-DOCKER_NAME=spatial_detr_ma_zahr
-docker build -t $DOCKER_NAME -f ./docker/Dockerfile .
+IMAGE_NAME=xai_ma_zahr_pip
+docker build -t $IMAGE_NAME -f ./docker/Dockerfile .

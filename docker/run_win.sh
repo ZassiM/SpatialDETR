@@ -1,4 +1,5 @@
-DOCKER_NAME=spatial_detr_ma_zahr
+IMAGE_NAME=xai_ma_zahr
+CONTAINER_NAME=xai
 
 # path to directory where nusenes data is stored
 nusc_data_dir="/mnt/c/Users/wasso/Desktop/dataset/nuscenes"
@@ -11,7 +12,7 @@ xhost +
 
 docker run \
 --rm \
---name $DOCKER_NAME \
+--name $CONTAINER_NAME \
 --env DISPLAY=${DISPLAY} \
 --net=host \
 --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
@@ -21,5 +22,5 @@ docker run \
 --mount source=$work_dirs,target=/workspace/work_dirs,type=bind,consistency=cached \
 --mount source=$nusc_data_dir,target=/workspace/data/nuscenes,type=bind,consistency=cached \
 -it \
-$DOCKER_NAME
+$IMAGE_NAME
 

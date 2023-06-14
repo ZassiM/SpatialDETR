@@ -328,7 +328,6 @@ class BaseApp(tk.Tk):
             self.update_objects_list()
             self.initialize_bboxes()
 
-
     def add_separator(self, sep="|"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
         # sep="\u22EE"
@@ -440,7 +439,6 @@ class BaseApp(tk.Tk):
                 if len(self.bboxes) > 0:
                     self.bboxes[0].set(True)
 
-
     def get_camera_object(self):
         scores = self.update_scores()
         cam_obj = scores.index(max(scores))
@@ -511,7 +509,7 @@ class BaseApp(tk.Tk):
 
     def save_video(self):
         if hasattr(self, "img_frames"):
-            data = {'img_frames': self.img_frames, "video_idx": self.start_video_idx}
+            data = {'img_frames': self.img_frames, "img_labels": self.img_labels, "video_idx": self.start_video_idx}
 
             file_path = fd.asksaveasfilename(defaultextension=".pkl", filetypes=[("All Files", "*.*")])
 
@@ -537,6 +535,7 @@ class BaseApp(tk.Tk):
             data = pickle.load(f)
 
         self.img_frames = data["img_frames"]
+        self.img_labels = data["img_labels"]
         self.start_video_idx = data["video_idx"]
 
         print(f"Video loaded from {video_pickle}.\n")
