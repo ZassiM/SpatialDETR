@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DOCKER_NAME=spatial_detr_ma_zahr
-CONTAINER_NAME=spatial_detr_ma_zahr
+CONTAINER_NAME=spatial_detr
 # path to directory where nusenes data is stored
 nusc_data_dir="/work/data01/beemelmanns/nuscenes"
 #nusc_data_dir="/work/data01/zahr/datasets/nuscenes"
