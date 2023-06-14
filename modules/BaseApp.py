@@ -33,7 +33,7 @@ class BaseApp(tk.Tk):
 
         # Tkinter-related settings
         self.tk.call("source", "misc/theme/azure.tcl")
-        self.tk.call("set_theme", "dark")
+        self.tk.call("set_theme", "light")
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
         self.protocol("WM_DELETE_WINDOW", self.quit)
@@ -114,11 +114,17 @@ class BaseApp(tk.Tk):
         dataidx_opt = tk.Menu(self.menubar)
         dataidx_opt.add_command(label=" Select data index", command=lambda: self.select_data_idx(type=0))
         dataidx_opt.add_command(label=" Select random data", command=self.random_data_idx)
+
         dataidx_opt.add_separator()
 
         dataidx_opt.add_command(label=" Select video length", command=lambda: self.select_data_idx(type=1))
         dataidx_opt.add_command(label=" Select frame rate", command=lambda: self.select_data_idx(type=2))
         dataidx_opt.add_command(label=" Generate video", command=self.generate_video)
+        dataidx_opt.add_command(label=" Show video", command=self.show_video)
+
+        dataidx_opt.add_separator()
+
+        dataidx_opt.add_command(label=" Show LIDAR", command=self.show_lidar)
 
         # Cascade menus for Prediction threshold
         thr_opt = tk.Menu(self.menubar)
@@ -250,10 +256,6 @@ class BaseApp(tk.Tk):
         self.menubar.add_cascade(label="Options", menu=add_opt)
         self.add_separator("|")
         self.menubar.add_command(label="Visualize", command=self.visualize)
-        self.add_separator("|")
-        self.menubar.add_command(label="Show LIDAR", command=self.show_lidar)
-        self.add_separator("|")
-        self.menubar.add_command(label="Show video", command=self.show_video)
 
     def show_car(self):
         img = plt.imread("misc/car.png")
@@ -328,7 +330,7 @@ class BaseApp(tk.Tk):
             self.update_objects_list()
             self.initialize_bboxes()
 
-    def add_separator(self, sep="|"):
+    def add_separator(self, sep="\u22EE"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
         # sep="\u22EE"
 
