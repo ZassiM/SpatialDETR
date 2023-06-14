@@ -452,8 +452,10 @@ class BaseApp(tk.Tk):
     def disable_attn(self):
         if not self.show_attn.get():
             self.overlay_bool.set(False)
-            self.single_bbox_select(single_select=True)
+            #self.single_bbox_select(single_select=True)
             self.show_all_layers.set(True)
+        else:
+            self.overlay_bool.set(True)
 
     def update_scores(self):
         scores = []
@@ -509,7 +511,7 @@ class BaseApp(tk.Tk):
 
     def save_video(self):
         if hasattr(self, "img_frames"):
-            data = {'img_frames': self.img_frames, "img_labels": self.img_labels, "video_idx": self.start_video_idx}
+            data = {'img_frames': self.img_frames, "img_labels": self.img_labels, "video_idx": self.start_video_idx, "video_lenght": self.video_length}
 
             file_path = fd.asksaveasfilename(defaultextension=".pkl", filetypes=[("All Files", "*.*")])
 
@@ -537,5 +539,6 @@ class BaseApp(tk.Tk):
         self.img_frames = data["img_frames"]
         self.img_labels = data["img_labels"]
         self.start_video_idx = data["video_idx"]
+        self.video_length = data["video_lenght"]
 
         print(f"Video loaded from {video_pickle}.\n")

@@ -144,4 +144,4 @@ points/
 video_gen/
 eval_results/
 backups/*
-eval_denormvsmean.txt
+*.mp4

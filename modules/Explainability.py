@@ -136,7 +136,6 @@ class ExplainableTransformer:
             one_hot = torch.sum(one_hot * output_scores)
 
             self.Model.model.zero_grad()
-            #one_hot.backward(retain_graph=True)
             one_hot.backward()
             for layer in self.Model.model.module.pts_bbox_head.transformer.decoder.layers:
                 self.dec_cross_attn_grads.append(layer.attentions[1].attn.get_attn_gradients().cpu())
@@ -147,7 +146,6 @@ class ExplainableTransformer:
         for hook in hooks:
             hook.remove()
             
-        torch.cuda.empty_cache()
         return outputs
         
     def generate_rollout(self, layer, camidx, head_fusion="min", raw=True):  
@@ -234,7 +232,6 @@ class ExplainableTransformer:
                 attention_maps[layer][object] = (attention_maps[layer][object] - attention_maps[layer][object].min()) / (attention_maps[layer][object].max() - attention_maps[layer][object].min())
 
         # now attention maps can be overlayed
-        # {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
         if attention_maps.shape[1] > 0:
             attention_maps = attention_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
             discard_attn(attention_maps, discard_ratio)
@@ -251,6 +248,8 @@ class ExplainableTransformer:
             attention_maps_cameras = []
             for camidx in range(len(attention_maps[layer])):
                 attn = attention_maps[layer][camidx].reshape(1, 1, self.height_feats, self.width_feats)
+                attn[0,0,:,0] = 0
+                attn[0,0,:,-1] = 0
                 attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
                 attn = attn.reshape(attn.shape[2], attn.shape[3])
                 if remove_pad:

@@ -196,11 +196,6 @@ class App(BaseApp):
                 else:
                     ax_attn = self.fig.add_subplot(self.spec[1, grid_column])
                 
-                # if self.single_bbox.get() and (self.show_all_layers.get() or self.selected_camera.get() != -1):
-                #     # Extract camera with highest attention
-                #     cam_obj = self.get_camera_object()
-                #     self.selected_camera.set(cam_obj)
-                
                 if self.show_all_layers.get():
                     attn = self.ExplainableModel.attn_list[i][self.selected_camera.get()]
                 elif self.selected_camera.get() == -1:
@@ -239,17 +234,9 @@ class App(BaseApp):
         self.fig.tight_layout()
 
     def show_lidar(self):
-        # self.ExplainableModel.attn_list[layer] = 6x900x1600
-        '''
-        For each attn camera, i have one attention value for each pixel. I have a matrix 6x1450x3 of depth values with respect to the 
-        ref coordinate for each pixel. I can generate a point cloud for the attention maps in which I use xyz from the depth value for each
-        pixel in each camera, and color it depending on the attention value
-        '''
-        self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, pipeline=None, score_thr=self.selected_threshold.get())
-        # self.after(100, self.ObjectDetector.dataset.show_mod, self.outputs, self.data_idx, "points/", self.GT_bool.get(), True, None, 0.5)
+        self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, snapshot=False, pipeline=None, score_thr=self.selected_threshold.get())
 
     def show_video(self):
-
         if not hasattr(self, "img_frames"):
             generated = self.generate_video(save_img=True)
         else:
