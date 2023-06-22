@@ -14,15 +14,14 @@ def main():
     warnings.filterwarnings("ignore")
     expl_types = ['Attention Rollout', 'Grad-CAM', 'Gradient Rollout', 'Random']
 
-
     ObjectDetector = Model()
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
 
-    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[2], negative_pert=False, pred_threshold=0.1)
+    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[2], negative_pert=True, pred_threshold=0.1)
 
 
-def evaluate(Model, ExplGen, expl_type, negative_pert=False, pred_threshold=0.1):
+def evaluate(Model, ExplGen, expl_type, negative_pert=True, pred_threshold=0.1):
     txt_del = "*" * (38 + len(expl_type))
     info = txt_del
     if not negative_pert:
@@ -67,7 +66,7 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False, pred_threshold=0.1)
         file.write("--------------------------\n")
         file.write(f"Elapsed time: {total_time}\n")
 
-def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negative_pert=False, pred_threshold=0.1, remove_pad=False):
+def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negative_pert=True, pred_threshold=0.1, remove_pad=False):
    
     if expl_type == "Gradient Rollout":
         layer = 0
