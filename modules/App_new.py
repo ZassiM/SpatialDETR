@@ -32,7 +32,7 @@ class App(BaseApp):
                 self.menubar.delete('end', 'end')
             self.fig = plt.figure()
             self.fig.set_facecolor(self.bg_color)
-            # self.spec = self.fig.add_gridspec(3, 3)
+            self.spec = self.fig.add_gridspec(3, 3)
             self.canvas = FigureCanvasTkAgg(self.fig, master=self)
             self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
@@ -60,6 +60,7 @@ class App(BaseApp):
 
             if self.single_bbox.get() and camidx == self.selected_camera.get():
                 og_img = self.imgs[camidx].astype(np.uint8)
+                att_nobbx_layers = []
                 for layer in range(len(self.ExplainableModel.attn_list)):
                     attn = self.ExplainableModel.attn_list[layer][camidx]
                     attn_img = overlay_attention_on_image(og_img, attn)      
@@ -96,11 +97,6 @@ class App(BaseApp):
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             self.cam_imgs.append(img)
 
-        if not self.single_bbox.get():
-            self.spec = self.fig.add_gridspec(3, 3)
-        else:
-            self.spec = self.fig.add_gridspec(3, 3)
-
         # Visualize the generated images list on the figure subplots
         for i in range(len(self.imgs)):
             if i < 3:
@@ -114,7 +110,6 @@ class App(BaseApp):
                 score = self.update_scores()[self.cam_idx[i]]
                 ax.axhline(y=0, color='black', linewidth=10)
                 ax.axhline(y=0, color='green', linewidth=10, xmax=score/100)
-
             ax.axis('off')
 
         if self.single_bbox.get():
@@ -194,12 +189,8 @@ class App(BaseApp):
 
         ax.set_facecolor('none')
         ax.set_xticks(x)
-        ax.set_ylabel('Percentage', fontsize=fontsize)
-        ax.set_xlabel('Index', fontsize=fontsize)
-        ax.xaxis.label.set_color(title_color)
-        ax.yaxis.label.set_color(title_color)
-        ax.tick_params(colors=title_color)
-        ax.set_title("Query self-attention", fontsize=fontsize, color=title_color, pad=0)
+        ax.set_ylabel('Percentage')
+        ax.set_xlabel('Index')
 
         # Display the plot
         self.fig.tight_layout()

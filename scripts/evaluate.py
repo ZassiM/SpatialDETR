@@ -12,7 +12,7 @@ import gc
 
 def main():
     warnings.filterwarnings("ignore")
-    expl_types = ['Attention Rollout', 'Grad-CAM', 'Gradient Rollout', 'Random']
+    expl_types = ['Raw Attention', 'Grad-CAM', 'Gradient Rollout', 'Random']
 
     ObjectDetector = Model()
     ObjectDetector.load_from_config()

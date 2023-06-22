@@ -46,6 +46,9 @@ class BaseApp(tk.Tk):
         self.video_length = 15
         self.video_gen_bool = False
         self.frame_rate = 1
+        self.old_bbox_idx = None
+
+        self.bbox_coords, self.att_nobbx_all = [], []
         
         # Main Tkinter menu in which all other cascade menus are added
         self.menubar = tk.Menu(self)
@@ -147,18 +150,16 @@ class BaseApp(tk.Tk):
         # Cascade menu for Attention layer
         layer_opt = tk.Menu(self.menubar)
         self.selected_layer = tk.IntVar()
-        self.show_all_layers = tk.BooleanVar()
         for i in range(self.ObjectDetector.num_layers):
             layer_opt.add_radiobutton(label=i, variable=self.selected_layer)
-        layer_opt.add_checkbutton(label="All", onvalue=1, offvalue=0, variable=self.show_all_layers, command=self.check_layers)
         self.selected_layer.set(self.ExplainableModel.num_layers - 1)
 
         # Cascade menus for Explainable options
         expl_opt = tk.Menu(self.menubar)
         attn_rollout, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
-        self.expl_options = ["Attention Rollout", "Grad-CAM", "Gradient Rollout"]
+        self.expl_options = ["Raw Attention", "Grad-CAM", "Gradient Rollout"]
 
-        # Attention Rollout
+        # Raw Attention
         expl_opt.add_cascade(label=self.expl_options[0], menu=attn_rollout)
         self.head_fusion_types = ["max", "min", "mean"]
         self.selected_head_fusion = tk.StringVar()
@@ -223,14 +224,12 @@ class BaseApp(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.show_attn, self.GT_bool, self.BB_bool, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d = \
-            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
-        self.show_attn.set(True)
+        self.GT_bool, self.BB_bool, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.BB_bool.set(True)
         self.show_labels.set(True)
         self.overlay_bool.set(True)
         self.bbox_2d.set(True)
-        add_opt.add_checkbutton(label=" Show attention maps", onvalue=1, offvalue=0, variable=self.show_attn, command=self.disable_attn)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
         add_opt.add_checkbutton(label=" Overlay attention on image", onvalue=1, offvalue=0, variable=self.overlay_bool)
@@ -430,8 +429,6 @@ class BaseApp(tk.Tk):
             for i in range(len(self.bboxes)):
                 if i != idx:
                     self.bboxes[i].set(False)
-            self.show_attn.set(False)
-            self.disable_attn()
 
     def initialize_bboxes(self):
         if hasattr(self, "bboxes"):
@@ -449,13 +446,10 @@ class BaseApp(tk.Tk):
         return cam_obj
 
     def check_layers(self):
-        if self.selected_camera.get() == -1 or not self.show_attn.get():
+        if self.selected_camera.get() == -1 or self.single_bbox.get():
             cam_obj = self.get_camera_object()
             self.selected_camera.set(cam_obj)
     
-    def disable_attn(self):
-        if not self.show_attn.get():
-            self.show_all_layers.set(True)
 
     def update_scores(self):
         scores = []
@@ -477,12 +471,6 @@ class BaseApp(tk.Tk):
             return 0
 
     def capture(self):
-        x0 = self.winfo_rootx()
-        y0 = self.winfo_rooty()
-        x1 = x0 + self.canvas.get_width_height()[0]
-        y1 = y0 + self.canvas.get_width_height()[1]
-        
-        im = ImageGrab.grab((x0, y0, x1, y1))
         screenshots_path = "screenshots/"
         if not os.path.exists(screenshots_path):
             os.makedirs(screenshots_path)
@@ -495,7 +483,7 @@ class BaseApp(tk.Tk):
             self.file_suffix = 0
 
         path += "_" + str(self.file_suffix) + ".png"
-        im.save(path)
+        self.fig.savefig(path)
         print(f"Screenshot saved in {path}\n")
 
     def change_theme(self):

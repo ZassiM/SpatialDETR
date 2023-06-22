@@ -149,7 +149,7 @@ class ExplainableTransformer:
         return outputs
         
     def generate_rollout(self, layer, camidx, head_fusion="min", raw=True):  
-        ''' Generates Attention Rollout for XAI. '''      
+        ''' Generates Raw Attention for XAI. '''      
 
         # initialize relevancy matrices
         queries_num = self.dec_self_attn_weights[0].shape[-1]
@@ -201,26 +201,26 @@ class ExplainableTransformer:
             self.handle_co_attn_query(self.num_layers-1, camidx, handle_residual, apply_rule)
 
         
-    def generate_explainability(self, expl_type, bbox_idx, indexes, head_fusion="min", discard_ratio=0.9, raw=True, rollout=True, handle_residual=True, apply_rule=True,  remove_pad=True):
-        attention_maps, att_maps_cameras = [], []
+    def generate_explainability(self, expl_type, bbox_idx, indices, head_fusion="min", discard_ratio=0.9, raw=True, rollout=True, handle_residual=True, apply_rule=True,  remove_pad=True):
+        attention_maps, self_attention_maps, att_maps_cameras = [], [], []
 
         if expl_type == "Gradient Rollout":
             for camidx in range(6):
                 self.generate_gradroll(camidx, rollout, handle_residual, apply_rule)
-                att_maps_cameras.append(self.R_q_i[indexes[bbox_idx]].detach().cpu())
+                att_maps_cameras.append(self.R_q_i[indices[bbox_idx]].detach().cpu())
             attention_maps.append(att_maps_cameras)
         else:
             for layer in range(self.num_layers):
-                att_maps_cameras = []
+                att_maps_cameras, self_att_maps_cameras = [], []
                 for camidx in range(6):
-                    if expl_type == "Attention Rollout":
+                    if expl_type == "Raw Attention":
                         self.generate_rollout(layer, camidx, head_fusion, raw)
                     elif expl_type == "Grad-CAM":
                         self.generate_gradcam(layer, camidx)
-                    elif expl_type == "Partial-LRP":
-                        attention_maps = 0
-                    att_maps_cameras.append(self.R_q_i[indexes[bbox_idx]].detach().cpu())
+                    att_maps_cameras.append(self.R_q_i[indices[bbox_idx]].detach().cpu())
+
                 attention_maps.append(att_maps_cameras)
+                self_attention_maps.append(self.dec_self_attn_weights[layer][indices[bbox_idx]][:, indices])
 
         # num_layers x num_cams x num_objects x 1450
         attention_maps = torch.stack([torch.stack(layer) for layer in attention_maps])
@@ -238,6 +238,7 @@ class ExplainableTransformer:
             attention_maps = self.interpolate_expl(attention_maps, remove_pad)
 
         self.attn_list = attention_maps
+        self.self_attn_list = self_attention_maps
 
     def interpolate_expl(self, attention_maps, remove_pad):
         attention_maps_inter = []
