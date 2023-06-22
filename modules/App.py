@@ -133,7 +133,7 @@ class App(BaseApp):
 
     def update_explainability(self):
         # Avoid selecting all layers and all cameras. Only the last layer will be visualized
-        if (self.show_all_layers.get() and self.selected_camera.get() == -1) or self.selected_expl_type.get() == "Gradient Rollout":
+        if (self.show_all_layers.get() and self.selected_camera.get() == -1 and self.show_attn.get()) or self.selected_expl_type.get() == "Gradient Rollout":
             self.show_all_layers.set(False)
             if self.selected_expl_type.get() == "Gradient Rollout":
                 self.selected_layer.set(0)
@@ -178,59 +178,61 @@ class App(BaseApp):
                     att_nobbx_obj = att_nobbx_obj[bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
                     ax_obj_layer.imshow(att_nobbx_obj, vmin=0, vmax=1)   
 
-                    ax_obj_layer.set_title(f"layer {i}", fontsize=fontsize, color=title_color, pad=0)
+                    if self.selected_expl_type.get() != "Gradient Rollout":
+                        ax_obj_layer.set_title(f"layer {i}", fontsize=fontsize, color=title_color, pad=0)
                     ax_obj_layer.axis('off')
 
-            else:
-                att_nobbx_obj = self.att_nobbx_all[self.selected_camera.get()][self.selected_layer.get()]
-                att_nobbx_obj = att_nobbx_obj[bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
-                ax_obj = self.fig.add_subplot(self.spec[1, grid_column])
-                ax_obj.imshow(att_nobbx_obj, vmin=0, vmax=1)   
-                ax_obj.set_title(f"layer {self.selected_layer.get()}", fontsize=fontsize, color=title_color, pad=0)
-                ax_obj.axis('off')
+            # else:
+            #     att_nobbx_obj = self.att_nobbx_all[self.selected_camera.get()][self.selected_layer.get()]
+            #     att_nobbx_obj = att_nobbx_obj[bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
+            #     ax_obj = self.fig.add_subplot(self.spec[1, grid_column])
+            #     ax_obj.imshow(att_nobbx_obj, vmin=0, vmax=1)   
+            #     ax_obj.set_title(f"layer {self.selected_layer.get()}", fontsize=fontsize, color=title_color, pad=0)
+            #     ax_obj.axis('off')
 
-        else:
-            for i in range(len(self.ExplainableModel.attn_list[0])):
-                if self.show_all_layers.get() or self.selected_camera.get() == -1:
-                    ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
-                else:
-                    ax_attn = self.fig.add_subplot(self.spec[1, grid_column])
+
+        # else:
+        #     for i in range(len(self.ExplainableModel.attn_list[0])):
+        #         if self.show_all_layers.get() or self.selected_camera.get() == -1:
+        #             ax_attn = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
+        #         else:
+        #             ax_attn = self.fig.add_subplot(self.spec[1, grid_column])
                 
-                if self.show_all_layers.get():
-                    attn = self.ExplainableModel.attn_list[i][self.selected_camera.get()]
-                elif self.selected_camera.get() == -1:
-                    attn = self.ExplainableModel.attn_list[self.selected_layer.get()][self.cam_idx[i]]
-                else:
-                    attn = self.ExplainableModel.attn_list[self.selected_layer.get()][self.selected_camera.get()]
+        #         if self.show_all_layers.get():
+        #             attn = self.ExplainableModel.attn_list[i][self.selected_camera.get()]
+        #         elif self.selected_camera.get() == -1:
+        #             attn = self.ExplainableModel.attn_list[self.selected_layer.get()][self.cam_idx[i]]
+        #         else:
+        #             attn = self.ExplainableModel.attn_list[self.selected_layer.get()][self.selected_camera.get()]
 
-                ax_attn.imshow(attn, vmin=0, vmax=1)      
+        #         ax_attn.imshow(attn, vmin=0, vmax=1)      
 
-                # Set title accordinly
-                if self.show_all_layers.get() or self.selected_camera.get() != -1:
-                    title = f'{list(self.cameras.keys())[self.selected_camera.get()]}'
-                    if self.selected_expl_type.get() != "Gradient Rollout":
-                        title += f' | layer {i} '
-                else:
-                    title = f'{list(self.cameras.keys())[self.cam_idx[i]]}'
-                    if self.selected_expl_type.get() != "Gradient Rollout":
-                        title += f' | layer {self.selected_layer.get()}'
+        #         # Set title accordinly
+        #         if self.show_all_layers.get() or self.selected_camera.get() != -1:
+        #             title = f'{list(self.cameras.keys())[self.selected_camera.get()]}'
+        #             if self.selected_expl_type.get() != "Gradient Rollout":
+        #                 title += f' | layer {i} '
+        #         else:
+        #             title = f'{list(self.cameras.keys())[self.cam_idx[i]]}'
+        #             if self.selected_expl_type.get() != "Gradient Rollout":
+        #                 title += f' | layer {self.selected_layer.get()}'
 
-                # If doing Attention Rollout, visualize head fusion type
-                if self.selected_expl_type.get() == "Attention Rollout":
-                    title += f' | head {self.selected_head_fusion.get()}'
+        #         # If doing Attention Rollout, visualize head fusion type
+        #         if self.selected_expl_type.get() == "Attention Rollout":
+        #             title += f' | head {self.selected_head_fusion.get()}'
 
-                # Show attention camera contributon if all cameras are selected and one object is selected
-                if self.selected_camera.get() == -1 and self.single_bbox.get():
-                    score = self.update_scores()[self.cam_idx[i]]
-                    title += f' | {score}%'
-                    ax_attn.axhline(y=0, color='black', linewidth=10)
-                    ax_attn.axhline(y=0, color='green', linewidth=10, xmax=score/100)
+        #         # Show attention camera contributon if all cameras are selected and one object is selected
+        #         if self.selected_camera.get() == -1 and self.single_bbox.get():
+        #             score = self.update_scores()[self.cam_idx[i]]
+        #             title += f' | {score}%'
+        #             ax_attn.axhline(y=0, color='black', linewidth=10)
+        #             ax_attn.axhline(y=0, color='green', linewidth=10, xmax=score/100)
 
-                ax_attn.set_title(title, fontsize=fontsize, color=title_color, pad=0)
-                ax_attn.axis('off')   
+        #         ax_attn.set_title(title, fontsize=fontsize, color=title_color, pad=0)
+        #         ax_attn.axis('off')   
 
-                if not self.show_all_layers.get() and self.selected_camera.get() != -1:
-                    break
+        #         if not self.show_all_layers.get() and self.selected_camera.get() != -1:
+        #             break
         self.fig.tight_layout()
 
     def show_lidar(self):

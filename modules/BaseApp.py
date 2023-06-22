@@ -33,7 +33,7 @@ class BaseApp(tk.Tk):
 
         # Tkinter-related settings
         self.tk.call("source", "misc/theme/azure.tcl")
-        self.tk.call("set_theme", "light")
+        self.tk.call("set_theme", "dark")
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
         self.protocol("WM_DELETE_WINDOW", self.quit)
@@ -330,7 +330,7 @@ class BaseApp(tk.Tk):
             self.update_objects_list()
             self.initialize_bboxes()
 
-    def add_separator(self, sep="\u22EE"):
+    def add_separator(self, sep="|"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
         # sep="\u22EE"
 
@@ -430,6 +430,8 @@ class BaseApp(tk.Tk):
             for i in range(len(self.bboxes)):
                 if i != idx:
                     self.bboxes[i].set(False)
+            self.show_attn.set(False)
+            self.disable_attn()
 
     def initialize_bboxes(self):
         if hasattr(self, "bboxes"):
@@ -453,11 +455,7 @@ class BaseApp(tk.Tk):
     
     def disable_attn(self):
         if not self.show_attn.get():
-            self.overlay_bool.set(False)
-            #self.single_bbox_select(single_select=True)
             self.show_all_layers.set(True)
-        else:
-            self.overlay_bool.set(True)
 
     def update_scores(self):
         scores = []
