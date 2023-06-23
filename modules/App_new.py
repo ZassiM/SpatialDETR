@@ -113,7 +113,7 @@ class App(BaseApp):
             ax.axis('off')
 
         if self.single_bbox.get():
-            self.show_attention_maps()
+            self.show_explainability()
 
         self.fig.tight_layout(pad=0)
         self.canvas.draw()
@@ -135,7 +135,7 @@ class App(BaseApp):
             self.update_data(initialize_bboxes=False)
         self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.apply_rollout.get(), self.handle_residual.get(), self.apply_rule.get()]   
 
-    def show_attention_maps(self, grid_column=1):
+    def show_explainability(self, grid_column=1):
         '''
         Shows the attention map for explainability.
         '''

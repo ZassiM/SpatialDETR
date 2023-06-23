@@ -22,7 +22,7 @@ class Configs:
                 self.triggered_function()
             else:
                 print(f"Generating {self.old_configs[0]}...")
-                self.triggered_function(self.old_configs[0], self.old_configs[1], self.old_configs[2], self.old_configs[3], self.old_configs[4],self.old_configs[5], self.old_configs[6], self.old_configs[7], self.old_configs[8])
+                self.triggered_function(self.old_configs[0], self.old_configs[1], self.old_configs[2], self.old_configs[3], self.old_configs[4],self.old_configs[5], self.old_configs[6])
         self.new_configs = new_values.copy()
 
     def equal_configs(self, list1, list2):

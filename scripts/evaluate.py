@@ -18,7 +18,7 @@ def main():
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
 
-    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[2], negative_pert=True, pred_threshold=0.1)
+    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=True, pred_threshold=0.1)
 
 
 def evaluate(Model, ExplGen, expl_type, negative_pert=True, pred_threshold=0.1):
@@ -45,8 +45,8 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=True, pred_threshold=0.1):
     with open(file_path, "a") as file:
         file.write(f"{info}\n")
 
-    base_size = 29 * 50
-    pert_steps = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+    base_size = 900 * 1600
+    pert_steps = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
 
     print(info)
     start_time = time.time()
@@ -54,7 +54,7 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=True, pred_threshold=0.1):
         num_tokens = int(base_size * pert_steps[step])
         perc = pert_steps[step] * 100
         print(f"\nNumber of tokens removed: {num_tokens} ({perc} %)")
-        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, perc=perc, negative_pert=negative_pert, eval_file=file_path, remove_pad=False, pred_threshold=pred_threshold)
+        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, perc=perc, negative_pert=negative_pert, eval_file=file_path, remove_pad=True, pred_threshold=pred_threshold)
         gc.collect()
         torch.cuda.empty_cache()
     end_time = time.time()
@@ -73,8 +73,8 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
     else:
         layer = Model.num_layers - 1
 
-    head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule = \
-        "max", 0.9, True, True, True
+    head_fusion, discard_ratio, handle_residual, apply_rule = \
+        "max", 0.9, True, True
     
     dataset = Model.dataset
     evaluation_lenght = len(dataset)
@@ -94,21 +94,25 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
         if "points" in data.keys():
             data.pop("points")
 
-        # Attention scores are extracted, together with gradients if grad-CAM is selected
-        output_og = ExplGen.extract_attentions(data)
+        if expl_type != "Random":
+            # Attention scores are extracted, together with gradients if grad-CAM is selected
+            output_og = ExplGen.extract_attentions(data)
 
-        # Extract predicted bboxes and their labels
-        outputs = output_og[0]["pts_bbox"]
-        nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes().cpu()
-        thr_idxs = outputs['scores_3d'] > pred_threshold
-        labels = outputs['labels_3d'][thr_idxs]
+            # Extract predicted bboxes and their labels
+            outputs = output_og[0]["pts_bbox"]
+            nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes().cpu()
+            thr_idxs = outputs['scores_3d'] > pred_threshold
+            labels = outputs['labels_3d'][thr_idxs]
+            
+            bbox_idx = list(range(len(labels)))
+            if expl_type in ["Grad-CAM", "Gradient Rollout"]:
+                ExplGen.extract_attentions(data, bbox_idx)
+
+            ExplGen.generate_explainability(expl_type, bbox_idx, nms_idxs, head_fusion, discard_ratio, handle_residual, apply_rule, remove_pad)
+            attn_list = ExplGen.attn_list[layer]
         
-        bbox_idx = list(range(len(labels)))
-        if expl_type in ["Grad-CAM", "Gradient Rollout"]:
-            ExplGen.extract_attentions(data, bbox_idx)
-
-        ExplGen.generate_explainability(expl_type, bbox_idx, nms_idxs, head_fusion, discard_ratio, raw_attention, handle_residual, apply_rule, remove_pad)
-        attn_list = ExplGen.attn_list[layer]
+        else:
+            attn_list = torch.rand(6, 900, 1600)
 
         # Perturbate the input image with the XAI maps
         img = img[0][0]

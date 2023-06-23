@@ -138,14 +138,8 @@ class BaseApp(tk.Tk):
             thr_opt.add_radiobutton(label=i, variable=self.selected_threshold, command=self.update_thr)
 
         # Cascade menu for Camera
-        camera_opt = tk.Menu(self.menubar)
         self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
         self.cam_idx = [2, 0, 1, 5, 3, 4]  # Used for visualizing camera outputs properly
-        self.selected_camera = tk.IntVar()
-        for value, key in enumerate(self.cameras):
-            camera_opt.add_radiobutton(label=key, variable=self.selected_camera, value=value)
-        camera_opt.add_radiobutton(label="All", variable=self.selected_camera, value=-1)
-        self.selected_camera.set(-1) # Default: visualize all cameras
 
         # Cascade menu for Attention layer
         layer_opt = tk.Menu(self.menubar)
@@ -164,8 +158,7 @@ class BaseApp(tk.Tk):
         self.head_fusion_types = ["max", "min", "mean"]
         self.selected_head_fusion = tk.StringVar()
         self.selected_head_fusion.set(self.head_fusion_types[0])
-        self.raw_attn = tk.BooleanVar()
-        self.raw_attn.set(True)
+
         hf_opt = tk.Menu(self.menubar)
         self.selected_discard_ratio = tk.DoubleVar()
         self.selected_discard_ratio.set(0.5)
@@ -175,7 +168,6 @@ class BaseApp(tk.Tk):
         for head in range(self.ObjectDetector.num_heads):
             hf_opt.add_radiobutton(label=str(head), variable=self.selected_head_fusion, value = str(head))
         attn_rollout.add_cascade(label=" Head fusion", menu=hf_opt)
-        attn_rollout.add_checkbutton(label=" Raw attention", variable=self.raw_attn, onvalue=1, offvalue=0)
 
         # Grad-CAM
         expl_opt.add_cascade(label=self.expl_options[1], menu=grad_cam)
@@ -187,11 +179,9 @@ class BaseApp(tk.Tk):
 
         # Gradient Rollout
         expl_opt.add_cascade(label=self.expl_options[2], menu=grad_rollout)
-        self.handle_residual, self.apply_rule, self.apply_rollout = tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
-        self.apply_rollout.set(True)
+        self.handle_residual, self.apply_rule = tk.BooleanVar(), tk.BooleanVar()
         self.handle_residual.set(True)
         self.apply_rule.set(True)
-        grad_rollout.add_checkbutton(label=" Apply rollout", variable=self.apply_rollout, onvalue=1, offvalue=0)
         grad_rollout.add_checkbutton(label=" Handle residual", variable=self.handle_residual, onvalue=1, offvalue=0)
         grad_rollout.add_checkbutton(label=" Apply rule 10", variable=self.apply_rule, onvalue=1, offvalue=0)
 
@@ -243,8 +233,6 @@ class BaseApp(tk.Tk):
         self.menubar.add_cascade(label="Data", menu=dataidx_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Prediction threshold", menu=thr_opt)
-        self.add_separator()
-        self.menubar.add_cascade(label="Camera", menu=camera_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Objects", menu=self.bbox_opt)
         self.add_separator()
@@ -445,11 +433,6 @@ class BaseApp(tk.Tk):
         cam_obj = scores.index(max(scores))
         return cam_obj
 
-    def check_layers(self):
-        if self.selected_camera.get() == -1 or self.single_bbox.get():
-            cam_obj = self.get_camera_object()
-            self.selected_camera.set(cam_obj)
-    
 
     def update_scores(self):
         scores = []

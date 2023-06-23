@@ -148,7 +148,7 @@ class ExplainableTransformer:
             
         return outputs
         
-    def generate_rollout(self, layer, camidx, head_fusion="min", raw=True):  
+    def generate_raw_att(self, layer, camidx, head_fusion="min"):  
         ''' Generates Raw Attention for XAI. '''      
 
         # initialize relevancy matrices
@@ -161,11 +161,8 @@ class ExplainableTransformer:
         cam_q_i = self.dec_cross_attn_weights[layer][camidx]
         cam_q_i = avg_heads(cam_q_i, head_fusion)
         
-        if raw:
-            self.R_q_i = cam_q_i  # Only one layer
-        else:
-            self.R_q_q = compute_rollout_attention(self.dec_self_attn_weights)
-            self.R_q_i = torch.matmul(self.R_q_q, cam_q_i)
+        self.R_q_i = cam_q_i  
+
 
     def generate_gradcam(self, layer, camidx):
         ''' Generates Grad-CAM for XAI. '''      
@@ -193,34 +190,32 @@ class ExplainableTransformer:
             for layer in range(self.num_layers):
                 self.handle_co_attn_self_query(layer)
                 self.handle_co_attn_query(layer, camidx, handle_residual, apply_rule)
-                debug=0
-                # self.R_q_i[layer][object] = (attention_maps[layer][object] - attention_maps[layer][object].min()) / (attention_maps[layer][object].max() - attention_maps[layer][object].min())
-
         else:
             self.handle_co_attn_self_query(self.num_layers-1)
             self.handle_co_attn_query(self.num_layers-1, camidx, handle_residual, apply_rule)
 
-        
-    def generate_explainability(self, expl_type, bbox_idx, indices, head_fusion="min", discard_ratio=0.9, raw=True, rollout=True, handle_residual=True, apply_rule=True,  remove_pad=True):
+    def generate_explainability(self, expl_type, bbox_idx, indices, head_fusion="min", discard_ratio=0.9, handle_residual=True, apply_rule=True,  remove_pad=True):
         attention_maps, self_attention_maps, att_maps_cameras = [], [], []
 
         if expl_type == "Gradient Rollout":
             for camidx in range(6):
-                self.generate_gradroll(camidx, rollout, handle_residual, apply_rule)
+                self.generate_gradroll(camidx, handle_residual, apply_rule)
                 att_maps_cameras.append(self.R_q_i[indices[bbox_idx]].detach().cpu())
             attention_maps.append(att_maps_cameras)
+
         else:
             for layer in range(self.num_layers):
                 att_maps_cameras, self_att_maps_cameras = [], []
                 for camidx in range(6):
                     if expl_type == "Raw Attention":
-                        self.generate_rollout(layer, camidx, head_fusion, raw)
+                        self.generate_raw_att(layer, camidx, head_fusion)
                     elif expl_type == "Grad-CAM":
                         self.generate_gradcam(layer, camidx)
                     att_maps_cameras.append(self.R_q_i[indices[bbox_idx]].detach().cpu())
-
                 attention_maps.append(att_maps_cameras)
-                self_attention_maps.append(self.dec_self_attn_weights[layer][indices[bbox_idx]][:, indices])
+
+        for layer in range(self.num_layers):
+            self_attention_maps.append(self.dec_self_attn_weights[layer][indices[bbox_idx]][:, indices].detach().cpu())
 
         # num_layers x num_cams x num_objects x 1450
         attention_maps = torch.stack([torch.stack(layer) for layer in attention_maps])

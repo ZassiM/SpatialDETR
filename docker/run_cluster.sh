@@ -1,7 +1,7 @@
 #!/bin/bash
 
 IMAGE_NAME=xai_ma_zahr
-CONTAINER_NAME=grad_roll_neg_eval
+CONTAINER_NAME=xai
 
 # path to directory where nusenes data is stored
 nusc_data_dir="/work/data01/beemelmanns/nuscenes"

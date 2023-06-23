@@ -51,14 +51,14 @@ class App(BaseApp):
         if self.single_bbox.get():
             # Extract camera with highest attention
             cam_obj = self.get_camera_object()
-            self.selected_camera.set(cam_obj)
+            self.selected_camera = cam_obj
     
         # Generate images list with bboxes on it
         print("Generating camera images...")
         self.cam_imgs, self.bbox_coords, self.att_nobbx_all = [], [], []
         for camidx in range(len(self.imgs)):
 
-            if self.single_bbox.get() and camidx == self.selected_camera.get():
+            if self.single_bbox.get() and camidx == self.selected_camera:
                 og_img = self.imgs[camidx].astype(np.uint8)
                 for layer in range(len(self.ExplainableModel.attn_list)):
                     attn = self.ExplainableModel.attn_list[layer][camidx]
@@ -66,6 +66,7 @@ class App(BaseApp):
                     attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
                     self.att_nobbx_all.append(attn_img)
 
+            # {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
             img, bbox_coords = draw_lidar_bbox3d_on_img(
                     self.pred_bboxes,
                     self.imgs[camidx],
@@ -76,7 +77,7 @@ class App(BaseApp):
                     bbx_idx=self.bbox_idx,
                     mode_2d=self.bbox_2d.get())
 
-            if self.single_bbox.get() and camidx == self.selected_camera.get():
+            if self.single_bbox.get() and camidx == self.selected_camera:
                 self.bbox_coords = bbox_coords
 
             # Extract Ground Truth bboxes if wanted
@@ -97,7 +98,7 @@ class App(BaseApp):
             self.cam_imgs.append(img)
 
         if not self.single_bbox.get():
-            self.spec = self.fig.add_gridspec(3, 3)
+            self.spec = self.fig.add_gridspec(2, 3)
         else:
             self.spec = self.fig.add_gridspec(3, 3)
 
@@ -106,7 +107,10 @@ class App(BaseApp):
             if i < 3:
                 ax = self.fig.add_subplot(self.spec[0, i])
             else:
-                ax = self.fig.add_subplot(self.spec[2, i-3])
+                if not self.single_bbox.get():
+                    ax = self.fig.add_subplot(self.spec[1, i-3])
+                else:
+                    ax = self.fig.add_subplot(self.spec[2, i-3])
 
             ax.imshow(self.cam_imgs[self.cam_idx[i]])
 
@@ -118,7 +122,7 @@ class App(BaseApp):
             ax.axis('off')
 
         if self.single_bbox.get():
-            self.show_attention_maps()
+            self.show_explainability()
 
         self.fig.tight_layout(pad=0)
         self.canvas.draw()
@@ -138,9 +142,9 @@ class App(BaseApp):
 
         if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
             self.update_data(initialize_bboxes=False)
-        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.apply_rollout.get(), self.handle_residual.get(), self.apply_rule.get()]   
+        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.handle_residual.get(), self.apply_rule.get()]   
 
-    def show_attention_maps(self, grid_column=1):
+    def show_explainability(self):
         '''
         Shows the attention map for explainability.
         '''
@@ -148,10 +152,10 @@ class App(BaseApp):
         # If we want to visualize all layers or all cameras:
         if self.selected_expl_type.get() != "Gradient Rollout":
             # Select the center of the grid to plot the attentions and add 2x2 subgrid
-            layer_grid = self.spec[1, grid_column].subgridspec(2, 3)
-            fontsize = 7
+            layer_grid = self.spec[1, 1].subgridspec(2, 3)
+            fontsize = 8
         else:
-            layer_grid = self.spec[1, grid_column].subgridspec(1, 1)
+            layer_grid = self.spec[1, 1].subgridspec(1, 1)
             fontsize = 12
 
         if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
@@ -170,7 +174,8 @@ class App(BaseApp):
             att_nobbx_obj = self.att_nobbx_all[i]
             att_nobbx_obj = att_nobbx_obj[bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
             ax_obj_layer.imshow(att_nobbx_obj, vmin=0, vmax=1)   
-
+            
+            title = ""
             if self.selected_expl_type.get() != "Gradient Rollout":
                 title = f"layer {i}"
                 if self.selected_expl_type.get() == "Raw Attention":
@@ -180,28 +185,34 @@ class App(BaseApp):
             ax_obj_layer.axis('off')
         
         # Query self-attention visualization
-        query_self_attn = self.ExplainableModel.self_attn_list[-1] # last layer
-        query_self_attn.squeeze_()
+        query_self_attn = self.ExplainableModel.self_attn_list[self.selected_layer.get()] # last layer
+        query_self_attn = query_self_attn[0]
         query_self_attn = query_self_attn[self.thr_idxs]
 
         percentage = query_self_attn / query_self_attn.sum() * 100
 
-        # Create an array for the x values
         x = torch.arange(len(query_self_attn))
         ax = self.fig.add_subplot(self.spec[1, 2])
-        # Create the bar plot
-        ax.bar(x, percentage)
+        bars = ax.bar(x, percentage)
+
+        bars[self.bbox_idx[0]].set_color('red')
 
         ax.set_facecolor('none')
         ax.set_xticks(x)
-        ax.set_ylabel('Percentage', fontsize=fontsize)
-        ax.set_xlabel('Index', fontsize=fontsize)
+        ax.set_yticks([])
+        ax.set_xlabel('Objects', fontsize=fontsize)
+        ax.set_ylabel('Cross-attention', fontsize=fontsize)
         ax.xaxis.label.set_color(title_color)
         ax.yaxis.label.set_color(title_color)
-        ax.tick_params(colors=title_color)
-        ax.set_title("Query self-attention", fontsize=fontsize, color=title_color, pad=0)
 
-        # Display the plot
+        labels = self.labels.tolist()
+
+        ax.tick_params(colors=title_color)
+        title = "Self-attention"
+        if self.selected_expl_type.get() != "Gradient Rollout":
+            title += f" | layer {self.selected_layer.get()}"
+        ax.set_title(title, fontsize=fontsize-1, color=title_color)
+
         self.fig.tight_layout()
 
     def show_lidar(self):
@@ -291,7 +302,7 @@ class App(BaseApp):
         # Extract the selected bounding box indices from the menu
         self.bbox_idx = list(range(len(self.labels)))
 
-        self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.apply_rollout.get(), self.handle_residual.get(), self.apply_rule.get())
+        self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.handle_residual.get(), self.apply_rule.get())
 
         # Generate images list with bboxes on it
         cam_imgs = []  # Used for video generation
