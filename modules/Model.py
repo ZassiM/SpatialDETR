@@ -69,6 +69,7 @@ class Model():
         self.num_layers = self.cfg.model.pts_bbox_head.transformer.decoder.num_layers
         self.num_heads = self.cfg.model.pts_bbox_head.transformer.decoder.transformerlayers.attn_cfgs[0].num_heads
         self.ori_shape = self.dataset[0]["img_metas"][0]._data["ori_shape"]
+        self.pad_shape = self.dataset[0]["img_metas"][0]._data["pad_shape"]
 
 
         print("\nModel loaded.\n")

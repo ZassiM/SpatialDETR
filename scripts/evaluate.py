@@ -18,10 +18,10 @@ def main():
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
 
-    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=True, pred_threshold=0.1)
+    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[3], negative_pert=True, pred_threshold=0.1, remove_pad=True)
 
 
-def evaluate(Model, ExplGen, expl_type, negative_pert=True, pred_threshold=0.1):
+def evaluate(Model, ExplGen, expl_type, negative_pert=True, pred_threshold=0.1, remove_pad=True):
     txt_del = "*" * (38 + len(expl_type))
     info = txt_del
     if not negative_pert:
@@ -45,7 +45,11 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=True, pred_threshold=0.1):
     with open(file_path, "a") as file:
         file.write(f"{info}\n")
 
-    base_size = 900 * 1600
+    if remove_pad:
+        base_size = Model.ori_shape[0] * Model.ori_shape[1]
+    else:
+        base_size = Model.pad_shape[0] * Model.pad_shape[1]
+
     pert_steps = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
 
     print(info)
@@ -54,7 +58,7 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=True, pred_threshold=0.1):
         num_tokens = int(base_size * pert_steps[step])
         perc = pert_steps[step] * 100
         print(f"\nNumber of tokens removed: {num_tokens} ({perc} %)")
-        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, perc=perc, negative_pert=negative_pert, eval_file=file_path, remove_pad=True, pred_threshold=pred_threshold)
+        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, perc=perc, negative_pert=negative_pert, eval_file=file_path, remove_pad=remove_pad, pred_threshold=pred_threshold)
         gc.collect()
         torch.cuda.empty_cache()
     end_time = time.time()
@@ -112,7 +116,10 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
             attn_list = ExplGen.attn_list[layer]
         
         else:
-            attn_list = torch.rand(6, 900, 1600)
+            if remove_pad:
+                attn_list = torch.rand(6, Model.ori_shape[0], Model.ori_shape[1])
+            else:
+                attn_list = torch.rand(6, Model.pad_shape[0], Model.pad_shape[1])
 
         # Perturbate the input image with the XAI maps
         img = img[0][0]
