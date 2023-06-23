@@ -18,7 +18,7 @@ class Configs:
         self.old_configs = new_values.copy()
         if not self.equal_configs(self.old_configs, self.new_configs):
             if self.type == 0:
-                print("Detecting bounding boxes...")
+                print("Detecting objects...")
                 self.triggered_function()
             else:
                 print(f"Generating {self.old_configs[0]}...")

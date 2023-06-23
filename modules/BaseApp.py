@@ -81,6 +81,11 @@ class BaseApp(tk.Tk):
 
         self.ExplainableModel = ExplainableTransformer(self.ObjectDetector)
 
+        # Synced configurations: when a value is changed, the triggered function is called
+        data_configs, expl_configs = [], []
+        self.data_configs = Configs(data_configs, triggered_function=self.update_data, type=0)
+        self.expl_configs = Configs(expl_configs, triggered_function=self.ExplainableModel.generate_explainability, type=1)
+
         if not self.started_app:
             print("Starting app...\n")
             self.start_app()
@@ -96,11 +101,6 @@ class BaseApp(tk.Tk):
         '''
         # Suffix used for saving screenshot of same model with different numbering
         self.file_suffix = 0
-
-        # Synced configurations: when a value is changed, the triggered function is called
-        data_configs, expl_configs = [], []
-        self.data_configs = Configs(data_configs, triggered_function=self.update_data, type=0)
-        self.expl_configs = Configs(expl_configs, triggered_function=self.ExplainableModel.generate_explainability, type=1)
 
         # Tkinter frame for visualizing model and GPU info
         frame = tk.Frame(self)
@@ -275,6 +275,7 @@ class BaseApp(tk.Tk):
         data['img'][0] = DC(img)
         self.data = data
 
+
         if "points" in self.data.keys():
             self.data.pop("points")
 
@@ -296,6 +297,11 @@ class BaseApp(tk.Tk):
         self.pred_bboxes.tensor.detach()
         self.labels = self.outputs['labels_3d'][self.thr_idxs]
 
+        self.no_object = False
+        if len(self.labels) == 0:
+            self.no_object = True
+            print("No object detected.")
+
         # Extract image metas which contain, for example, the lidar to camera projection matrices
         self.img_metas = self.data["img_metas"][0]._data[0][0]
 
@@ -315,7 +321,7 @@ class BaseApp(tk.Tk):
 
         if initialize_bboxes and not self.video_gen_bool:
             self.update_objects_list()
-            self.initialize_bboxes()
+            self.initialize_bboxes(all_select=True)
 
     def add_separator(self, sep="|"):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
@@ -418,7 +424,9 @@ class BaseApp(tk.Tk):
                 if i != idx:
                     self.bboxes[i].set(False)
 
-    def initialize_bboxes(self):
+    def initialize_bboxes(self, all_select=False):
+        if all_select:
+            self.select_all_bboxes.set(True)
         if hasattr(self, "bboxes"):
             if self.select_all_bboxes.get():
                 self.single_bbox.set(False)
@@ -466,7 +474,7 @@ class BaseApp(tk.Tk):
             self.file_suffix = 0
 
         path += "_" + str(self.file_suffix) + ".png"
-        self.fig.savefig(path)
+        self.fig.savefig(path, dpi=800, transparent=True)
         print(f"Screenshot saved in {path}\n")
 
     def change_theme(self):

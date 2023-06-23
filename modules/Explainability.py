@@ -141,7 +141,10 @@ class ExplainableTransformer:
                 self.dec_cross_attn_grads.append(layer.attentions[1].attn.get_attn_gradients().cpu())
 
         if self.height_feats is None:
-            self.height_feats, self.width_feats = conv_feats[0][0].shape[-2:]
+            if isinstance(conv_feats[0], dict):
+                self.height_feats, self.width_feats = conv_feats[0]["stage5"].shape[-2:]   
+            else:
+                self.height_feats, self.width_feats = conv_feats[0][0].shape[-2:]
                                                                      
         for hook in hooks:
             hook.remove()
