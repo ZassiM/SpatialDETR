@@ -54,16 +54,22 @@ class App(BaseApp):
                 # Extract camera with highest attention
                 cam_obj = self.get_camera_object()
                 self.selected_camera = cam_obj
-    
+
         # Generate images list with bboxes on it
         print("Generating camera images...")
-        self.cam_imgs, self.bbox_coords, self.att_nobbx_all = [], [], []
+        self.cam_imgs, self.bbox_coords, self.att_nobbx_all = [], [], [] 
         for camidx in range(len(self.imgs)):
 
             if self.single_bbox.get() and camidx == self.selected_camera:
                 og_img = self.imgs[camidx].astype(np.uint8)
                 for layer in range(len(self.ExplainableModel.attn_list)):
                     attn = self.ExplainableModel.attn_list[layer][camidx]
+                    if self.use_thresholding.get():
+                        attn = attn.numpy() * 255
+                        attn = attn.astype(np.uint8)
+                        ret, attn = cv2.threshold(attn, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                        attn[attn == 255] = 1
+                        attn = torch.from_numpy(attn)
                     attn_img = overlay_attention_on_image(og_img, attn)      
                     attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
                     self.att_nobbx_all.append(attn_img)
@@ -186,33 +192,32 @@ class App(BaseApp):
 
             ax_obj_layer.set_title(title, fontsize=fontsize, color=title_color, pad=0)
         
-        self.fig.tight_layout()
+        if self.show_self_attention.get():
+            # Query self-attention visualization
+            query_self_attn = self.ExplainableModel.self_attn_list[self.selected_layer.get()] # last layer
+            query_self_attn = query_self_attn[0]
+            query_self_attn = query_self_attn[self.thr_idxs]
+            percentage = query_self_attn / query_self_attn.sum() * 100
 
-        # Query self-attention visualization
-        query_self_attn = self.ExplainableModel.self_attn_list[self.selected_layer.get()] # last layer
-        query_self_attn = query_self_attn[0]
-        query_self_attn = query_self_attn[self.thr_idxs]
-        percentage = query_self_attn / query_self_attn.sum() * 100
+            x = torch.arange(len(query_self_attn))
+            ax = self.fig.add_subplot(self.spec[1, 2])
+            bars = ax.bar(x, percentage)
 
-        x = torch.arange(len(query_self_attn))
-        ax = self.fig.add_subplot(self.spec[1, 2])
-        bars = ax.bar(x, percentage)
+            bars[self.bbox_idx[0]].set_color('red')
+            ax.set_facecolor('none')
+            ax.set_xticks(x)
+            ax.set_yticks([])
+            ax.set_xlabel('Objects', fontsize=fontsize)
+            ax.set_ylabel('Cross-attention', fontsize=fontsize)
+            ax.xaxis.label.set_color(title_color)
+            ax.yaxis.label.set_color(title_color)
+            ax.tick_params(colors=title_color)
+            title = "Self-attention"
+            if self.selected_expl_type.get() != "Gradient Rollout":
+                title += f" | layer {self.selected_layer.get()}"
+            ax.set_title(title, fontsize=fontsize-1, color=title_color)
 
-        bars[self.bbox_idx[0]].set_color('red')
-        ax.set_facecolor('none')
-        ax.set_xticks(x)
-        ax.set_yticks([])
-        ax.set_xlabel('Objects', fontsize=fontsize)
-        ax.set_ylabel('Cross-attention', fontsize=fontsize)
-        ax.xaxis.label.set_color(title_color)
-        ax.yaxis.label.set_color(title_color)
-        ax.tick_params(colors=title_color)
-        title = "Self-attention"
-        if self.selected_expl_type.get() != "Gradient Rollout":
-            title += f" | layer {self.selected_layer.get()}"
-        ax.set_title(title, fontsize=fontsize-1, color=title_color)
-
-        # self.fig.tight_layout()
+        self.fig.tight_layout(pad=0)
 
     def show_lidar(self):
         self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, snapshot=False, pipeline=None, score_thr=self.selected_threshold.get())

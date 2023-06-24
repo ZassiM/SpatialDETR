@@ -253,6 +253,7 @@ class ExplainableTransformer:
                 attn = attn.reshape(attn.shape[2], attn.shape[3])
                 if remove_pad:
                     attn = attn[:self.ori_shape[0], :self.ori_shape[1]]
+
                 attention_maps_cameras.append(attn)
             attention_maps_inter.append(attention_maps_cameras)
 
