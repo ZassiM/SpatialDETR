@@ -77,7 +77,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
     else:
         layer = Model.num_layers - 1
 
-    head_fusion, discard_ratio, handle_residual, apply_rule = \
+    head_fusion, discard_threshold, handle_residual, apply_rule = \
         "max", 0.9, True, True
     
     dataset = Model.dataset
@@ -112,7 +112,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
             if expl_type in ["Grad-CAM", "Gradient Rollout"]:
                 ExplGen.extract_attentions(data, bbox_idx)
 
-            ExplGen.generate_explainability(expl_type, bbox_idx, nms_idxs, head_fusion, discard_ratio, handle_residual, apply_rule, remove_pad)
+            ExplGen.generate_explainability(expl_type, bbox_idx, nms_idxs, head_fusion, discard_threshold, handle_residual, apply_rule, remove_pad)
             attn_list = ExplGen.attn_list[layer]
         
         else:

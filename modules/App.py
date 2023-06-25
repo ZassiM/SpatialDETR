@@ -57,14 +57,15 @@ class App(BaseApp):
 
         # Generate images list with bboxes on it
         print("Generating camera images...")
-        self.cam_imgs, self.bbox_coords, self.att_nobbx_all = [], [], [] 
+        self.cam_imgs, self.att_nobbx_all = [], []
+        with_labels = True
         for camidx in range(len(self.imgs)):
 
             if self.single_bbox.get() and camidx == self.selected_camera:
                 og_img = self.imgs[camidx].astype(np.uint8)
                 for layer in range(len(self.ExplainableModel.attn_list)):
                     attn = self.ExplainableModel.attn_list[layer][camidx]
-                    if self.use_thresholding.get():
+                    if self.gen_segmentation.get():
                         attn = attn.numpy() * 255
                         attn = attn.astype(np.uint8)
                         ret, attn = cv2.threshold(attn, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -80,8 +81,8 @@ class App(BaseApp):
                     self.imgs[camidx],
                     self.img_metas['lidar2img'][camidx],
                     color=(0, 255, 0),
-                    with_bbox_id=self.show_labels.get(),
-                    all_bbx=self.BB_bool.get(),
+                    with_bbox_id=with_labels,
+                    all_bbx=True,
                     bbx_idx=self.bbox_idx,
                     mode_2d=self.bbox_2d.get())
 
@@ -151,7 +152,7 @@ class App(BaseApp):
         if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
             self.update_data(initialize_bboxes=False)
 
-        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.handle_residual.get(), self.apply_rule.get()]   
+        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_threshold.get(), self.handle_residual.get(), self.apply_rule.get()]   
 
     def show_explainability(self):
         '''
@@ -159,16 +160,16 @@ class App(BaseApp):
         '''
         if self.selected_expl_type.get() != "Gradient Rollout":
             # Select the center of the grid to plot the attentions and add 2x2 subgrid
-            layer_grid = self.spec[1, 1].subgridspec(2, 3)
+            layer_grid = self.spec[1, 1].subgridspec(2, 3, wspace=0, hspace=0)
             fontsize = 8
         else:
             layer_grid = self.spec[1, 1].subgridspec(1, 1)
             fontsize = 12
 
         if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
-            title_color = "white"
+            text_color = "white"
         else:
-            title_color = "black"
+            text_color = "black"
 
         for b in self.bbox_coords:
             if self.bbox_idx[0] == b[0]:
@@ -189,8 +190,7 @@ class App(BaseApp):
                     title += f" | head {self.selected_head_fusion.get()}"
 
             ax_obj_layer.axis('off')
-
-            ax_obj_layer.set_title(title, fontsize=fontsize, color=title_color, pad=0)
+            #ax_obj_layer.set_title(title, fontsize=fontsize, color=text_color, pad=0)
         
         if self.show_self_attention.get():
             # Query self-attention visualization
@@ -199,25 +199,42 @@ class App(BaseApp):
             query_self_attn = query_self_attn[self.thr_idxs]
             percentage = query_self_attn / query_self_attn.sum() * 100
 
-            x = torch.arange(len(query_self_attn))
             ax = self.fig.add_subplot(self.spec[1, 2])
+            x = torch.arange(len(query_self_attn))
             bars = ax.bar(x, percentage)
-
             bars[self.bbox_idx[0]].set_color('red')
             ax.set_facecolor('none')
             ax.set_xticks(x)
             ax.set_yticks([])
             ax.set_xlabel('Objects', fontsize=fontsize)
-            ax.set_ylabel('Cross-attention', fontsize=fontsize)
-            ax.xaxis.label.set_color(title_color)
-            ax.yaxis.label.set_color(title_color)
-            ax.tick_params(colors=title_color)
+            ax.set_ylabel('Percentage', fontsize=fontsize)
+            ax.xaxis.label.set_color(text_color)
+            ax.yaxis.label.set_color(text_color)
+            ax.tick_params(colors=text_color)
             title = "Self-attention"
             if self.selected_expl_type.get() != "Gradient Rollout":
                 title += f" | layer {self.selected_layer.get()}"
-            ax.set_title(title, fontsize=fontsize-1, color=title_color)
+            ax.set_title(title, fontsize=fontsize-1, color=text_color)
 
-        self.fig.tight_layout(pad=0)
+            ax2 = self.fig.add_subplot(self.spec[1, 0])
+            labels = np.arange(len(self.labels))
+            explode = [0.1 if i == self.bbox_idx[0] else 0 for i in range(len(self.labels))]
+            edge_color = "black" if text_color == "white" else "white"
+            patches, texts = ax2.pie(query_self_attn, labels=labels, wedgeprops={'linewidth': 1.0, 'edgecolor': edge_color}, explode=explode)
+            for i, patch in enumerate(patches):
+                texts[i].set_color(patch.get_facecolor())
+            classes = [f"{i}: {self.ObjectDetector.class_names[self.labels[i]]}" for i in labels]
+            leg = ax2.legend(patches, classes,
+                        title="Objects",
+                        loc="center left",
+                        bbox_to_anchor=(1, 0, 0.5, 1),
+                        fontsize='small',
+                        framealpha=0.0)
+            for text in leg.get_texts():
+                text.set_color(text_color)
+            ax2.set_title(title, color=text_color, fontsize=fontsize-1)
+
+        self.fig.tight_layout()
 
     def show_lidar(self):
         self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, snapshot=False, pipeline=None, score_thr=self.selected_threshold.get())
@@ -306,7 +323,7 @@ class App(BaseApp):
         # Extract the selected bounding box indices from the menu
         self.bbox_idx = list(range(len(self.labels)))
 
-        self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.handle_residual.get(), self.apply_rule.get())
+        self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_threshold.get(), self.handle_residual.get(), self.apply_rule.get())
 
         # Generate images list with bboxes on it
         cam_imgs = []  # Used for video generation
@@ -318,8 +335,8 @@ class App(BaseApp):
                     self.imgs[camidx],
                     self.img_metas['lidar2img'][camidx],
                     color=(0, 255, 0),
-                    with_bbox_id=self.show_labels.get(),
-                    all_bbx=self.BB_bool.get(),
+                    with_bbox_id=True,
+                    all_bbx=True,
                     bbx_idx=self.bbox_idx,
                     mode_2d=self.bbox_2d.get())
             

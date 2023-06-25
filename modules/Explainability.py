@@ -32,7 +32,7 @@ def compute_rollout_attention(all_layer_matrices, start_layer=0):
         joint_attention = matrices_aug[i].matmul(joint_attention)
     return joint_attention
 
-def avg_heads(attn, head_fusion="max", discard_ratio=0.5):
+def avg_heads(attn, head_fusion="max"):
     if head_fusion == "mean":
         attn = attn.mean(dim=0)
     elif head_fusion == "max":
@@ -41,13 +41,8 @@ def avg_heads(attn, head_fusion="max", discard_ratio=0.5):
         attn = attn.min(dim=0)[0]
     else:
         attn = attn[int(head_fusion)]
-    return attn
 
-def discard_attn(attn, discard_ratio):
-    flat = attn.view(-1)
-    _, indices = flat.topk(int(flat.size(-1)*discard_ratio), -1, False)
-    indices = indices[indices != 0]
-    flat[indices] = 0
+    return attn
 
 def avg_heads_og(cam, grad):
     cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
@@ -197,7 +192,7 @@ class ExplainableTransformer:
             self.handle_co_attn_self_query(self.num_layers-1)
             self.handle_co_attn_query(self.num_layers-1, camidx, handle_residual, apply_rule)
 
-    def generate_explainability(self, expl_type, bbox_idx, indices, head_fusion="min", discard_ratio=0.9, handle_residual=True, apply_rule=True,  remove_pad=True):
+    def generate_explainability(self, expl_type, bbox_idx, indices, head_fusion="min", discard_threshold=0.9, handle_residual=True, apply_rule=True,  remove_pad=True):
         attention_maps, self_attention_maps, att_maps_cameras = [], [], []
 
         if expl_type == "Gradient Rollout":
@@ -223,7 +218,7 @@ class ExplainableTransformer:
         # num_layers x num_cams x num_objects x 1450
         attention_maps = torch.stack([torch.stack(layer) for layer in attention_maps])
         attention_maps = attention_maps.permute(0, 2, 1, 3)  # num layers x num_objects x num_cams x 1450 # take only the selected objects
-        
+
         # normalize across cameras
         for layer in range(len(attention_maps)):
             for object in range(len(attention_maps[layer])):
@@ -232,7 +227,8 @@ class ExplainableTransformer:
         # now attention maps can be overlayed
         if attention_maps.shape[1] > 0:
             attention_maps = attention_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
-            discard_attn(attention_maps, discard_ratio)
+            mask = attention_maps < discard_threshold
+            attention_maps[mask] = 0
             attention_maps = self.interpolate_expl(attention_maps, remove_pad)
 
         self.attn_list = attention_maps

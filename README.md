@@ -1,5 +1,6 @@
 # Explainable Transformer-based 3D Object Detector from multiple cameras
-
+This application assists in understanding the reasoning of a 3D Object detector, SpatialDETR. The Machine Learning framework used is Pytorch. The Graphical User Interface is created with Tkinter. It uses the MMDetection3D framework to load a model and dataset. The dataset used for this application is Nuscenes.
+The application displays saliency maps from various explainability techniques, allowing you to see where the model is focusing at. It also provides additional features such as visualization in Birth Eye View (BEV), generation of a segmentation map from the saliency map and visualization of the objects self-attention mechanism.
 
 ## Setup
 ### Repository
@@ -68,24 +69,23 @@ python scripts/main.py
 2. A GUI will appear. Select **File-Load model** to load the model configuration and the checkpoints. Otherwise, if the same configurations are used each time, modify the **config.toml** file accordinly and select **File-Load from config file**.
 3. Change the visualization settings with the drop-down menus. Then, click **Visualize**. 
 
-## Model Training
-1. Use the configs in the **configs** folder to train SpatialDETR.  
-For a baseline on a single gpu use:
-```bash
-python ./mmdetection3d/tools/train.py configs/submission/frozen_4/query_proj_value_proj.py
-```
-or for multi-gpu e.g. 4 gpus:  
-```bash
-./mmdetection3d/tools/dist_train.sh configs/submission/frozen_4/query_proj_value_proj.py 4
-```
+## Usage
+The application provides a GUI with a series of dropdown menus for customization.
 
-3. To test, use
-```bash
-./mmdetection3d/tools/dist_test.sh configs/submission/frozen_4/query_proj_value_proj.py /path/to/.pth 4 --eval=bbox
-```
+1. **Change Prediction Threshold**: This filters out queries with scores below the chosen threshold. By default, the threshold is set at 0.5.
+2. **Select Object for Explainability Map**: This allows you to select specific objects for individual saliency map visualization.
+3. **Select Explainability Technique**: Choose between Raw Attention, Grad-CAM, and Gradient Rollout. For raw attention, there are further options to select a particular head, or to fuse them by taking the maximum, minimum, or mean. You can also adjust the discard threshold.
+4. **Objects Self-Attention Visualization**: Shows the attention score between the selected object query and all other objects in the images.
+5. **Conversion of 3D to 2D Bounding Boxes**: This will convert the bounding boxes from LiDAR to camera coordinates, which are easier to visualize on top of a 2D bounding box.
+6. **Use Otsu's Thresholding Method**: This will generate a segmentation mask from the saliency map.
+7. **Generate Video**: Allows the generation of a video-like visualization of a scene. The generated sequence can be saved as a collection of images or can be visualized directly on the UI. During the video, you can pause, select an object for explainability, and then resume the video.
+
+This figure shows how the application looks like when visualizing the saliency maps of a truck for every layer of the model. The charts show the self-attention contributions for each object.
+
+![](misc/readme_overview.png "Overview of the GUI application")  
 
 ## Issues and To-Do
 - The shell for running the docker container makes sure that the display environment is correctly forwarded to the docker and ssh server. However, some display errors still can be faced reported while trying to run the GUI application. For testing the GUI inside the Docker container, run `xclock` and see if a window opens. The following guides are useful: https://www.baeldung.com/linux/forward-x-over-ssh, https://x410.dev/cookbook/enabling-ssh-x11-forwarding-in-visual-studio-code-for-remote-development/
-- The application works only with SpatialDETR for now. Other models will be supported.
+- The application works only with SpatialDETR.
 
  

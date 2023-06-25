@@ -133,7 +133,7 @@ class App(BaseApp):
 
         if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
             self.update_data(initialize_bboxes=False)
-        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.apply_rollout.get(), self.handle_residual.get(), self.apply_rule.get()]   
+        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_threshold.get(), self.raw_attn.get(), self.apply_rollout.get(), self.handle_residual.get(), self.apply_rule.get()]   
 
     def show_explainability(self, grid_column=1):
         '''
@@ -150,9 +150,9 @@ class App(BaseApp):
             fontsize = 12
 
         if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
-            title_color = "white"
+            text_color = "white"
         else:
-            title_color = "black"
+            text_color = "black"
 
         for b in self.bbox_coords:
             if self.bbox_idx[0] == b[0]:
@@ -171,7 +171,7 @@ class App(BaseApp):
                 if self.selected_expl_type.get() == "Raw Attention":
                     title += f" | head {self.selected_head_fusion.get()}"
 
-            ax_obj_layer.set_title(title, fontsize=fontsize, color=title_color, pad=0)
+            ax_obj_layer.set_title(title, fontsize=fontsize, color=text_color, pad=0)
             ax_obj_layer.axis('off')
         
         # Query self-attention visualization
@@ -282,7 +282,7 @@ class App(BaseApp):
         # Extract the selected bounding box indices from the menu
         self.bbox_idx = list(range(len(self.labels)))
 
-        self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_ratio.get(), self.raw_attn.get(), self.apply_rollout.get(), self.handle_residual.get(), self.apply_rule.get())
+        self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_threshold.get(), self.raw_attn.get(), self.apply_rollout.get(), self.handle_residual.get(), self.apply_rule.get())
 
         # Generate images list with bboxes on it
         cam_imgs = []  # Used for video generation

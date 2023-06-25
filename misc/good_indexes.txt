@@ -3,3 +3,5 @@
 4116 pedestrian
 156 bicycle
 3456 trucks
+2279 pedestrian, truck
+2157 (screenshot ui)

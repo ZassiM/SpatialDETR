@@ -135,7 +135,7 @@ class BaseApp(tk.Tk):
         self.selected_threshold.set(0.5)
         values = np.arange(0.0, 1, 0.1).round(1)
         for i in values:
-            thr_opt.add_radiobutton(label=i, variable=self.selected_threshold, command=self.update_thr)
+            thr_opt.add_radiobutton(label=i, variable=self.selected_threshold)
 
         # Cascade menu for Camera
         self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
@@ -160,14 +160,14 @@ class BaseApp(tk.Tk):
         self.selected_head_fusion.set(self.head_fusion_types[0])
 
         hf_opt = tk.Menu(self.menubar)
-        self.selected_discard_ratio = tk.DoubleVar()
-        self.selected_discard_ratio.set(0.5)
+        self.selected_discard_threshold = tk.DoubleVar()
+        self.selected_discard_threshold.set(0.3)
         values = np.arange(0.0, 1, 0.1).round(1)
         for i in range(len(self.head_fusion_types)):
             hf_opt.add_radiobutton(label=self.head_fusion_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_fusion_types[i])
         for head in range(self.ObjectDetector.num_heads):
             hf_opt.add_radiobutton(label=str(head), variable=self.selected_head_fusion, value = str(head))
-        attn_rollout.add_cascade(label=" Head fusion", menu=hf_opt)
+        attn_rollout.add_cascade(label=" Head", menu=hf_opt)
 
         # Grad-CAM
         expl_opt.add_cascade(label=self.expl_options[1], menu=grad_cam)
@@ -199,10 +199,14 @@ class BaseApp(tk.Tk):
 
         # Discard ratio for attention weights
         dr_opt = tk.Menu(self.menubar)
+        self.show_self_attention, self.gen_segmentation = tk.BooleanVar(), tk.BooleanVar()
         for i in values:
-            dr_opt.add_radiobutton(label=i, variable=self.selected_discard_ratio)
-        expl_opt.add_cascade(label="Discard ratio", menu=dr_opt)
-        expl_opt.add_command(label="Evaluate explainability", command=lambda: evaluate(self.ObjectDetector, self.ExplainableModel, self.selected_expl_type.get()))
+            dr_opt.add_radiobutton(label=i, variable=self.selected_discard_threshold)
+        expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
+        expl_opt.add_checkbutton(label="Show objects self-attention", onvalue=1, offvalue=0, variable=self.show_self_attention)
+        expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
+
+
         # Cascade menus for object selection
         self.bbox_opt = tk.Menu(self.menubar)
         self.single_bbox = tk.BooleanVar()
@@ -214,20 +218,15 @@ class BaseApp(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.BB_bool, self.show_self_attention, self.use_thresholding, self.overlay_bool, self.show_labels, self.capture_bool, self.bbox_2d = \
-            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
-        self.BB_bool.set(True)
-        self.show_labels.set(True)
+        self.GT_bool, self.overlay_bool, self.capture_bool, self.bbox_2d = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.overlay_bool.set(True)
         self.bbox_2d.set(True)
-        add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
-        add_opt.add_checkbutton(label=" Show all Bounding Boxes", onvalue=1, offvalue=0, variable=self.BB_bool)
-        add_opt.add_checkbutton(label=" Show objects self-attention", onvalue=1, offvalue=0, variable=self.show_self_attention)
-        add_opt.add_checkbutton(label=" Use Otsu's thresholding method", onvalue=1, offvalue=0, variable=self.use_thresholding)
-        add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
-        add_opt.add_checkbutton(label=" Show predicted labels", onvalue=1, offvalue=0, variable=self.show_labels)
-        add_opt.add_checkbutton(label=" Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
+
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
+        add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
+        add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
+        add_opt.add_checkbutton(label=" Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
 
         # Adding all cascade menus ro the main menubar menu
@@ -238,9 +237,9 @@ class BaseApp(tk.Tk):
         self.add_separator()
         self.menubar.add_cascade(label="Objects", menu=self.bbox_opt)
         self.add_separator()
-        self.menubar.add_cascade(label="Layer", menu=layer_opt)
-        self.add_separator()
         self.menubar.add_cascade(label="Explainability", menu=expl_opt)
+        self.add_separator()
+        self.menubar.add_cascade(label="Layer", menu=layer_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Options", menu=add_opt)
         self.add_separator("|")
@@ -400,10 +399,6 @@ class BaseApp(tk.Tk):
             info = f"Model: {self.ObjectDetector.model_name} | Dataloader: {self.ObjectDetector.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
         self.info_text.set(info)
 
-    def update_thr(self):
-        self.BB_bool.set(True)
-        self.show_labels.set(True)
-
     def update_objects_list(self, labels=None):
         if labels is None:
             labels = self.labels
@@ -443,7 +438,6 @@ class BaseApp(tk.Tk):
         cam_obj = scores.index(max(scores))
         return cam_obj
 
-
     def update_scores(self):
         scores = []
         scores_perc = []
@@ -476,7 +470,7 @@ class BaseApp(tk.Tk):
             self.file_suffix = 0
 
         path += "_" + str(self.file_suffix) + ".png"
-        self.fig.savefig(path, dpi=800, transparent=True)
+        self.fig.savefig(path, dpi=300, transparent=True)
         print(f"Screenshot saved in {path}\n")
 
     def change_theme(self):
