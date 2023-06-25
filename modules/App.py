@@ -87,7 +87,11 @@ class App(BaseApp):
                     saliency_map = generate_saliency_map(og_img, xai_map)      
                     saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                     self.saliency_maps_objects.append(saliency_map)
+
                 self.bbox_coords = bbox_coords
+                # if self.old_bbox_idx != self.bbox_idx:
+                #     self.bbox_coords = bbox_coords
+                #     self.old_bbox_idx = self.bbox_idx
 
             # Extract Ground Truth bboxes if wanted
             if self.GT_bool.get():
@@ -127,7 +131,7 @@ class App(BaseApp):
             ax.imshow(self.cam_imgs[self.cam_idx[i]])
 
             if self.single_bbox.get():
-                score = self.update_scores()[self.cam_idx[i]]
+                score = self.get_camera_scores()[self.cam_idx[i]]
                 ax.axhline(y=0, color='black', linewidth=10)
                 ax.axhline(y=0, color='green', linewidth=10, xmax=score/100)
 
@@ -199,24 +203,43 @@ class App(BaseApp):
             query_self_attn = self.ExplainableModel.self_xai_maps[self.selected_layer.get()] # last layer
             query_self_attn = query_self_attn[0]
             query_self_attn = query_self_attn[self.thr_idxs]
-            percentage = query_self_attn / query_self_attn.sum() * 100
+
+            # ax = self.fig.add_subplot(self.spec[1, 2])
+            # percentage = query_self_attn / query_self_attn.sum() * 100
+            # x = torch.arange(len(query_self_attn))
+            # bars = ax.bar(x, percentage)
+            # bars[self.bbox_idx[0]].set_color('red')
+            # ax.set_facecolor('none')
+            # ax.set_xticks(x)
+            # ax.set_yticks([])
+            # ax.set_xlabel('Objects', fontsize=fontsize)
+            # ax.set_ylabel('Percentage', fontsize=fontsize)
+            # ax.xaxis.label.set_color(text_color)
+            # ax.yaxis.label.set_color(text_color)
+            # ax.tick_params(colors=text_color)
+            # title = "Self-attention"
+            # if self.selected_expl_type.get() != "Gradient Rollout":
+            #     title += f" | layer {self.selected_layer.get()}"
+            # ax.set_title(title, fontsize=fontsize-1, color=text_color)
 
             ax = self.fig.add_subplot(self.spec[1, 2])
-            x = torch.arange(len(query_self_attn))
-            bars = ax.bar(x, percentage)
-            bars[self.bbox_idx[0]].set_color('red')
-            ax.set_facecolor('none')
-            ax.set_xticks(x)
-            ax.set_yticks([])
-            ax.set_xlabel('Objects', fontsize=fontsize)
-            ax.set_ylabel('Percentage', fontsize=fontsize)
-            ax.xaxis.label.set_color(text_color)
-            ax.yaxis.label.set_color(text_color)
-            ax.tick_params(colors=text_color)
+            n_cameras, n_layers = scores.shape
+
+            # This will be our x locations for the groups
+            x = np.arange(n_layers)
+
+            # We'll use a bar width of 0.1
+            bar_width = 0.1  
+
+            fig, ax = plt.subplots()
+
+            # For each camera, we'll create a bar at each layer position
+            for i in range(n_cameras):
+                ax.bar(x - bar_width/2 + i*bar_width, scores[i], bar_width, label=f'Camera {i+1}')
+
             title = "Self-attention"
             if self.selected_expl_type.get() != "Gradient Rollout":
                 title += f" | layer {self.selected_layer.get()}"
-            ax.set_title(title, fontsize=fontsize-1, color=text_color)
 
             ax2 = self.fig.add_subplot(self.spec[1, 0])
             labels = np.arange(len(self.labels))

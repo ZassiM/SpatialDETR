@@ -435,13 +435,13 @@ class BaseApp(tk.Tk):
                     self.bboxes[0].set(True)
 
     def get_camera_object(self):
-        scores = self.update_scores()
+        scores = self.get_camera_scores()
         if not scores:
             return -1
         cam_obj = scores.index(max(scores))
         return cam_obj
 
-    def update_scores(self):
+    def get_camera_scores(self):
         scores = []
         scores_perc = []
 
