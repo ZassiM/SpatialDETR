@@ -61,6 +61,7 @@ class Model():
         args["config"] = cfg_file
         args["checkpoint"] = weights_file
         args["launcher"] = launcher
+
         self.init_model(args)
         
         self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]

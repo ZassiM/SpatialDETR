@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 from modules.Configs import Configs
 from modules.Explainability import ExplainableTransformer
-from modules.Explainability  import overlay_attention_on_image
+from modules.Explainability  import generate_saliency_map
 from modules.Model import Model
 from scripts.evaluate import evaluate
 
@@ -48,7 +48,7 @@ class BaseApp(tk.Tk):
         self.frame_rate = 1
         self.old_bbox_idx = None
 
-        self.bbox_coords, self.att_nobbx_all = [], []
+        self.bbox_coords, self.saliency_maps_objects = [], []
         
         # Main Tkinter menu in which all other cascade menus are added
         self.menubar = tk.Menu(self)
@@ -150,24 +150,24 @@ class BaseApp(tk.Tk):
 
         # Cascade menus for Explainable options
         expl_opt = tk.Menu(self.menubar)
-        attn_rollout, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
+        raw_attention, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.expl_options = ["Raw Attention", "Grad-CAM", "Gradient Rollout"]
 
         # Raw Attention
-        expl_opt.add_cascade(label=self.expl_options[0], menu=attn_rollout)
+        expl_opt.add_cascade(label=self.expl_options[0], menu=raw_attention)
         self.head_fusion_types = ["max", "min", "mean"]
         self.selected_head_fusion = tk.StringVar()
         self.selected_head_fusion.set(self.head_fusion_types[0])
 
         hf_opt = tk.Menu(self.menubar)
         self.selected_discard_threshold = tk.DoubleVar()
-        self.selected_discard_threshold.set(0.3)
+        self.selected_discard_threshold.set(0.1)
         values = np.arange(0.0, 1, 0.1).round(1)
         for i in range(len(self.head_fusion_types)):
             hf_opt.add_radiobutton(label=self.head_fusion_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_fusion_types[i])
         for head in range(self.ObjectDetector.num_heads):
             hf_opt.add_radiobutton(label=str(head), variable=self.selected_head_fusion, value = str(head))
-        attn_rollout.add_cascade(label=" Head", menu=hf_opt)
+        raw_attention.add_cascade(label=" Head", menu=hf_opt)
 
         # Grad-CAM
         expl_opt.add_cascade(label=self.expl_options[1], menu=grad_cam)
@@ -302,6 +302,7 @@ class BaseApp(tk.Tk):
         if len(self.labels) == 0:
             self.no_object = True
             print("No object detected.")
+            self.show_message("No object detected.")
 
         # Extract image metas which contain, for example, the lidar to camera projection matrices
         self.img_metas = self.data["img_metas"][0]._data[0][0]
@@ -435,6 +436,8 @@ class BaseApp(tk.Tk):
 
     def get_camera_object(self):
         scores = self.update_scores()
+        if not scores:
+            return -1
         cam_obj = scores.index(max(scores))
         return cam_obj
 
@@ -442,10 +445,10 @@ class BaseApp(tk.Tk):
         scores = []
         scores_perc = []
 
-        for camidx in range(len(self.ExplainableModel.attn_list[self.selected_layer.get()])):
-            attn = self.ExplainableModel.attn_list[self.selected_layer.get()][camidx]
-            attn = attn.clamp(min=0)
-            score = round(attn.sum().item(), 2)
+        for camidx in range(len(self.ExplainableModel.xai_maps[self.selected_layer.get()])):
+            cam_map = self.ExplainableModel.xai_maps[self.selected_layer.get()][camidx]
+            cam_map = cam_map.clamp(min=0)
+            score = round(cam_map.sum().item(), 2)
             scores.append(score)
 
         sum_scores = sum(scores)

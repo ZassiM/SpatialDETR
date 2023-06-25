@@ -12,11 +12,11 @@ def handle_residual(orig_self_attention):
     self_attention += torch.eye(self_attention.shape[-1]).to(self_attention.device)
     return self_attention
 
-def overlay_attention_on_image(img, attn, intensity=255):
-    attn = cv2.applyColorMap(np.uint8(attn * intensity), cv2.COLORMAP_JET)
-    attn = np.float32(attn) 
-    attn = cv2.resize(attn, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
-    img = attn + np.float32(img)
+def generate_saliency_map(img, xai_map, intensity=255):
+    xai_map = cv2.applyColorMap(np.uint8(xai_map * intensity), cv2.COLORMAP_JET)
+    xai_map = np.float32(xai_map) 
+    xai_map = cv2.resize(xai_map, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
+    img = xai_map + np.float32(img)
     img = img / np.max(img)
     return img
     
@@ -193,68 +193,68 @@ class ExplainableTransformer:
             self.handle_co_attn_query(self.num_layers-1, camidx, handle_residual, apply_rule)
 
     def generate_explainability(self, expl_type, bbox_idx, indices, head_fusion="min", discard_threshold=0.9, handle_residual=True, apply_rule=True,  remove_pad=True):
-        attention_maps, self_attention_maps, att_maps_cameras = [], [], []
+        xai_maps, self_xai_maps, xai_maps_camera = [], [], []
 
         if expl_type == "Gradient Rollout":
             for camidx in range(6):
                 self.generate_gradroll(camidx, handle_residual, apply_rule)
-                att_maps_cameras.append(self.R_q_i[indices[bbox_idx]].detach().cpu())
-            attention_maps.append(att_maps_cameras)
+                xai_maps_camera.append(self.R_q_i[indices[bbox_idx]].detach().cpu())
+            xai_maps.append(xai_maps_camera)
 
         else:
             for layer in range(self.num_layers):
-                att_maps_cameras, self_att_maps_cameras = [], []
+                xai_maps_camera, self_xai_maps_camera = [], []
                 for camidx in range(6):
                     if expl_type == "Raw Attention":
                         self.generate_raw_att(layer, camidx, head_fusion)
                     elif expl_type == "Grad-CAM":
                         self.generate_gradcam(layer, camidx)
-                    att_maps_cameras.append(self.R_q_i[indices[bbox_idx]].detach().cpu())
-                attention_maps.append(att_maps_cameras)
+                    xai_maps_camera.append(self.R_q_i[indices[bbox_idx]].detach().cpu())
+                xai_maps.append(xai_maps_camera)
 
         for layer in range(self.num_layers):
-            self_attention_maps.append(self.dec_self_attn_weights[layer][indices[bbox_idx]][:, indices].detach().cpu())
+            self_xai_maps.append(self.dec_self_attn_weights[layer][indices[bbox_idx]][:, indices].detach().cpu())
 
         # num_layers x num_cams x num_objects x 1450
-        attention_maps = torch.stack([torch.stack(layer) for layer in attention_maps])
-        attention_maps = attention_maps.permute(0, 2, 1, 3)  # num layers x num_objects x num_cams x 1450 # take only the selected objects
+        xai_maps = torch.stack([torch.stack(layer) for layer in xai_maps])
+        xai_maps = xai_maps.permute(0, 2, 1, 3)  # num layers x num_objects x num_cams x 1450 # take only the selected objects
 
         # normalize across cameras
-        for layer in range(len(attention_maps)):
-            for object in range(len(attention_maps[layer])):
-                attention_maps[layer][object] = (attention_maps[layer][object] - attention_maps[layer][object].min()) / (attention_maps[layer][object].max() - attention_maps[layer][object].min())
+        for layer in range(len(xai_maps)):
+            for object in range(len(xai_maps[layer])):
+                xai_maps[layer][object] = (xai_maps[layer][object] - xai_maps[layer][object].min()) / (xai_maps[layer][object].max() - xai_maps[layer][object].min())
 
         # now attention maps can be overlayed
-        if attention_maps.shape[1] > 0:
-            attention_maps = attention_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
-            mask = attention_maps < discard_threshold
-            attention_maps[mask] = 0
-            attention_maps = self.interpolate_expl(attention_maps, remove_pad)
+        if xai_maps.shape[1] > 0:
+            xai_maps = xai_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
+            mask = xai_maps < discard_threshold - (xai_maps.mean() + xai_maps.std())
+            xai_maps[mask] = 0 
+            xai_maps = self.interpolate_expl(xai_maps, remove_pad)
 
-        self.attn_list = attention_maps
-        self.self_attn_list = self_attention_maps
+        self.xai_maps = xai_maps
+        self.self_xai_maps = self_xai_maps
 
-    def interpolate_expl(self, attention_maps, remove_pad):
-        attention_maps_inter = []
-        if attention_maps.dim() == 1:
-            attention_maps.unsqueeze_(0)
-            attention_maps.unsqueeze_(0)
-        for layer in range(len(attention_maps)):
-            attention_maps_cameras = []
-            for camidx in range(len(attention_maps[layer])):
-                attn = attention_maps[layer][camidx].reshape(1, 1, self.height_feats, self.width_feats)
-                attn[0,0,:,0] = 0
-                attn[0,0,:,-1] = 0
-                attn = torch.nn.functional.interpolate(attn, scale_factor=32, mode='bilinear')
-                attn = attn.reshape(attn.shape[2], attn.shape[3])
+    def interpolate_expl(self, xai_maps, remove_pad):
+        xai_maps_inter = []
+        if xai_maps.dim() == 1:
+            xai_maps.unsqueeze_(0)
+            xai_maps.unsqueeze_(0)
+        for layer in range(len(xai_maps)):
+            xai_maps_cameras = []
+            for camidx in range(len(xai_maps[layer])):
+                xai_map = xai_maps[layer][camidx].reshape(1, 1, self.height_feats, self.width_feats)
+                xai_map[0,0,:,0] = 0
+                xai_map[0,0,:,-1] = 0
+                xai_map = torch.nn.functional.interpolate(xai_map, scale_factor=32, mode='bilinear')
+                xai_map = xai_map.reshape(xai_map.shape[2], xai_map.shape[3])
                 if remove_pad:
-                    attn = attn[:self.ori_shape[0], :self.ori_shape[1]]
+                    xai_map = xai_map[:self.ori_shape[0], :self.ori_shape[1]]
 
-                attention_maps_cameras.append(attn)
-            attention_maps_inter.append(attention_maps_cameras)
+                xai_maps_cameras.append(xai_map)
+            xai_maps_inter.append(xai_maps_cameras)
 
-        attention_maps_inter = torch.stack([torch.stack(layer) for layer in attention_maps_inter])
+        xai_maps_inter = torch.stack([torch.stack(layer) for layer in xai_maps_inter])
 
-        return attention_maps_inter
+        return xai_maps_inter
 
 

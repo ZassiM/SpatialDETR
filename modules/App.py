@@ -4,7 +4,7 @@ from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 import matplotlib.transforms as mtransforms
 
 
-from modules.BaseApp import BaseApp, tk, np, cv2, plt, mmcv, torch, DC, overlay_attention_on_image
+from modules.BaseApp import BaseApp, tk, np, cv2, plt, mmcv, torch, DC, generate_saliency_map
 import shutil
 import os
 
@@ -53,29 +53,17 @@ class App(BaseApp):
             if self.single_bbox.get():
                 # Extract camera with highest attention
                 cam_obj = self.get_camera_object()
+                if cam_obj == -1:
+                    self.show_message("Change explainability option.")
+                    return
                 self.selected_camera = cam_obj
 
         # Generate images list with bboxes on it
         print("Generating camera images...")
-        self.cam_imgs, self.att_nobbx_all = [], []
+        self.cam_imgs, self.saliency_maps_objects = [], []
         with_labels = True
         for camidx in range(len(self.imgs)):
 
-            if self.single_bbox.get() and camidx == self.selected_camera:
-                og_img = self.imgs[camidx].astype(np.uint8)
-                for layer in range(len(self.ExplainableModel.attn_list)):
-                    attn = self.ExplainableModel.attn_list[layer][camidx]
-                    if self.gen_segmentation.get():
-                        attn = attn.numpy() * 255
-                        attn = attn.astype(np.uint8)
-                        ret, attn = cv2.threshold(attn, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-                        attn[attn == 255] = 1
-                        attn = torch.from_numpy(attn)
-                    attn_img = overlay_attention_on_image(og_img, attn)      
-                    attn_img = cv2.cvtColor(attn_img, cv2.COLOR_BGR2RGB)
-                    self.att_nobbx_all.append(attn_img)
-
-            # {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
             img, bbox_coords = draw_lidar_bbox3d_on_img(
                     self.pred_bboxes,
                     self.imgs[camidx],
@@ -87,6 +75,18 @@ class App(BaseApp):
                     mode_2d=self.bbox_2d.get())
 
             if self.single_bbox.get() and camidx == self.selected_camera:
+                og_img = self.imgs[camidx].astype(np.uint8)
+                for layer in range(len(self.ExplainableModel.xai_maps)):
+                    xai_map = self.ExplainableModel.xai_maps[layer][camidx]
+                    if self.gen_segmentation.get():
+                        xai_map = xai_map.numpy() * 255
+                        xai_map = xai_map.astype(np.uint8)
+                        _, xai_map = cv2.threshold(xai_map, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                        xai_map[xai_map == 255] = 1
+                        xai_map = torch.from_numpy(xai_map)
+                    saliency_map = generate_saliency_map(og_img, xai_map)      
+                    saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
+                    self.saliency_maps_objects.append(saliency_map)
                 self.bbox_coords = bbox_coords
 
             # Extract Ground Truth bboxes if wanted
@@ -100,11 +100,13 @@ class App(BaseApp):
                         mode_2d=self.bbox_2d.get())
                 
             if self.overlay_bool.get() and not self.no_object:
-                attn = self.ExplainableModel.attn_list[self.selected_layer.get()][camidx]
-                img = overlay_attention_on_image(img, attn)            
-
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            self.cam_imgs.append(img)
+                xai_map = self.ExplainableModel.xai_maps[self.selected_layer.get()][camidx]
+                saliency_map = generate_saliency_map(img, xai_map)            
+                saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
+                self.cam_imgs.append(saliency_map)
+            else:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                self.cam_imgs.append(img)
 
         if not self.single_bbox.get():
             self.spec = self.fig.add_gridspec(2, 3)
@@ -156,7 +158,7 @@ class App(BaseApp):
 
     def show_explainability(self):
         '''
-        Shows the attention map for explainability.
+        Shows the saliency map for explainability.
         '''
         if self.selected_expl_type.get() != "Gradient Rollout":
             # Select the center of the grid to plot the attentions and add 2x2 subgrid
@@ -176,10 +178,10 @@ class App(BaseApp):
                 bbox_coord = b[1]
                 break
         
-        for i in range(len(self.att_nobbx_all)):
+        for i in range(len(self.saliency_maps_objects)):
             ax_obj_layer = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
 
-            att_nobbx_obj = self.att_nobbx_all[i]
+            att_nobbx_obj = self.saliency_maps_objects[i]
             att_nobbx_obj = att_nobbx_obj[bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
             ax_obj_layer.imshow(att_nobbx_obj, vmin=0, vmax=1)   
             
@@ -194,7 +196,7 @@ class App(BaseApp):
         
         if self.show_self_attention.get():
             # Query self-attention visualization
-            query_self_attn = self.ExplainableModel.self_attn_list[self.selected_layer.get()] # last layer
+            query_self_attn = self.ExplainableModel.self_xai_maps[self.selected_layer.get()] # last layer
             query_self_attn = query_self_attn[0]
             query_self_attn = query_self_attn[self.thr_idxs]
             percentage = query_self_attn / query_self_attn.sum() * 100
@@ -342,11 +344,11 @@ class App(BaseApp):
             
 
             if self.selected_expl_type.get() == "Gradient Rollout":
-                attn = self.ExplainableModel.attn_list[0][camidx]
+                attn = self.ExplainableModel.xai_maps[0][camidx]
             else:
-                attn = self.ExplainableModel.attn_list[self.selected_layer.get()][camidx]
+                attn = self.ExplainableModel.xai_maps[self.selected_layer.get()][camidx]
 
-            img = overlay_attention_on_image(img, attn)   
+            img = generate_saliency_map(img, attn)   
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
             cam_imgs.append(img)     
