@@ -42,6 +42,8 @@ class BaseApp(tk.Tk):
         # Model object
         self.ObjectDetector = Model()
 
+        self.file_suffix = 0
+        self.bg_color = self.option_get('background', '*')
         self.started_app = False
         self.video_length = 15
         self.video_gen_bool = False
@@ -99,43 +101,22 @@ class BaseApp(tk.Tk):
         '''
         It starts the UI after loading the model. Variables are initialized.
         '''
-        # Suffix used for saving screenshot of same model with different numbering
-        self.file_suffix = 0
 
-        # Tkinter frame for visualizing model and GPU info
-        frame = tk.Frame(self)
-        frame.pack(fill=tk.Y)
-        self.info_text = tk.StringVar()
-        self.info_label = tk.Label(frame, textvariable=self.info_text, anchor=tk.CENTER)
-        self.info_label.bind("<Button-1>", lambda event: self.show_model_info())
-        self.info_label.bind("<Enter>", lambda event: self.red_text())
-        self.info_label.bind("<Leave>", lambda event: self.black_text())
-        self.info_label.pack(side=tk.TOP)
-        self.bg_color = self.info_label.cget("background")
-
-        # Cascade menu for Data index
-        dataidx_opt = tk.Menu(self.menubar)
-        dataidx_opt.add_command(label=" Select data index", command=lambda: self.select_data_idx(type=0))
-        dataidx_opt.add_command(label=" Select random data", command=self.random_data_idx)
-
-        dataidx_opt.add_separator()
-
-        dataidx_opt.add_command(label=" Select video length", command=lambda: self.select_data_idx(type=1))
-        dataidx_opt.add_command(label=" Select frame rate", command=lambda: self.select_data_idx(type=2))
-        dataidx_opt.add_command(label=" Generate video", command=self.generate_video)
-        dataidx_opt.add_command(label=" Show video", command=self.show_video)
-
-        dataidx_opt.add_separator()
-
-        dataidx_opt.add_command(label=" Show LIDAR", command=self.show_lidar)
-
-        # Cascade menus for Prediction threshold
-        thr_opt = tk.Menu(self.menubar)
+        # Cascade menu for Data settings
+        dataidx_opt, thr_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.selected_threshold = tk.DoubleVar()
         self.selected_threshold.set(0.5)
         values = np.arange(0.0, 1, 0.1).round(1)
         for i in values:
             thr_opt.add_radiobutton(label=i, variable=self.selected_threshold)
+        dataidx_opt.add_command(label=" Select data index", command=lambda: self.select_data_idx(type=0))
+        dataidx_opt.add_command(label=" Select random data", command=self.random_data_idx)
+        dataidx_opt.add_cascade(label=" Select prediction threshold", menu=thr_opt)
+        dataidx_opt.add_separator()
+        dataidx_opt.add_command(label=" Generate video", command=self.generate_video)
+        dataidx_opt.add_command(label=" Show video", command=self.show_video)
+        dataidx_opt.add_separator()
+        dataidx_opt.add_command(label=" Show LIDAR", command=self.show_lidar)
 
         # Cascade menu for Camera
         self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
@@ -227,23 +208,27 @@ class BaseApp(tk.Tk):
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
         add_opt.add_checkbutton(label=" Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
+        add_opt.add_command(label=" Select video length", command=lambda: self.select_data_idx(type=1))
+        add_opt.add_command(label=" Select frame rate", command=lambda: self.select_data_idx(type=2))
         add_opt.add_command(label=" Change theme", command=self.change_theme)
 
         # Adding all cascade menus ro the main menubar menu
         self.add_separator()
         self.menubar.add_cascade(label="Data", menu=dataidx_opt)
         self.add_separator()
-        self.menubar.add_cascade(label="Prediction threshold", menu=thr_opt)
-        self.add_separator()
         self.menubar.add_cascade(label="Objects", menu=self.bbox_opt)
         self.add_separator()
-        self.menubar.add_cascade(label="Explainability", menu=expl_opt)
-        self.add_separator()
         self.menubar.add_cascade(label="Layer", menu=layer_opt)
+        self.add_separator()
+        self.menubar.add_cascade(label="Explainability", menu=expl_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Options", menu=add_opt)
         self.add_separator("|")
         self.menubar.add_command(label="Visualize", command=self.visualize)
+        self.add_separator("|")
+        self.add_separator("---------------|")
+        self.menubar.add_command(label="")
+        self.add_separator("|---------------")
 
     def show_car(self):
         img = plt.imread("misc/car.png")
@@ -332,14 +317,7 @@ class BaseApp(tk.Tk):
     def show_message(self, message):
         showinfo(title=None, message=message)
 
-    def red_text(self, event=None):
-        self.info_label.config(fg="red")
 
-    def black_text(self, event=None):
-        if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
-            self.info_label.config(fg="white")
-        else:
-            self.info_label.config(fg="black")
 
     def show_model_info(self, event=None):
         popup = tk.Toplevel(self)
@@ -398,7 +376,10 @@ class BaseApp(tk.Tk):
             idx = self.data_idx
         if info is None:
             info = f"Model: {self.ObjectDetector.model_name} | Dataloader: {self.ObjectDetector.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
-        self.info_text.set(info)
+        
+        last_index = self.menubar.index('end')
+        self.menubar.delete(last_index - 1)
+        self.menubar.insert_command(last_index - 1, label=info, command=self.show_model_info)
 
     def update_objects_list(self, labels=None):
         if labels is None:
@@ -435,30 +416,11 @@ class BaseApp(tk.Tk):
                     self.bboxes[0].set(True)
 
     def get_camera_object(self):
-        scores = self.get_camera_scores()
+        scores = self.ExplainableModel.scores
         if not scores:
             return -1
-        cam_obj = scores.index(max(scores))
+        cam_obj = scores[self.selected_layer.get()].index(max(scores[self.selected_layer.get()]))
         return cam_obj
-
-    def get_camera_scores(self):
-        scores = []
-        scores_perc = []
-
-        for camidx in range(len(self.ExplainableModel.xai_maps[self.selected_layer.get()])):
-            cam_map = self.ExplainableModel.xai_maps[self.selected_layer.get()][camidx]
-            cam_map = cam_map.clamp(min=0)
-            score = round(cam_map.sum().item(), 2)
-            scores.append(score)
-
-        sum_scores = sum(scores)
-        if sum_scores > 0 and not np.isnan(sum_scores):
-            for i in range(len(scores)):
-                score_perc = round(((scores[i]/sum_scores)*100))
-                scores_perc.append(score_perc)
-            return scores_perc
-        else:
-            return 0
 
     def capture(self):
         screenshots_path = "screenshots/"
@@ -482,7 +444,7 @@ class BaseApp(tk.Tk):
             self.bg_color = "white"
         else:
             self.tk.call("set_theme", "dark")
-            self.bg_color = self.info_label.cget("background")
+            self.bg_color = self.option_get('background', '*')
 
         self.fig.set_facecolor(self.bg_color)
         self.canvas.draw()

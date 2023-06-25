@@ -19,6 +19,7 @@ def generate_saliency_map(img, xai_map, intensity=255):
     img = xai_map + np.float32(img)
     img = img / np.max(img)
     return img
+
     
 def compute_rollout_attention(all_layer_matrices, start_layer=0):
     num_tokens = all_layer_matrices[0].shape[1]
@@ -145,6 +146,30 @@ class ExplainableTransformer:
             hook.remove()
             
         return outputs
+    
+    def get_camera_scores(self):
+        scores = []
+        scores_perc = [] 
+
+        for layer in range(len(self.xai_maps)):
+            scores_cam = []
+            for camidx in range(len(self.xai_maps[layer])):
+                cam_map = self.xai_maps[layer][camidx]
+                score = round(cam_map.sum().item(), 2)
+                scores_cam.append(score)
+            scores.append(scores_cam)
+        
+        for layer in range(len(self.xai_maps)):
+            sum_scores = sum(scores[layer])
+            if sum_scores > 0 and not np.isnan(sum_scores):
+                scores_perc_cam = []
+                for camidx in range(len(scores[layer])):
+                    score_perc = round(((scores[layer][camidx]/sum_scores)*100))
+                    scores_perc_cam.append(score_perc)
+                scores_perc.append(scores_perc_cam)
+            else:
+                continue
+        return scores_perc
         
     def generate_raw_att(self, layer, camidx, head_fusion="min"):  
         ''' Generates Raw Attention for XAI. '''      
@@ -227,11 +252,13 @@ class ExplainableTransformer:
         # now attention maps can be overlayed
         if xai_maps.shape[1] > 0:
             xai_maps = xai_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
-            mask = xai_maps < discard_threshold - (xai_maps.mean() + xai_maps.std())
+            mask = xai_maps < discard_threshold - (discard_threshold * 10) * (xai_maps.mean() + xai_maps.std())
             xai_maps[mask] = 0 
             xai_maps = self.interpolate_expl(xai_maps, remove_pad)
 
         self.xai_maps = xai_maps
+        if len(bbox_idx) == 1:
+            self.scores = self.get_camera_scores()
         self.self_xai_maps = self_xai_maps
 
     def interpolate_expl(self, xai_maps, remove_pad):
@@ -245,7 +272,7 @@ class ExplainableTransformer:
                 xai_map = xai_maps[layer][camidx].reshape(1, 1, self.height_feats, self.width_feats)
                 xai_map[0,0,:,0] = 0
                 xai_map[0,0,:,-1] = 0
-                xai_map = torch.nn.functional.interpolate(xai_map, scale_factor=32, mode='bilinear')
+                xai_map = torch.nn.functional.interpolate(xai_map, scale_factor=16, mode='bilinear')
                 xai_map = xai_map.reshape(xai_map.shape[2], xai_map.shape[3])
                 if remove_pad:
                     xai_map = xai_map[:self.ori_shape[0], :self.ori_shape[1]]

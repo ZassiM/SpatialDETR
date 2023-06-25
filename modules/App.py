@@ -54,9 +54,12 @@ class App(BaseApp):
                 # Extract camera with highest attention
                 cam_obj = self.get_camera_object()
                 if cam_obj == -1:
-                    self.show_message("Change explainability option.")
+                    self.show_message("Please check the selected options.")
                     return
                 self.selected_camera = cam_obj
+                # if self.old_bbox_idx != self.bbox_idx:
+                #     self.scores = self.get_camera_scores()
+                #     self.old_bbox_idx = self.bbox_idx
 
         # Generate images list with bboxes on it
         print("Generating camera images...")
@@ -113,9 +116,9 @@ class App(BaseApp):
                 self.cam_imgs.append(img)
 
         if not self.single_bbox.get():
-            self.spec = self.fig.add_gridspec(2, 3)
+            self.spec = self.fig.add_gridspec(2, 3, wspace=0, hspace=0)
         else:
-            self.spec = self.fig.add_gridspec(3, 3)
+            self.spec = self.fig.add_gridspec(3, 3, wspace=0, hspace=0)
 
         # Visualize the generated images list on the figure subplots
         print("Plotting...")
@@ -131,7 +134,7 @@ class App(BaseApp):
             ax.imshow(self.cam_imgs[self.cam_idx[i]])
 
             if self.single_bbox.get():
-                score = self.get_camera_scores()[self.cam_idx[i]]
+                score = self.ExplainableModel.scores[self.selected_layer.get()][self.cam_idx[i]]
                 ax.axhline(y=0, color='black', linewidth=10)
                 ax.axhline(y=0, color='green', linewidth=10, xmax=score/100)
 
@@ -204,42 +207,30 @@ class App(BaseApp):
             query_self_attn = query_self_attn[0]
             query_self_attn = query_self_attn[self.thr_idxs]
 
-            # ax = self.fig.add_subplot(self.spec[1, 2])
-            # percentage = query_self_attn / query_self_attn.sum() * 100
-            # x = torch.arange(len(query_self_attn))
-            # bars = ax.bar(x, percentage)
-            # bars[self.bbox_idx[0]].set_color('red')
-            # ax.set_facecolor('none')
-            # ax.set_xticks(x)
-            # ax.set_yticks([])
-            # ax.set_xlabel('Objects', fontsize=fontsize)
-            # ax.set_ylabel('Percentage', fontsize=fontsize)
-            # ax.xaxis.label.set_color(text_color)
-            # ax.yaxis.label.set_color(text_color)
-            # ax.tick_params(colors=text_color)
-            # title = "Self-attention"
-            # if self.selected_expl_type.get() != "Gradient Rollout":
-            #     title += f" | layer {self.selected_layer.get()}"
-            # ax.set_title(title, fontsize=fontsize-1, color=text_color)
-
-            ax = self.fig.add_subplot(self.spec[1, 2])
-            n_cameras, n_layers = scores.shape
-
-            # This will be our x locations for the groups
-            x = np.arange(n_layers)
-
-            # We'll use a bar width of 0.1
-            bar_width = 0.1  
-
-            fig, ax = plt.subplots()
-
-            # For each camera, we'll create a bar at each layer position
-            for i in range(n_cameras):
-                ax.bar(x - bar_width/2 + i*bar_width, scores[i], bar_width, label=f'Camera {i+1}')
-
             title = "Self-attention"
             if self.selected_expl_type.get() != "Gradient Rollout":
                 title += f" | layer {self.selected_layer.get()}"
+
+            ax = self.fig.add_subplot(self.spec[1, 2])
+            percentage = query_self_attn / query_self_attn.sum() * 100
+            x = torch.arange(len(query_self_attn))
+            bars = ax.bar(x, percentage)
+            bars[self.bbox_idx[0]].set_color('red')
+            ax.set_facecolor('none')
+            ax.set_xticks(x)
+            ax.set_yticks([])
+            ax.set_xlabel('Objects', fontsize=fontsize, labelpad=-5)
+            ax.set_ylabel('Percentage', fontsize=fontsize, labelpad=-5)
+            ax.xaxis.label.set_color(text_color)
+            ax.yaxis.label.set_color(text_color)
+            ax.tick_params(colors=text_color)
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+
+            # Hide the left and bottom spines but keep the ticks
+            ax.spines['left'].set_visible(False)
+            ax.spines['bottom'].set_visible(False)
+            ax.set_title(title, fontsize=fontsize-1, color=text_color)
 
             ax2 = self.fig.add_subplot(self.spec[1, 0])
             labels = np.arange(len(self.labels))
@@ -248,18 +239,18 @@ class App(BaseApp):
             patches, texts = ax2.pie(query_self_attn, labels=labels, wedgeprops={'linewidth': 1.0, 'edgecolor': edge_color}, explode=explode)
             for i, patch in enumerate(patches):
                 texts[i].set_color(patch.get_facecolor())
-            classes = [f"{i}: {self.ObjectDetector.class_names[self.labels[i]]}" for i in labels]
-            leg = ax2.legend(patches, classes,
-                        title="Objects",
-                        loc="center left",
-                        bbox_to_anchor=(1, 0, 0.5, 1),
-                        fontsize='small',
-                        framealpha=0.0)
-            for text in leg.get_texts():
-                text.set_color(text_color)
+            # classes = [f"{i}: {self.ObjectDetector.class_names[self.labels[i]]}" for i in labels]
+            # leg = ax2.legend(patches, classes,
+            #             title="Objects",
+            #             loc="center left",
+            #             bbox_to_anchor=(1, 0, 0.5, 1),
+            #             fontsize='small',
+            #             framealpha=0.0)
+            # for text in leg.get_texts():
+            #     text.set_color(text_color)
             ax2.set_title(title, color=text_color, fontsize=fontsize-1)
 
-        self.fig.tight_layout()
+        self.fig.tight_layout(pad=0)
 
     def show_lidar(self):
         self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, snapshot=False, pipeline=None, score_thr=self.selected_threshold.get())
