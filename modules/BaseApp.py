@@ -270,15 +270,13 @@ class BaseApp(tk.Tk):
             outputs = self.ExplainableModel.extract_attentions(self.data)
         else:
             outputs = self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
+
+        layer = -1
         
         # Those are needed to index the bboxes decoded by the NMS-Free decoder
-        self.nms_idxs = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()
-
-        # Extract predicted bboxes and their labels
-        self.outputs = outputs[0]["pts_bbox"]
+        self.nms_idxs = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()[layer]
+        self.outputs = outputs[0]["pts_bbox"][layer]
         self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
-
-        # [cx, cy, cz, l, w, h, rot, vx, vy]
         self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
         self.pred_bboxes.tensor.detach()
         self.labels = self.outputs['labels_3d'][self.thr_idxs]
