@@ -32,6 +32,7 @@ class App(BaseApp):
             if self.video_gen_bool:
                 self.canvas.pack_forget()
                 self.menubar.delete('end', 'end')
+                self.video_gen_bool = False
             self.fig = plt.figure()
             self.fig.set_facecolor(self.bg_color)
             # self.spec = self.fig.add_gridspec(3, 3)
@@ -40,10 +41,17 @@ class App(BaseApp):
 
         self.fig.clear()
 
+        if self.selected_expl_type.get() == "Gradient Rollout":
+                self.selected_layer.set(0)
+
         self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name]
 
-        if self.video_gen_bool:
-            self.video_gen_bool = False
+        if self.old_layer != self.selected_layer.get():
+            if self.single_bbox.get():
+                self.select_layer(initialize_bboxes=False)
+            else:
+                self.select_layer()
+            self.old_layer = self.selected_layer.get()
 
         # Extract the selected bounding box indices from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
@@ -57,9 +65,6 @@ class App(BaseApp):
                     self.show_message("Please check the selected options.")
                     return
                 self.selected_camera = cam_obj
-                # if self.old_bbox_idx != self.bbox_idx:
-                #     self.scores = self.get_camera_scores()
-                #     self.old_bbox_idx = self.bbox_idx
 
         # Generate images list with bboxes on it
         print("Generating camera images...")
@@ -145,10 +150,6 @@ class App(BaseApp):
 
         self.fig.tight_layout(pad=0)
         self.canvas.draw()
-
-        # Take a screenshot if the option is selected
-        if self.capture_bool.get():
-            self.capture()
         
         print("Done.\n")
         torch.cuda.empty_cache()
@@ -156,12 +157,13 @@ class App(BaseApp):
 
     def update_explainability(self):
         # Avoid selecting all layers and all cameras. Only the last layer will be visualized
-        if self.selected_expl_type.get() == "Gradient Rollout":
-                self.selected_layer.set(0)
         if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
+            print("Calculating gradients...")
             self.update_data(initialize_bboxes=False)
 
-        self.expl_configs.configs = [self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_threshold.get(), self.handle_residual.get(), self.apply_rule.get()]   
+        self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.selected_discard_threshold.get(), self.handle_residual.get(), self.apply_rule.get(), self.data_idx]   
+
+        self.ExplainableModel.select_saliency_maps(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get())
 
     def show_explainability(self):
         '''
@@ -169,7 +171,7 @@ class App(BaseApp):
         '''
         if self.selected_expl_type.get() != "Gradient Rollout":
             # Select the center of the grid to plot the attentions and add 2x2 subgrid
-            layer_grid = self.spec[1, 1].subgridspec(2, 3, wspace=0, hspace=0)
+            layer_grid = self.spec[1, 1].subgridspec(2, 3)
             fontsize = 8
         else:
             layer_grid = self.spec[1, 1].subgridspec(1, 1)
@@ -203,7 +205,7 @@ class App(BaseApp):
         
         if self.show_self_attention.get():
             # Query self-attention visualization
-            query_self_attn = self.ExplainableModel.self_xai_maps[self.selected_layer.get()] # last layer
+            query_self_attn = self.ExplainableModel.self_xai_maps[self.selected_layer.get()]
             query_self_attn = query_self_attn[0]
             query_self_attn = query_self_attn[self.thr_idxs]
 
@@ -219,41 +221,48 @@ class App(BaseApp):
             ax.set_facecolor('none')
             ax.set_xticks(x)
             ax.set_yticks([])
-            ax.set_xlabel('Objects', fontsize=fontsize, labelpad=-5)
-            ax.set_ylabel('Percentage', fontsize=fontsize, labelpad=-5)
+            # ax.set_xlabel('Objects', fontsize=fontsize, labelpad=-5)
+            # ax.set_ylabel('Percentage', fontsize=fontsize, labelpad=-5)
             ax.xaxis.label.set_color(text_color)
             ax.yaxis.label.set_color(text_color)
             ax.tick_params(colors=text_color)
             ax.spines['right'].set_visible(False)
             ax.spines['top'].set_visible(False)
-
-            # Hide the left and bottom spines but keep the ticks
             ax.spines['left'].set_visible(False)
             ax.spines['bottom'].set_visible(False)
-            ax.set_title(title, fontsize=fontsize-1, color=text_color)
+
+            ax.set_xticklabels([])
+            min_font_size = 6
+            max_font_size = 12
+            num_bars = len(bars)
+            fontsize = max(min_font_size, max_font_size - num_bars // 10)
+            for i, bar in enumerate(bars):
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                        str(i), ha='center', va='bottom', color=text_color,
+                        fontsize=fontsize)
+            
+            edge_color = "black" if text_color == "white" else "white"
+            title_color = edge_color
+            ax.set_title(title, fontsize=fontsize-1, color=title_color)
 
             ax2 = self.fig.add_subplot(self.spec[1, 0])
+
+            cmap = plt.cm.get_cmap('OrRd')  # Choose the desired colormap
+
+            # Normalize the values of query_self_attn between 0 and 1
+            norm = plt.Normalize(vmin=query_self_attn.min(), vmax=query_self_attn.max())
+            color_values = cmap(norm(query_self_attn))
             labels = np.arange(len(self.labels))
             explode = [0.1 if i == self.bbox_idx[0] else 0 for i in range(len(self.labels))]
-            edge_color = "black" if text_color == "white" else "white"
-            patches, texts = ax2.pie(query_self_attn, labels=labels, wedgeprops={'linewidth': 1.0, 'edgecolor': edge_color}, explode=explode)
+            patches, texts = ax2.pie(query_self_attn, labels=labels, wedgeprops={'linewidth': 1.0, 'edgecolor': edge_color}, explode=explode, colors=color_values)
             for i, patch in enumerate(patches):
                 texts[i].set_color(patch.get_facecolor())
-            # classes = [f"{i}: {self.ObjectDetector.class_names[self.labels[i]]}" for i in labels]
-            # leg = ax2.legend(patches, classes,
-            #             title="Objects",
-            #             loc="center left",
-            #             bbox_to_anchor=(1, 0, 0.5, 1),
-            #             fontsize='small',
-            #             framealpha=0.0)
-            # for text in leg.get_texts():
-            #     text.set_color(text_color)
-            ax2.set_title(title, color=text_color, fontsize=fontsize-1)
+            ax2.set_title(title, color=title_color, fontsize=fontsize-1)
 
-        self.fig.tight_layout(pad=0)
+        self.fig.tight_layout()
 
     def show_lidar(self):
-        self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, snapshot=False, pipeline=None, score_thr=self.selected_threshold.get())
+        self.ObjectDetector.dataset.show_mod(self.outputs[self.selected_layer.get()], index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, snapshot=False, pipeline=None, score_thr=self.selected_threshold.get())
 
     def show_video(self):
         if not hasattr(self, "img_frames"):
@@ -278,7 +287,7 @@ class App(BaseApp):
             self.show_sequence()
 
     def generate_video(self, save_img=True):
-        if self.video_length > ((len(self.ObjectDetector.dataset)-1) - self.data_idx):
+        if self.video_length.get() > ((len(self.ObjectDetector.dataset)-1) - self.data_idx):
             self.show_message(f"Video lenght should be between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
             return False
 
@@ -317,7 +326,7 @@ class App(BaseApp):
             self.canvas.itemconfig(self.canvas_frame, image=self.img_frame)
             self.update_info_label(idx=self.data_idx + self.idx_video)
 
-            self.after_seq_id = self.after(self.frame_rate, self.show_sequence)
+            self.after_seq_id = self.after(self.frame_rate.get(), self.show_sequence)
 
     def pause_resume(self):
         if not self.paused:

@@ -11,8 +11,9 @@ from tkinter import filedialog as fd
 from mmcv.parallel import DataContainer as DC
 from tkinter.messagebox import showinfo
 from tkinter import scrolledtext
-from PIL import ImageGrab
 import matplotlib.pyplot as plt
+from PIL import Image, ImageTk
+
 
 from modules.Configs import Configs
 from modules.Explainability import ExplainableTransformer
@@ -33,7 +34,7 @@ class BaseApp(tk.Tk):
 
         # Tkinter-related settings
         self.tk.call("source", "misc/theme/azure.tcl")
-        self.tk.call("set_theme", "dark")
+        self.tk.call("set_theme", "light")
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
         self.protocol("WM_DELETE_WINDOW", self.quit)
@@ -41,13 +42,15 @@ class BaseApp(tk.Tk):
 
         # Model object
         self.ObjectDetector = Model()
-
+        self.indices_file = 'misc/indices.txt'
+        if not os.path.exists(self.indices_file):
+            open(self.indices_file, 'w').close()
         self.file_suffix = 0
         self.bg_color = self.option_get('background', '*')
         self.started_app = False
-        self.video_length = 15
         self.video_gen_bool = False
-        self.frame_rate = 1
+
+        self.old_layer = None
         self.old_bbox_idx = None
 
         self.bbox_coords, self.saliency_maps_objects = [], []
@@ -64,6 +67,8 @@ class BaseApp(tk.Tk):
         file_opt.add_command(label=" Load model from config file", command=lambda: self.load_model(from_config=True))
         file_opt.add_command(label=" Load video from pickle file", command=self.load_video)
         file_opt.add_command(label=" Save video", command=self.save_video)
+        file_opt.add_command(label=" Save index", command=lambda: self.insert_entry(type=1))
+        file_opt.add_command(label=" Capture screen", command=self.capture)
         file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
         file_opt.add_separator()
         file_opt.add_command(label=" Show car setup", command=self.show_car)
@@ -101,22 +106,37 @@ class BaseApp(tk.Tk):
         '''
         It starts the UI after loading the model. Variables are initialized.
         '''
+        frame = tk.Frame(self)
+        frame.pack(fill=tk.Y)
+        self.info_text = tk.StringVar()
+        self.info_label = tk.Label(frame, textvariable=self.info_text, anchor=tk.CENTER)
+        self.info_label.bind("<Button-1>", lambda event: self.show_model_info())
+        self.info_label.bind("<Enter>", lambda event: self.red_text())
+        self.info_label.bind("<Leave>", lambda event: self.black_text())
+        self.info_label.pack(side=tk.TOP)
 
         # Cascade menu for Data settings
-        dataidx_opt, thr_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
+        dataidx_opt, self.select_idx_opt, saved_indices, thr_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.selected_threshold = tk.DoubleVar()
         self.selected_threshold.set(0.5)
         values = np.arange(0.0, 1, 0.1).round(1)
         for i in values:
             thr_opt.add_radiobutton(label=i, variable=self.selected_threshold)
-        dataidx_opt.add_command(label=" Select data index", command=lambda: self.select_data_idx(type=0))
+
+
+        self.select_idx_opt.add_command(label="Insert index", command=lambda: self.insert_entry(type=0))
+        self.selected_data_idx = tk.IntVar()
+        with open(self.indices_file, 'r') as file:
+            for line in file:
+                self.select_idx_opt.add_radiobutton(label=line.strip(), variable=self.selected_data_idx, command=self.update_idx, value=line.split()[0])
+        dataidx_opt.add_cascade(label=" Select data index", menu=self.select_idx_opt)
         dataidx_opt.add_command(label=" Select random data", command=self.random_data_idx)
         dataidx_opt.add_cascade(label=" Select prediction threshold", menu=thr_opt)
         dataidx_opt.add_separator()
         dataidx_opt.add_command(label=" Generate video", command=self.generate_video)
         dataidx_opt.add_command(label=" Show video", command=self.show_video)
         dataidx_opt.add_separator()
-        dataidx_opt.add_command(label=" Show LIDAR", command=self.show_lidar)
+        dataidx_opt.add_command(label=" Show LiDAR", command=self.show_lidar)
 
         # Cascade menu for Camera
         self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
@@ -181,10 +201,10 @@ class BaseApp(tk.Tk):
         # Discard ratio for attention weights
         dr_opt = tk.Menu(self.menubar)
         self.show_self_attention, self.gen_segmentation = tk.BooleanVar(), tk.BooleanVar()
+        self.show_self_attention.set(True)
         for i in values:
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_threshold)
         expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
-        expl_opt.add_checkbutton(label="Show objects self-attention", onvalue=1, offvalue=0, variable=self.show_self_attention)
         expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
 
 
@@ -197,19 +217,41 @@ class BaseApp(tk.Tk):
         self.bbox_opt.add_checkbutton(label=" Select all", onvalue=1, offvalue=0, variable=self.select_all_bboxes, command=self.initialize_bboxes)
         self.bbox_opt.add_separator()
 
+        quality_opt = tk.Menu(self.menubar)
+        map_qualities = ["Low", "Medium", "High"]
+        self.selected_map_quality = tk.StringVar()
+        self.selected_map_quality.set(map_qualities[1])
+        for i in range(len(map_qualities)):
+            quality_opt.add_radiobutton(label=map_qualities[i], variable=self.selected_map_quality, value=map_qualities[i])
+
+        framerate_opt = tk.Menu(self.menubar)
+        frame_rates = np.arange(0, 20, 5)
+        self.frame_rate = tk.IntVar()
+        self.frame_rate.set(frame_rates[0])
+        for i in range(len(frame_rates)):
+            framerate_opt.add_radiobutton(label=frame_rates[i], variable=self.frame_rate, value=frame_rates[i])
+
+        videolength_opt = tk.Menu(self.menubar)
+        video_lengths = np.arange(10, 200, 20)
+        self.video_length = tk.IntVar()
+        self.video_length.set(video_lengths[0])
+        for i in range(len(video_lengths)):
+            videolength_opt.add_radiobutton(label=video_lengths[i], variable=self.video_length , value=video_lengths[i])
+
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.overlay_bool, self.capture_bool, self.bbox_2d = \
+        self.GT_bool, self.overlay_bool, self.bbox_2d, self.show_self_attention = \
             tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.overlay_bool.set(True)
         self.bbox_2d.set(True)
-
+        self.show_self_attention.set(True)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
-        add_opt.add_checkbutton(label=" Capture output", onvalue=1, offvalue=0, variable=self.capture_bool)
-        add_opt.add_command(label=" Select video length", command=lambda: self.select_data_idx(type=1))
-        add_opt.add_command(label=" Select frame rate", command=lambda: self.select_data_idx(type=2))
+        add_opt.add_checkbutton(label=" Show objects self-attention", onvalue=1, offvalue=0, variable=self.show_self_attention)
+        add_opt.add_cascade(label=" Select video length", menu=videolength_opt)
+        add_opt.add_cascade(label=" Select frame rate", menu=framerate_opt)
+        add_opt.add_cascade(label=" Select maps quality", menu=quality_opt)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
 
         # Adding all cascade menus ro the main menubar menu
@@ -222,13 +264,9 @@ class BaseApp(tk.Tk):
         self.add_separator()
         self.menubar.add_cascade(label="Explainability", menu=expl_opt)
         self.add_separator()
-        self.menubar.add_cascade(label="Options", menu=add_opt)
+        self.menubar.add_cascade(label="Settings", menu=add_opt)
         self.add_separator("|")
         self.menubar.add_command(label="Visualize", command=self.visualize)
-        self.add_separator("|")
-        self.add_separator("---------------|")
-        self.menubar.add_command(label="")
-        self.add_separator("|---------------")
 
     def show_car(self):
         img = plt.imread("misc/car.png")
@@ -236,6 +274,10 @@ class BaseApp(tk.Tk):
         plt.axis("off")
         plt.show()
         
+    def update_idx(self):
+        self.data_idx = self.selected_data_idx.get()
+        self.update_info_label()
+
     def show_app_info(self):
         readme_path = 'README.md'
         with open(readme_path, 'r') as f:
@@ -249,7 +291,7 @@ class BaseApp(tk.Tk):
         readme_text.configure(state='disabled')
         readme_text.pack()
 
-    def update_data(self, initialize_bboxes=True):
+    def update_data(self, select_layer=True, initialize_bboxes=True):
         '''
         Predict bboxes and extracts attentions.
         '''
@@ -271,18 +313,19 @@ class BaseApp(tk.Tk):
         else:
             outputs = self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
 
-        layer = -1
-        
+
         # Those are needed to index the bboxes decoded by the NMS-Free decoder
-        self.nms_idxs = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()[layer]
-        self.outputs = outputs[0]["pts_bbox"][layer]
-        self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
-        self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
-        self.pred_bboxes.tensor.detach()
-        self.labels = self.outputs['labels_3d'][self.thr_idxs]
+        self.nms_îdxs_layers = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()
+        self.outputs = outputs[0]["pts_bbox"]
+        self.thr_idxs_layers = [output_layer['scores_3d'] > self.selected_threshold.get() for output_layer in self.outputs]
+        self.pred_bboxes_layers = [output_layer["boxes_3d"][thr_layer] for output_layer,thr_layer in zip(self.outputs, self.thr_idxs_layers)]
+        for i in range(len(self.pred_bboxes_layers)):
+            self.pred_bboxes_layers[i].tensor.detach()
+                       
+        self.labels_layers = [output_layer['labels_3d'][thr_layer] for output_layer,thr_layer in zip(self.outputs, self.thr_idxs_layers)]
 
         self.no_object = False
-        if len(self.labels) == 0:
+        if len(self.labels_layers[self.selected_layer.get()]) == 0:
             self.no_object = True
             print("No object detected.")
             self.show_message("No object detected.")
@@ -304,18 +347,36 @@ class BaseApp(tk.Tk):
             imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
         self.imgs = imgs.astype(np.uint8)
 
+        if select_layer:
+            self.select_layer(initialize_bboxes=initialize_bboxes)
+
+    
+    def select_layer(self, all_select=True, initialize_bboxes=True):
+        # Extract only the selected layer
+        self.labels = self.labels_layers[self.selected_layer.get()]
+        self.nms_idxs = self.nms_îdxs_layers[self.selected_layer.get()]
+        self.thr_idxs = self.thr_idxs_layers[self.selected_layer.get()]
+        self.pred_bboxes = self.pred_bboxes_layers[self.selected_layer.get()]
+
         if initialize_bboxes and not self.video_gen_bool:
             self.update_objects_list()
-            self.initialize_bboxes(all_select=True)
+            self.initialize_bboxes(all_select=all_select)
 
-    def add_separator(self, sep="|"):
+    def add_separator(self, sep=""):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
         # sep="\u22EE"
 
     def show_message(self, message):
         showinfo(title=None, message=message)
 
+    def red_text(self, event=None):
+        self.info_label.config(fg="red")
 
+    def black_text(self, event=None):
+        if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
+            self.info_label.config(fg="white")
+        else:
+            self.info_label.config(fg="black")
 
     def show_model_info(self, event=None):
         popup = tk.Toplevel(self)
@@ -331,7 +392,7 @@ class BaseApp(tk.Tk):
         text.pack(expand=True, fill='both')
         text.configure(state="disabled")
 
-    def select_data_idx(self, type=0):
+    def insert_entry(self, type=0):
         # Type 0: data index; type 1: video lenght; type 2: frame rate
         popup = tk.Toplevel(self)
         popup.geometry("80x50")
@@ -343,27 +404,20 @@ class BaseApp(tk.Tk):
         button.pack()
 
     def close_entry(self, popup, type):
-        idx = self.entry.get()
+        entry = self.entry.get()
         if type == 0:
-            if idx.isnumeric() and int(idx) <= (len(self.ObjectDetector.dataset)-1):
-                self.data_idx = int(idx)
+            if entry.isnumeric() and int(entry) <= (len(self.ObjectDetector.dataset)-1):
+                self.data_idx = int(entry)
                 self.update_info_label()
             else:
                 self.show_message(f"Insert an integer between 0 and {len(self.ObjectDetector.dataset)}")
         elif type == 1:
-            if idx.isnumeric() and 2 <= int(idx) <= ((len(self.ObjectDetector.dataset)-1) - self.data_idx):
-                self.video_length = int(idx)
-            else:
-                self.show_message(f"Insert an integer between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
-        elif type == 2:
-            max_frame_rate = 100
-            if idx.isnumeric() and 0 <= int(idx) <= (max_frame_rate):
-                self.frame_rate = int(idx)
-            else:
-                self.show_message(f"Insert an integer between 0 and {max_frame_rate}") 
-
+            self.select_idx_opt.add_radiobutton(label=f'{self.data_idx} | {entry}', variable=self.selected_data_idx, command=self.update_idx, value=self.data_idx)
+            with open(self.indices_file, 'a') as file:
+                file.write(f'{self.data_idx} | {entry}\n')
+        
         popup.destroy()
-
+        
     def random_data_idx(self):
         idx = random.randint(0, len(self.ObjectDetector.dataset)-1)
         self.data_idx = idx
@@ -375,9 +429,7 @@ class BaseApp(tk.Tk):
         if info is None:
             info = f"Model: {self.ObjectDetector.model_name} | Dataloader: {self.ObjectDetector.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
         
-        last_index = self.menubar.index('end')
-        self.menubar.delete(last_index - 1)
-        self.menubar.insert_command(last_index - 1, label=info, command=self.show_model_info)
+        self.info_text.set(info)
 
     def update_objects_list(self, labels=None):
         if labels is None:
@@ -434,7 +486,7 @@ class BaseApp(tk.Tk):
 
         path += "_" + str(self.file_suffix) + ".png"
         self.fig.savefig(path, dpi=300, transparent=True)
-        print(f"Screenshot saved in {path}\n")
+        print(f"Screenshot saved in {path}.")
 
     def change_theme(self):
         if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
@@ -449,7 +501,7 @@ class BaseApp(tk.Tk):
 
     def save_video(self):
         if hasattr(self, "img_frames"):
-            data = {'img_frames': self.img_frames, "img_labels": self.img_labels, "video_idx": self.start_video_idx, "video_lenght": self.video_length}
+            data = {'img_frames': self.img_frames, "img_labels": self.img_labels, "video_idx": self.start_video_idx, "video_lenght": self.video_length.get()}
 
             file_path = fd.asksaveasfilename(defaultextension=".pkl", filetypes=[("All Files", "*.*")])
 
@@ -477,6 +529,6 @@ class BaseApp(tk.Tk):
         self.img_frames = data["img_frames"]
         self.img_labels = data["img_labels"]
         self.start_video_idx = data["video_idx"]
-        self.video_length = data["video_lenght"]
+        self.video_length.set(data["video_lenght"])
 
         print(f"Video loaded from {video_pickle}.\n")

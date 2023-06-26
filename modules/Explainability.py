@@ -125,7 +125,7 @@ class ExplainableTransformer:
      
             outputs = self.Model.model(return_loss=False, rescale=True, **data)
 
-            output_scores = outputs[0]["pts_bbox"]["scores_3d"]
+            output_scores = outputs[0]["pts_bbox"][-1]["scores_3d"]
             one_hot = torch.zeros_like(output_scores).to(output_scores.device)
             one_hot[target_index] = 1
             one_hot.requires_grad_(True)
@@ -217,28 +217,28 @@ class ExplainableTransformer:
             self.handle_co_attn_self_query(self.num_layers-1)
             self.handle_co_attn_query(self.num_layers-1, camidx, handle_residual, apply_rule)
 
-    def generate_explainability(self, expl_type, bbox_idx, indices, head_fusion="min", discard_threshold=0.9, handle_residual=True, apply_rule=True,  remove_pad=True):
+    def generate_explainability(self, expl_type, head_fusion="min", discard_threshold=0.9, handle_residual=True, apply_rule=True,  remove_pad=True):
         xai_maps, self_xai_maps, xai_maps_camera = [], [], []
 
         if expl_type == "Gradient Rollout":
             for camidx in range(6):
                 self.generate_gradroll(camidx, handle_residual, apply_rule)
-                xai_maps_camera.append(self.R_q_i[indices[bbox_idx]].detach().cpu())
+                xai_maps_camera.append(self.R_q_i.detach().cpu())
             xai_maps.append(xai_maps_camera)
 
         else:
             for layer in range(self.num_layers):
-                xai_maps_camera, self_xai_maps_camera = [], []
+                xai_maps_camera = []
                 for camidx in range(6):
                     if expl_type == "Raw Attention":
                         self.generate_raw_att(layer, camidx, head_fusion)
                     elif expl_type == "Grad-CAM":
                         self.generate_gradcam(layer, camidx)
-                    xai_maps_camera.append(self.R_q_i[indices[bbox_idx]].detach().cpu())
+                    xai_maps_camera.append(self.R_q_i.detach().cpu())
                 xai_maps.append(xai_maps_camera)
 
         for layer in range(self.num_layers):
-            self_xai_maps.append(self.dec_self_attn_weights[layer][indices[bbox_idx]][:, indices].detach().cpu())
+            self_xai_maps.append(self.dec_self_attn_weights[layer].detach().cpu())
 
         # num_layers x num_cams x num_objects x 1450
         xai_maps = torch.stack([torch.stack(layer) for layer in xai_maps])
@@ -249,30 +249,45 @@ class ExplainableTransformer:
             for object in range(len(xai_maps[layer])):
                 xai_maps[layer][object] = (xai_maps[layer][object] - xai_maps[layer][object].min()) / (xai_maps[layer][object].max() - xai_maps[layer][object].min())
 
-        # now attention maps can be overlayed
-        if xai_maps.shape[1] > 0:
-            xai_maps = xai_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
-            mask = xai_maps < discard_threshold - (discard_threshold * 10) * (xai_maps.mean() + xai_maps.std())
-            xai_maps[mask] = 0 
-            xai_maps = self.interpolate_expl(xai_maps, remove_pad)
+        # # now attention maps can be overlayed
+        # if xai_maps.shape[1] > 0:
+        #     xai_maps = xai_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
+        #     mask = xai_maps < discard_threshold - (discard_threshold * 10) * (xai_maps.mean() + xai_maps.std())
+        #     xai_maps[mask] = 0 
+        #     xai_maps = self.interpolate_expl(xai_maps, remove_pad)
 
-        self.xai_maps = xai_maps
+        self.xai_maps_full = xai_maps
+        self.self_xai_maps_full = self_xai_maps
+
+    def select_saliency_maps(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True):
+        self.xai_maps = self.xai_maps_full[:, nms_idxs[bbox_idx], :, :]
+        self.self_xai_maps = []
+        for layer in range(len(self.self_xai_maps_full)):
+            self.self_xai_maps.append(self.self_xai_maps_full[layer][nms_idxs[bbox_idx]][:, nms_idxs])
+
+        # now attention maps can be overlayed
+        if self.xai_maps.shape[1] > 0:
+            self.xai_maps = self.xai_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
+            mask = self.xai_maps < discard_threshold - (discard_threshold * 10) * (self.xai_maps.mean() + self.xai_maps.std())
+            self.xai_maps[mask] = 0 
+            self.xai_maps = self.interpolate_expl(self.xai_maps, maps_quality, remove_pad)
+
         if len(bbox_idx) == 1:
             self.scores = self.get_camera_scores()
-        self.self_xai_maps = self_xai_maps
 
-    def interpolate_expl(self, xai_maps, remove_pad):
+    def interpolate_expl(self, xai_maps, maps_quality,remove_pad):
         xai_maps_inter = []
         if xai_maps.dim() == 1:
             xai_maps.unsqueeze_(0)
             xai_maps.unsqueeze_(0)
+        interpol_res = {"Low": 8, "Medium": 16, "High": 32}
         for layer in range(len(xai_maps)):
             xai_maps_cameras = []
             for camidx in range(len(xai_maps[layer])):
                 xai_map = xai_maps[layer][camidx].reshape(1, 1, self.height_feats, self.width_feats)
                 xai_map[0,0,:,0] = 0
                 xai_map[0,0,:,-1] = 0
-                xai_map = torch.nn.functional.interpolate(xai_map, scale_factor=16, mode='bilinear')
+                xai_map = torch.nn.functional.interpolate(xai_map, scale_factor=interpol_res[maps_quality], mode='bilinear')
                 xai_map = xai_map.reshape(xai_map.shape[2], xai_map.shape[3])
                 if remove_pad:
                     xai_map = xai_map[:self.ori_shape[0], :self.ori_shape[1]]
