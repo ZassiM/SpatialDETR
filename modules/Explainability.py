@@ -114,7 +114,7 @@ class ExplainableTransformer:
 
         if target_index is None:
             with torch.no_grad():
-                outputs = self.Model.model(return_loss=False, rescale=True, **data)
+                outputs = self.Model.model(return_loss=False, rescale=True, all_layers=True, **data)
 
         else:
             for layer in self.Model.model.module.pts_bbox_head.transformer.decoder.layers:
@@ -123,7 +123,7 @@ class ExplainableTransformer:
                         lambda _, grad_input, grad_output: self.dec_self_attn_grads.append(grad_input[0].permute(1, 0, 2)[0].cpu())
                     ))
      
-            outputs = self.Model.model(return_loss=False, rescale=True, **data)
+            outputs = self.Model.model(return_loss=False, rescale=True, all_layers=True, **data)
 
             output_scores = outputs[0]["pts_bbox"][-1]["scores_3d"]
             one_hot = torch.zeros_like(output_scores).to(output_scores.device)
@@ -217,7 +217,7 @@ class ExplainableTransformer:
             self.handle_co_attn_self_query(self.num_layers-1)
             self.handle_co_attn_query(self.num_layers-1, camidx, handle_residual, apply_rule)
 
-    def generate_explainability(self, expl_type, head_fusion="min", discard_threshold=0.9, handle_residual=True, apply_rule=True,  remove_pad=True):
+    def generate_explainability(self, expl_type, head_fusion="max", handle_residual=True, apply_rule=True):
         xai_maps, self_xai_maps, xai_maps_camera = [], [], []
 
         if expl_type == "Gradient Rollout":
@@ -225,6 +225,7 @@ class ExplainableTransformer:
                 self.generate_gradroll(camidx, handle_residual, apply_rule)
                 xai_maps_camera.append(self.R_q_i.detach().cpu())
             xai_maps.append(xai_maps_camera)
+            self_xai_maps.append(self.R_q_q.detach().cpu())
 
         else:
             for layer in range(self.num_layers):
@@ -237,8 +238,8 @@ class ExplainableTransformer:
                     xai_maps_camera.append(self.R_q_i.detach().cpu())
                 xai_maps.append(xai_maps_camera)
 
-        for layer in range(self.num_layers):
-            self_xai_maps.append(self.dec_self_attn_weights[layer].detach().cpu())
+            for layer in range(self.num_layers):
+                self_xai_maps.append(self.dec_self_attn_weights[layer].detach().cpu())
 
         # num_layers x num_cams x num_objects x 1450
         xai_maps = torch.stack([torch.stack(layer) for layer in xai_maps])
@@ -249,17 +250,10 @@ class ExplainableTransformer:
             for object in range(len(xai_maps[layer])):
                 xai_maps[layer][object] = (xai_maps[layer][object] - xai_maps[layer][object].min()) / (xai_maps[layer][object].max() - xai_maps[layer][object].min())
 
-        # # now attention maps can be overlayed
-        # if xai_maps.shape[1] > 0:
-        #     xai_maps = xai_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
-        #     mask = xai_maps < discard_threshold - (discard_threshold * 10) * (xai_maps.mean() + xai_maps.std())
-        #     xai_maps[mask] = 0 
-        #     xai_maps = self.interpolate_expl(xai_maps, remove_pad)
-
         self.xai_maps_full = xai_maps
         self.self_xai_maps_full = self_xai_maps
 
-    def select_saliency_maps(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True):
+    def select_explainability(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True):
         self.xai_maps = self.xai_maps_full[:, nms_idxs[bbox_idx], :, :]
         self.self_xai_maps = []
         for layer in range(len(self.self_xai_maps_full)):

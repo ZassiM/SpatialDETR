@@ -53,11 +53,23 @@ class App(BaseApp):
                 self.select_layer()
             self.old_layer = self.selected_layer.get()
 
-        # Extract the selected bounding box indices from the menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
+
         
         if not self.no_object:
             self.update_explainability()
+            
+            # if self.selected_pert_step.get() > 0:
+            #     self.update_data(pert_step=self.selected_pert_step.get())
+
+            # Extract the selected bounding box indices from the menu
+            #self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
+
+            self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get())
+
+            if self.selected_pert_step.get() > 0:
+                self.update_data(pert_step=self.selected_pert_step.get())
+
             if self.single_bbox.get():
                 # Extract camera with highest attention
                 cam_obj = self.get_camera_object()
@@ -65,6 +77,12 @@ class App(BaseApp):
                     self.show_message("Please check the selected options.")
                     return
                 self.selected_camera = cam_obj
+
+            # _, indices = torch.topk(xai_map.flatten(), k=int(0.2*(1600*900)))
+            # indices = indices[xai_map.flatten()[indices] > 0.5]
+            # indices = np.array(np.unravel_index(indices.numpy(), xai_map.shape)).T
+            # cols, rows = indices[:, 0], indices[:, 1]
+            # saliency_map[cols, rows] = [0,0,0]
 
         # Generate images list with bboxes on it
         print("Generating camera images...")
@@ -97,9 +115,6 @@ class App(BaseApp):
                     self.saliency_maps_objects.append(saliency_map)
 
                 self.bbox_coords = bbox_coords
-                # if self.old_bbox_idx != self.bbox_idx:
-                #     self.bbox_coords = bbox_coords
-                #     self.old_bbox_idx = self.bbox_idx
 
             # Extract Ground Truth bboxes if wanted
             if self.GT_bool.get():
@@ -113,7 +128,7 @@ class App(BaseApp):
                 
             if self.overlay_bool.get() and not self.no_object:
                 xai_map = self.ExplainableModel.xai_maps[self.selected_layer.get()][camidx]
-                saliency_map = generate_saliency_map(img, xai_map)            
+                saliency_map = generate_saliency_map(img, xai_map)        
                 saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                 self.cam_imgs.append(saliency_map)
             else:
@@ -161,9 +176,8 @@ class App(BaseApp):
             print("Calculating gradients...")
             self.update_data(initialize_bboxes=False)
 
-        self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.selected_discard_threshold.get(), self.handle_residual.get(), self.apply_rule.get(), self.data_idx]   
+        self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get(), self.data_idx]   
 
-        self.ExplainableModel.select_saliency_maps(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get())
 
     def show_explainability(self):
         '''
@@ -191,7 +205,7 @@ class App(BaseApp):
             ax_obj_layer = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
 
             att_nobbx_obj = self.saliency_maps_objects[i]
-            att_nobbx_obj = att_nobbx_obj[bbox_coord[1]:bbox_coord[3], bbox_coord[0]:bbox_coord[2]]
+            att_nobbx_obj = att_nobbx_obj[bbox_coord[1].clip(min=0):bbox_coord[3], bbox_coord[0].clip(min=0):bbox_coord[2]]
             ax_obj_layer.imshow(att_nobbx_obj, vmin=0, vmax=1)   
             
             title = ""
@@ -221,8 +235,6 @@ class App(BaseApp):
             ax.set_facecolor('none')
             ax.set_xticks(x)
             ax.set_yticks([])
-            # ax.set_xlabel('Objects', fontsize=fontsize, labelpad=-5)
-            # ax.set_ylabel('Percentage', fontsize=fontsize, labelpad=-5)
             ax.xaxis.label.set_color(text_color)
             ax.yaxis.label.set_color(text_color)
             ax.tick_params(colors=text_color)
@@ -255,8 +267,9 @@ class App(BaseApp):
             labels = np.arange(len(self.labels))
             explode = [0.1 if i == self.bbox_idx[0] else 0 for i in range(len(self.labels))]
             patches, texts = ax2.pie(query_self_attn, labels=labels, wedgeprops={'linewidth': 1.0, 'edgecolor': edge_color}, explode=explode, colors=color_values)
-            for i, patch in enumerate(patches):
-                texts[i].set_color(patch.get_facecolor())
+            for i in range(len(texts)):
+                texts[i].set_fontweight('bold')  # make the text bold
+                texts[i].set_color(patches[i].get_facecolor())
             ax2.set_title(title, color=title_color, fontsize=fontsize-1)
 
         self.fig.tight_layout()
@@ -279,12 +292,23 @@ class App(BaseApp):
                 self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
                 self.canvas_frame = self.canvas.create_image(0, 0, anchor='nw', image=None)
                 self.video_gen_bool = True
+    
+            if hasattr(self, "scale"):
+                self.scale.configure(to=self.video_length.get())
+            else:
+                self.scale = tk.Scale(self.frame, from_=0, to=self.video_length.get(), showvalue=False, orient='horizontal', command=self.update_index)
+                self.scale.pack(fill='x')
 
             self.data_idx = self.start_video_idx
             self.idx_video = 0
             self.paused = False
 
             self.show_sequence()
+    
+    def update_index(self, value):
+        if self.paused:
+            self.idx_video = int(value)
+            self.show_sequence(forced=True)
 
     def generate_video(self, save_img=True):
         if self.video_length.get() > ((len(self.ObjectDetector.dataset)-1) - self.data_idx):
@@ -301,9 +325,9 @@ class App(BaseApp):
         self.img_frames, self.img_labels = [], []
         self.start_video_idx = self.data_idx
 
-        print("\nGenerating image frames...\n")
-        prog_bar = mmcv.ProgressBar(self.video_length)
-        for i in range(self.data_idx, self.data_idx + self.video_length):
+        print("\nGenerating video frames...\n")
+        prog_bar = mmcv.ProgressBar(self.video_length.get())
+        for i in range(self.data_idx, self.data_idx + self.video_length.get()):
             self.data_idx = i
             imgs_att, labels = self.generate_video_frame(folder=folder, save_img=save_img)
             self.img_frames.append(imgs_att)  # Image frame of all 6 cameras with attention maps and bboxes overlayed
@@ -314,10 +338,11 @@ class App(BaseApp):
         print("\nVideo generated.\n")
         return True
 
-    def show_sequence(self):
-        if not self.paused:
-            self.idx_video += 1
-            if self.idx_video >= self.video_length:
+    def show_sequence(self, forced=False):
+        if not self.paused or forced:
+            if not forced:
+                self.idx_video += 1
+            if self.idx_video >= self.video_length.get():
                 self.idx_video = 0
 
             img_frame = self.img_frames[self.idx_video]
@@ -325,6 +350,7 @@ class App(BaseApp):
             self.img_frame = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((w, h)))
             self.canvas.itemconfig(self.canvas_frame, image=self.img_frame)
             self.update_info_label(idx=self.data_idx + self.idx_video)
+            self.scale.set(self.idx_video)
 
             self.after_seq_id = self.after(self.frame_rate.get(), self.show_sequence)
 
@@ -347,8 +373,9 @@ class App(BaseApp):
 
         # Extract the selected bounding box indices from the menu
         self.bbox_idx = list(range(len(self.labels)))
+        self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get())
 
-        self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.bbox_idx, self.nms_idxs, self.selected_head_fusion.get(), self.selected_discard_threshold.get(), self.handle_residual.get(), self.apply_rule.get())
+        self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get())
 
         # Generate images list with bboxes on it
         cam_imgs = []  # Used for video generation
@@ -365,7 +392,6 @@ class App(BaseApp):
                     bbx_idx=self.bbox_idx,
                     mode_2d=self.bbox_2d.get())
             
-
             if self.selected_expl_type.get() == "Gradient Rollout":
                 attn = self.ExplainableModel.xai_maps[0][camidx]
             else:

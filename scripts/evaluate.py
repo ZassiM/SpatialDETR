@@ -104,22 +104,22 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
 
             # Extract predicted bboxes and their labels
             outputs = output_og[0]["pts_bbox"]
-            nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes().cpu()
+            nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes()[-1].cpu()
             thr_idxs = outputs['scores_3d'] > pred_threshold
             labels = outputs['labels_3d'][thr_idxs]
             
             bbox_idx = list(range(len(labels)))
             if expl_type in ["Grad-CAM", "Gradient Rollout"]:
                 ExplGen.extract_attentions(data, bbox_idx)
-
-            ExplGen.generate_explainability(expl_type, bbox_idx, nms_idxs, head_fusion, discard_threshold, handle_residual, apply_rule, remove_pad)
-            attn_list = ExplGen.attn_list[layer]
+            ExplGen.generate_explainability(expl_type, head_fusion, handle_residual, apply_rule)
+            ExplGen.ExplainableModel.select_explainability(nms_idxs, bbox_idx, discard_threshold, maps_quality="High", remove_pad=True)
+            xai_maps = ExplGen.xai_maps[layer]
         
         else:
             if remove_pad:
-                attn_list = torch.rand(6, Model.ori_shape[0], Model.ori_shape[1])
+                xai_maps = torch.rand(6, Model.ori_shape[0], Model.ori_shape[1])
             else:
-                attn_list = torch.rand(6, Model.pad_shape[0], Model.pad_shape[1])
+                xai_maps = torch.rand(6, Model.pad_shape[0], Model.pad_shape[1])
 
         # Perturbate the input image with the XAI maps
         img = img[0][0]
@@ -132,11 +132,11 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
 
         # defect data: 475
         img_pert_list = []  # list of perturbed images
-        for cam in range(len(attn_list)):
+        for cam in range(len(xai_maps)):
             img_og = img[cam].permute(1, 2, 0).numpy()
 
             # Get the attention for the camera and negate it if doing negative perturbation
-            attn = attn_list[cam]
+            attn = xai_maps[cam]
             if negative_pert:
                 attn = -attn
 
@@ -169,7 +169,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
 
         #del output_og
         del output_pert
-        del attn_list
+        del xai_maps
         gc.collect()
         torch.cuda.empty_cache()
         prog_bar.update()

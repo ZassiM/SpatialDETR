@@ -65,8 +65,6 @@ class BaseApp(tk.Tk):
         self.gpu_id.set(0)
         file_opt.add_command(label=" Load model", command=self.load_model)
         file_opt.add_command(label=" Load model from config file", command=lambda: self.load_model(from_config=True))
-        file_opt.add_command(label=" Load video from pickle file", command=self.load_video)
-        file_opt.add_command(label=" Save video", command=self.save_video)
         file_opt.add_command(label=" Save index", command=lambda: self.insert_entry(type=1))
         file_opt.add_command(label=" Capture screen", command=self.capture)
         file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
@@ -106,10 +104,10 @@ class BaseApp(tk.Tk):
         '''
         It starts the UI after loading the model. Variables are initialized.
         '''
-        frame = tk.Frame(self)
-        frame.pack(fill=tk.Y)
+        self.frame = tk.Frame(self)
+        self.frame.pack(fill=tk.Y)
         self.info_text = tk.StringVar()
-        self.info_label = tk.Label(frame, textvariable=self.info_text, anchor=tk.CENTER)
+        self.info_label = tk.Label(self.frame, textvariable=self.info_text, anchor=tk.CENTER)
         self.info_label.bind("<Button-1>", lambda event: self.show_model_info())
         self.info_label.bind("<Enter>", lambda event: self.red_text())
         self.info_label.bind("<Leave>", lambda event: self.black_text())
@@ -133,10 +131,31 @@ class BaseApp(tk.Tk):
         dataidx_opt.add_command(label=" Select random data", command=self.random_data_idx)
         dataidx_opt.add_cascade(label=" Select prediction threshold", menu=thr_opt)
         dataidx_opt.add_separator()
-        dataidx_opt.add_command(label=" Generate video", command=self.generate_video)
-        dataidx_opt.add_command(label=" Show video", command=self.show_video)
-        dataidx_opt.add_separator()
         dataidx_opt.add_command(label=" Show LiDAR", command=self.show_lidar)
+
+
+        framerate_opt = tk.Menu(self.menubar)
+        frame_rates = np.arange(0, 35, 5)
+        frame_rates[0] = 1
+        self.frame_rate = tk.IntVar()
+        self.frame_rate.set(frame_rates[0])
+        for i in range(len(frame_rates)):
+            framerate_opt.add_radiobutton(label=frame_rates[i], variable=self.frame_rate, value=frame_rates[i])
+
+        videolength_opt = tk.Menu(self.menubar)
+        video_lengths = np.arange(10, 200, 20)
+        self.video_length = tk.IntVar()
+        self.video_length.set(video_lengths[0])
+        for i in range(len(video_lengths)):
+            videolength_opt.add_radiobutton(label=video_lengths[i], variable=self.video_length , value=video_lengths[i])
+
+        video_opt = tk.Menu(self.menubar)
+        video_opt.add_command(label=" Generate", command=self.generate_video)
+        video_opt.add_command(label=" Load", command=self.load_video)
+        video_opt.add_command(label=" Save", command=self.save_video)
+        video_opt.add_command(label=" Show", command=self.show_video)
+        video_opt.add_cascade(label=" Sequence length", menu=videolength_opt)
+        video_opt.add_cascade(label=" Frame rate", menu=framerate_opt)
 
         # Cascade menu for Camera
         self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
@@ -194,9 +213,15 @@ class BaseApp(tk.Tk):
         expl_opt.add_cascade(label="Mechanism", menu=expl_type_opt)
         self.selected_expl_type = tk.StringVar()
         self.selected_expl_type.set(self.expl_options[0])
-        self.old_expl_type = self.expl_options[0]
         for i in range(len(self.expl_options)):
             expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i], command=self.update_info_label)
+        
+        pert_opt = tk.Menu(self.menubar)
+        self.selected_pert_step = tk.DoubleVar()
+        pert_steps = np.arange(0, 1, 0.1)
+        for step in pert_steps:
+            pert_opt.add_radiobutton(label=f"{int(step*100)} %", variable=self.selected_pert_step, value=step)
+        expl_opt.add_cascade(label="Perturbate image", menu=pert_opt)
 
         # Discard ratio for attention weights
         dr_opt = tk.Menu(self.menubar)
@@ -220,23 +245,9 @@ class BaseApp(tk.Tk):
         quality_opt = tk.Menu(self.menubar)
         map_qualities = ["Low", "Medium", "High"]
         self.selected_map_quality = tk.StringVar()
-        self.selected_map_quality.set(map_qualities[1])
+        self.selected_map_quality.set(map_qualities[2])
         for i in range(len(map_qualities)):
             quality_opt.add_radiobutton(label=map_qualities[i], variable=self.selected_map_quality, value=map_qualities[i])
-
-        framerate_opt = tk.Menu(self.menubar)
-        frame_rates = np.arange(0, 20, 5)
-        self.frame_rate = tk.IntVar()
-        self.frame_rate.set(frame_rates[0])
-        for i in range(len(frame_rates)):
-            framerate_opt.add_radiobutton(label=frame_rates[i], variable=self.frame_rate, value=frame_rates[i])
-
-        videolength_opt = tk.Menu(self.menubar)
-        video_lengths = np.arange(10, 200, 20)
-        self.video_length = tk.IntVar()
-        self.video_length.set(video_lengths[0])
-        for i in range(len(video_lengths)):
-            videolength_opt.add_radiobutton(label=video_lengths[i], variable=self.video_length , value=video_lengths[i])
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
@@ -249,14 +260,14 @@ class BaseApp(tk.Tk):
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
         add_opt.add_checkbutton(label=" Show objects self-attention", onvalue=1, offvalue=0, variable=self.show_self_attention)
-        add_opt.add_cascade(label=" Select video length", menu=videolength_opt)
-        add_opt.add_cascade(label=" Select frame rate", menu=framerate_opt)
         add_opt.add_cascade(label=" Select maps quality", menu=quality_opt)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
 
         # Adding all cascade menus ro the main menubar menu
         self.add_separator()
         self.menubar.add_cascade(label="Data", menu=dataidx_opt)
+        self.add_separator()
+        self.menubar.add_cascade(label="Video", menu=video_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Objects", menu=self.bbox_opt)
         self.add_separator()
@@ -267,6 +278,8 @@ class BaseApp(tk.Tk):
         self.menubar.add_cascade(label="Settings", menu=add_opt)
         self.add_separator("|")
         self.menubar.add_command(label="Visualize", command=self.visualize)
+        self.add_separator("|")
+
 
     def show_car(self):
         img = plt.imread("misc/car.png")
@@ -291,7 +304,7 @@ class BaseApp(tk.Tk):
         readme_text.configure(state='disabled')
         readme_text.pack()
 
-    def update_data(self, select_layer=True, initialize_bboxes=True):
+    def update_data(self, select_layer=True, initialize_bboxes=True, pert_step=None):
         '''
         Predict bboxes and extracts attentions.
         '''
@@ -303,15 +316,62 @@ class BaseApp(tk.Tk):
         data['img'][0] = DC(img)
         self.data = data
 
+        img_norm_cfg = self.ObjectDetector.cfg.get('img_norm_cfg')
+        mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
+        std = np.array(img_norm_cfg["std"], dtype=np.float32)
 
         if "points" in self.data.keys():
             self.data.pop("points")
 
-        # Attention scores are extracted, together with gradients if grad-CAM is selected
-        if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
-            outputs = self.ExplainableModel.extract_attentions(self.data)
+        if not pert_step:
+            # Attention scores are extracted, together with gradients if grad-CAM is selected
+            if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
+                outputs = self.ExplainableModel.extract_attentions(self.data)
+            else:
+                outputs = self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
         else:
-            outputs = self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
+            xai_maps = self.ExplainableModel.xai_maps[self.selected_layer.get()]
+            img = img[0][0]
+            img = img[:, :, :self.ObjectDetector.ori_shape[0], :self.ObjectDetector.ori_shape[1]]  # [num_cams x height x width x channels]
+
+            mask = torch.Tensor(-mean)
+            img_pert_list = []
+            for camidx in range(len(xai_maps)):
+                #  {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
+
+                img_pert = img[camidx].permute(1, 2, 0).numpy()
+                xai = xai_maps[camidx]
+                filter_mask = xai > 0.5
+
+                # apply the filter_mask to xai and flatten it
+                filtered_xai = xai[filter_mask].flatten()
+
+                # create a tensor of original indices
+                original_indices = torch.arange(xai.numel()).reshape(xai.shape)[filter_mask].flatten()
+
+                # compute the threshold for top 20% values
+                top_k = int(pert_step * filtered_xai.numel())
+
+                # get the top k values and their indices
+                values, indices = torch.topk(filtered_xai, top_k)
+
+                # get the indices with respect to the original tensor
+                original_indices = original_indices[indices]
+
+                # convert the 1D indices back to 2D
+                row_indices, col_indices = original_indices // xai.size(1), original_indices % xai.size(1)
+
+                img_pert[row_indices, col_indices] = mask
+
+                img_pert_list.append(img_pert)
+            if len(img_pert_list) > 0:
+                # save_img the perturbed 6 camera images into the data input
+                img_pert_list = torch.from_numpy(np.stack(img_pert_list))
+                img = [img_pert_list.permute(0, 3, 1, 2).unsqueeze(0)] # img = [torch.Size([1, 6, 3, 928, 1600])
+                self.data['img'][0] = DC(img)
+                
+                with torch.no_grad():
+                    outputs = self.ObjectDetector.model(return_loss=False, rescale=True, all_layers=True, **self.data)
 
 
         # Those are needed to index the bboxes decoded by the NMS-Free decoder
@@ -327,8 +387,9 @@ class BaseApp(tk.Tk):
         self.no_object = False
         if len(self.labels_layers[self.selected_layer.get()]) == 0:
             self.no_object = True
-            print("No object detected.")
-            self.show_message("No object detected.")
+            if not self.video_gen_bool:
+                print("No object detected.")
+                self.show_message("No object detected.")
 
         # Extract image metas which contain, for example, the lidar to camera projection matrices
         self.img_metas = self.data["img_metas"][0]._data[0][0]
@@ -339,16 +400,15 @@ class BaseApp(tk.Tk):
         imgs = imgs.transpose(0, 2, 3, 1)[:, :self.ObjectDetector.ori_shape[0], :self.ObjectDetector.ori_shape[1], :]  # [num_cams x height x width x channels]
         
         # Denormalize the images
-        img_norm_cfg = self.ObjectDetector.cfg.get('img_norm_cfg')
-        mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
-        std = np.array(img_norm_cfg["std"], dtype=np.float32)
-
         for i in range(len(imgs)):
             imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
         self.imgs = imgs.astype(np.uint8)
 
         if select_layer:
-            self.select_layer(initialize_bboxes=initialize_bboxes)
+            if pert_step:
+                self.select_layer(initialize_bboxes=initialize_bboxes, all_select=False)
+            else:
+                self.select_layer(initialize_bboxes=initialize_bboxes)
 
     
     def select_layer(self, all_select=True, initialize_bboxes=True):
@@ -530,5 +590,8 @@ class BaseApp(tk.Tk):
         self.img_labels = data["img_labels"]
         self.start_video_idx = data["video_idx"]
         self.video_length.set(data["video_lenght"])
+
+        if hasattr(self, "scale"):
+            self.scale.configure(to=self.video_length.get())
 
         print(f"Video loaded from {video_pickle}.\n")
