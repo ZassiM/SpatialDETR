@@ -31,7 +31,10 @@ class App(BaseApp):
             # Create canvas with the figure embedded in it, and update it after each visualization
             if self.video_gen_bool:
                 self.canvas.pack_forget()
-                self.menubar.delete('end', 'end')
+                self.scale.pack_forget()
+                self.scale.destroy()
+                end_idx = self.menubar.index('end')
+                self.menubar.delete(end_idx-1, end_idx)
                 self.video_gen_bool = False
             self.fig = plt.figure()
             self.fig.set_facecolor(self.bg_color)
@@ -288,9 +291,12 @@ class App(BaseApp):
                 if self.canvas:
                     self.canvas.get_tk_widget().pack_forget()
                 self.menubar.add_command(label="Pause/Resume", command=self.pause_resume)
+                self.add_separator("|")
                 self.canvas = tk.Canvas(self)
                 self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-                self.canvas_frame = self.canvas.create_image(0, 0, anchor='nw', image=None)
+                #self.canvas_frame = self.canvas.create_image(0, 0, anchor='nw', image=None)
+                self.canvas_frame = self.canvas.create_image(0, 0, image=None, anchor='nw', tags="img_tag")
+                self.canvas.update()
                 self.video_gen_bool = True
     
             if hasattr(self, "scale"):
@@ -302,7 +308,7 @@ class App(BaseApp):
             self.data_idx = self.start_video_idx
             self.idx_video = 0
             self.paused = False
-
+            self.old_w, self.old_h = None, None
             self.show_sequence()
     
     def update_index(self, value):
@@ -346,9 +352,31 @@ class App(BaseApp):
                 self.idx_video = 0
 
             img_frame = self.img_frames[self.idx_video]
-            w, h = self.canvas.winfo_width(), self.canvas.winfo_height()
-            self.img_frame = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((w, h)))
+            self.w, self.h = self.canvas.winfo_width(), self.canvas.winfo_height()
+
+            if self.old_w != self.w or self.old_h != self.h:
+                canvas_ratio = self.w / self.h
+                img_w, img_h = img_frame.shape[1], img_frame.shape[0]
+                img_ratio = img_w / img_h
+
+                if img_ratio > canvas_ratio:
+                    self.new_w = self.w
+                    self.new_h = int(self.new_w / img_ratio)
+                else:
+                    self.new_h = self.h
+                    self.new_w = int(self.new_h * img_ratio)
+
+                # Center image in canvas
+                x = (self.w - self.new_w) // 2
+                y = (self.h - self.new_h) // 2
+                self.canvas.coords("img_tag", x, y)
+
+                self.old_w = self.w
+                self.old_h = self.h
+
+            self.img_frame = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((self.new_w, self.new_h)))
             self.canvas.itemconfig(self.canvas_frame, image=self.img_frame)
+
             self.update_info_label(idx=self.data_idx + self.idx_video)
             self.scale.set(self.idx_video)
 

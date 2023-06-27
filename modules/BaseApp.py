@@ -34,7 +34,7 @@ class BaseApp(tk.Tk):
 
         # Tkinter-related settings
         self.tk.call("source", "misc/theme/azure.tcl")
-        self.tk.call("set_theme", "light")
+        self.tk.call("set_theme", "dark")
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
         self.protocol("WM_DELETE_WINDOW", self.quit)
@@ -265,9 +265,9 @@ class BaseApp(tk.Tk):
 
         # Adding all cascade menus ro the main menubar menu
         self.add_separator()
-        self.menubar.add_cascade(label="Data", menu=dataidx_opt)
-        self.add_separator()
         self.menubar.add_cascade(label="Video", menu=video_opt)
+        self.add_separator()
+        self.menubar.add_cascade(label="Data", menu=dataidx_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Objects", menu=self.bbox_opt)
         self.add_separator()
@@ -341,7 +341,7 @@ class BaseApp(tk.Tk):
 
                 img_pert = img[camidx].permute(1, 2, 0).numpy()
                 xai = xai_maps[camidx]
-                filter_mask = xai > 0.5
+                filter_mask = xai > 0.2
 
                 # apply the filter_mask to xai and flatten it
                 filtered_xai = xai[filter_mask].flatten()
