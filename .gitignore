@@ -141,7 +141,7 @@ screenshots_eval/
 training_logs/*
 config.toml
 points/
-video_gen/
+video*/
 eval_results/
 backups/*
 *.mp4

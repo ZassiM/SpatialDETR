@@ -4,7 +4,7 @@ from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 import matplotlib.transforms as mtransforms
 
 
-from modules.BaseApp import BaseApp, tk, np, cv2, plt, mmcv, torch, DC, generate_saliency_map
+from modules.BaseApp import BaseApp, tk, np, cv2, plt, mmcv, torch, DC, generate_saliency_map, pickle
 import shutil
 import os
 
@@ -32,7 +32,7 @@ class App(BaseApp):
             if self.video_gen_bool:
                 self.canvas.pack_forget()
                 self.scale.pack_forget()
-                self.scale.destroy()
+                #self.scale.destroy()
                 end_idx = self.menubar.index('end')
                 self.menubar.delete(end_idx-1, end_idx)
                 self.video_gen_bool = False
@@ -281,8 +281,8 @@ class App(BaseApp):
         self.ObjectDetector.dataset.show_mod(self.outputs[self.selected_layer.get()], index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, snapshot=False, pipeline=None, score_thr=self.selected_threshold.get())
 
     def show_video(self):
-        if not hasattr(self, "img_frames"):
-            generated = self.generate_video(save_img=True)
+        if not hasattr(self, "img_labels"):
+            generated = self.generate_video()
         else:
             generated = True
         
@@ -294,7 +294,6 @@ class App(BaseApp):
                 self.add_separator("|")
                 self.canvas = tk.Canvas(self)
                 self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-                #self.canvas_frame = self.canvas.create_image(0, 0, anchor='nw', image=None)
                 self.canvas_frame = self.canvas.create_image(0, 0, image=None, anchor='nw', tags="img_tag")
                 self.canvas.update()
                 self.video_gen_bool = True
@@ -303,12 +302,13 @@ class App(BaseApp):
                 self.scale.configure(to=self.video_length.get())
             else:
                 self.scale = tk.Scale(self.frame, from_=0, to=self.video_length.get(), showvalue=False, orient='horizontal', command=self.update_index)
-                self.scale.pack(fill='x')
+            self.scale.pack(fill='x')
 
             self.data_idx = self.start_video_idx
-            self.idx_video = 0
+
             self.paused = False
             self.old_w, self.old_h = None, None
+            self.idx_video = 0
             self.show_sequence()
     
     def update_index(self, value):
@@ -321,27 +321,41 @@ class App(BaseApp):
             self.show_message(f"Video lenght should be between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
             return False
 
-        if save_img:
-            folder = "video_gen"
-            if os.path.exists(folder):
-                shutil.rmtree(folder)
-            os.makedirs(folder)
+
+        self.video_folder = f"video_{self.data_idx}_{self.video_length.get()}"
+        os.makedirs(self.video_folder)
 
         self.select_all_bboxes.set(True)
-        self.img_frames, self.img_labels = [], []
+        self.img_labels = []
         self.start_video_idx = self.data_idx
 
         print("\nGenerating video frames...\n")
         prog_bar = mmcv.ProgressBar(self.video_length.get())
         for i in range(self.data_idx, self.data_idx + self.video_length.get()):
             self.data_idx = i
-            imgs_att, labels = self.generate_video_frame(folder=folder, save_img=save_img)
-            self.img_frames.append(imgs_att)  # Image frame of all 6 cameras with attention maps and bboxes overlayed
+            labels = self.generate_video_frame()
             self.img_labels.append(labels)
             prog_bar.update()
 
         self.data_idx = self.start_video_idx
-        print("\nVideo generated.\n")
+
+        self.img_frames = []
+        image_files = os.listdir(self.video_folder)
+        image_files.sort()
+        for image_file in image_files:
+            file_path = os.path.join(self.video_folder, image_file)
+            img = Image.open(file_path)
+            self.img_frames.append(img)
+
+        data = {"img_labels": self.img_labels}
+
+        file_path = os.path.join(self.video_folder, "labels.pkl")
+
+        with open(file_path, 'wb') as f:
+            pickle.dump(data, f)
+
+        print(f"\nVideo generated inside {self.video_folder} folder.\n")
+
         return True
 
     def show_sequence(self, forced=False):
@@ -356,7 +370,7 @@ class App(BaseApp):
 
             if self.old_w != self.w or self.old_h != self.h:
                 canvas_ratio = self.w / self.h
-                img_w, img_h = img_frame.shape[1], img_frame.shape[0]
+                img_w, img_h = img_frame.width, img_frame.height
                 img_ratio = img_w / img_h
 
                 if img_ratio > canvas_ratio:
@@ -374,7 +388,9 @@ class App(BaseApp):
                 self.old_w = self.w
                 self.old_h = self.h
 
-            self.img_frame = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((self.new_w, self.new_h)))
+            self.img_frame = ImageTk.PhotoImage(img_frame.resize((self.new_w, self.new_h)))
+
+            # self.img_frame = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((self.new_w, self.new_h)))
             self.canvas.itemconfig(self.canvas_frame, image=self.img_frame)
 
             self.update_info_label(idx=self.data_idx + self.idx_video)
@@ -395,7 +411,7 @@ class App(BaseApp):
             self.paused = False
             self.show_sequence()
 
-    def generate_video_frame(self, folder, save_img=True):
+    def generate_video_frame(self):
 
         self.update_data(initialize_bboxes=False)
 
@@ -434,11 +450,11 @@ class App(BaseApp):
         ver = np.concatenate((cam_imgs[5], cam_imgs[3], cam_imgs[4]), axis=1)
         img_frame = np.concatenate((hori, ver), axis=0)
 
-        if save_img:
-            img = (img_frame * 255).astype(np.uint8)
-            img = Image.fromarray(img)
-            file_name = f"{self.selected_expl_type.get()}_{self.data_idx}.jpeg"
-            file_path = os.path.join(folder, file_name)
-            img.save(file_path)
+        img = (img_frame * 255).astype(np.uint8)
+        img = Image.fromarray(img)
+        name = self.selected_expl_type.get().replace(" ", "_")
+        file_name = f"{name}_{self.data_idx}.jpeg"
+        file_path = os.path.join(self.video_folder, file_name)
+        img.save(file_path)
 
-        return img_frame, self.labels
+        return self.labels

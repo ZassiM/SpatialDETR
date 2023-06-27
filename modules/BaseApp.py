@@ -152,7 +152,6 @@ class BaseApp(tk.Tk):
         video_opt = tk.Menu(self.menubar)
         video_opt.add_command(label=" Generate", command=self.generate_video)
         video_opt.add_command(label=" Load", command=self.load_video)
-        video_opt.add_command(label=" Save", command=self.save_video)
         video_opt.add_command(label=" Show", command=self.show_video)
         video_opt.add_cascade(label=" Sequence length", menu=videolength_opt)
         video_opt.add_cascade(label=" Frame rate", menu=framerate_opt)
@@ -559,39 +558,32 @@ class BaseApp(tk.Tk):
         self.fig.set_facecolor(self.bg_color)
         self.canvas.draw()
 
-    def save_video(self):
-        if hasattr(self, "img_frames"):
-            data = {'img_frames': self.img_frames, "img_labels": self.img_labels, "video_idx": self.start_video_idx, "video_lenght": self.video_length.get()}
-
-            file_path = fd.asksaveasfilename(defaultextension=".pkl", filetypes=[("All Files", "*.*")])
-
-            print(f"Saving video in {file_path}...\n")
-            with open(file_path, 'wb') as f:
-                pickle.dump(data, f)
-            
-            print(f"Video saved.")
-        else:
-            self.show_message("You should first generate a video.")
-
     def load_video(self):
-        video_datatypes = (
-            ('Pickle', '*.pkl'),
-        )
-        video_pickle = fd.askopenfilename(
-            title='Load video data',
-            initialdir='/workspace/',
-            filetypes=video_datatypes)
 
-        print(f"Loading video from {video_pickle}...\n")
-        with open(video_pickle, 'rb') as f:
-            data = pickle.load(f)
+        self.video_folder = fd.askdirectory() 
+        if not self.video_folder:
+            print("No directory selected.")
+            return
+        labels_file = os.path.join(self.video_folder, "labels.pkl")
+        if os.path.exists(labels_file):
+            with open(labels_file, 'rb') as f:
+                data = pickle.load(f)
 
-        self.img_frames = data["img_frames"]
         self.img_labels = data["img_labels"]
-        self.start_video_idx = data["video_idx"]
-        self.video_length.set(data["video_lenght"])
+
+        image_files = os.listdir(self.video_folder)
+        image_files = [filename for filename in image_files if not filename.endswith('.pkl')]
+        image_files.sort()
+        self.img_frames = []
+        for image_file in image_files:
+            file_path = os.path.join(self.video_folder, image_file)
+            img = Image.open(file_path)
+            self.img_frames.append(img)
+        
+        self.start_video_idx = int(image_files[0].rsplit('.')[0].rsplit('_')[-1])
+        self.video_length.set(len(self.img_frames))
 
         if hasattr(self, "scale"):
             self.scale.configure(to=self.video_length.get())
 
-        print(f"Video loaded from {video_pickle}.\n")
+        print(f"Video loaded from ({self.video_length.get()} images).\n")
