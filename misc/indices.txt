@@ -17,3 +17,4 @@
 633 | bus near car
 2865 | cars pedestrians
 253 | pedestrians
+3073 | cars and trucks

@@ -49,6 +49,7 @@ class BaseApp(tk.Tk):
         self.bg_color = self.option_get('background', '*')
         self.started_app = False
         self.video_gen_bool = False
+        self.layers_video = 0
 
         self.old_layer = None
         self.old_bbox_idx = None
@@ -165,7 +166,7 @@ class BaseApp(tk.Tk):
         layer_opt = tk.Menu(self.menubar)
         self.selected_layer = tk.IntVar()
         for i in range(self.ObjectDetector.num_layers):
-            layer_opt.add_radiobutton(label=i, variable=self.selected_layer)
+            layer_opt.add_radiobutton(label=i, variable=self.selected_layer, command=self.update_info_label)
         self.selected_layer.set(self.ExplainableModel.num_layers - 1)
 
         # Cascade menus for Explainable options
@@ -376,6 +377,7 @@ class BaseApp(tk.Tk):
 
         # Those are needed to index the bboxes decoded by the NMS-Free decoder
         self.nms_îdxs_layers = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()
+        self.bbox_scores_layers = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_scores()
         self.outputs = outputs[0]["pts_bbox"]
         self.thr_idxs_layers = [output_layer['scores_3d'] > self.selected_threshold.get() for output_layer in self.outputs]
         self.pred_bboxes_layers = [output_layer["boxes_3d"][thr_layer] for output_layer,thr_layer in zip(self.outputs, self.thr_idxs_layers)]
@@ -415,6 +417,7 @@ class BaseApp(tk.Tk):
         # Extract only the selected layer
         self.labels = self.labels_layers[self.selected_layer.get()]
         self.nms_idxs = self.nms_îdxs_layers[self.selected_layer.get()]
+        self.bbox_scores = self.bbox_scores_layers[self.selected_layer.get()]
         self.thr_idxs = self.thr_idxs_layers[self.selected_layer.get()]
         self.pred_bboxes = self.pred_bboxes_layers[self.selected_layer.get()]
 
@@ -489,9 +492,11 @@ class BaseApp(tk.Tk):
             idx = self.data_idx
         if info is None:
             info = f"Model: {self.ObjectDetector.model_name} | Dataloader: {self.ObjectDetector.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
-            if self.video_gen_bool:
+            if self.video_gen_bool or self.selected_expl_type.get() != "Gradient Rollout":
                 if self.layers_video > 1:
                     info += f" | Layer {self.layer_idx}"
+                else:
+                    info += f" | Layer {self.selected_layer.get()}"
         self.info_text.set(info)
 
     def update_objects_list(self, labels=None):
@@ -503,7 +508,7 @@ class BaseApp(tk.Tk):
             view_bbox = tk.BooleanVar()
             view_bbox.set(False)
             self.bboxes.append(view_bbox)
-            self.bbox_opt.add_checkbutton(label=f" {self.ObjectDetector.class_names[labels[i].item()].capitalize()} ({i})", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
+            self.bbox_opt.add_checkbutton(label=f" {i}: {self.ObjectDetector.class_names[labels[i].item()].capitalize()} ({round(self.bbox_scores[i].item(), 2)} %)", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
 
     def single_bbox_select(self, idx=None, single_select=False):
         self.select_all_bboxes.set(False)
