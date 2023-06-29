@@ -33,11 +33,9 @@ class App(BaseApp):
                 self.canvas.pack_forget()
                 self.scale.pack_forget()
                 end_idx = self.menubar.index('end')
-                self.unbind('<space>')
-                self.unbind('<Right>')
-                self.unbind('<Left>')
-                self.unbind('<Up>')
-                self.unbind('<Down>')
+                for key in ['<space>', '<Right>', '<Left>', '<Up>', '<Down>']:
+                    self.unbind(key)
+
                 self.menubar.delete(end_idx-1, end_idx)
             self.fig = plt.figure()
             self.fig.set_facecolor(self.bg_color)
@@ -284,18 +282,18 @@ class App(BaseApp):
                 self.canvas_frame = self.canvas.create_image(0, 0, image=None, anchor='nw', tags="img_tag")
                 self.canvas.update()
                 self.video_gen_bool = True
-            
-            self.idx_video = tk.IntVar()
-            self.idx_video.set(max(0, self.data_idx - self.start_video_idx))
+                       
             if hasattr(self, "scale"):
                 self.scale.configure(to=self.video_length.get())
+                self.idx_video.set(max(0, self.data_idx - self.start_video_idx))
             else:
+                self.idx_video = tk.IntVar()
                 self.scale = tk.Scale(self.frame, from_=0, to=self.video_length.get(), variable=self.idx_video, command=self.update_index, showvalue=False, orient='horizontal')
             self.scale.pack(fill='x')
 
             self.paused = False
             self.old_w, self.old_h = None, None
-            self.selected_layer.set(self.layers_video - 1)
+            self.layer_idx = self.layers_video - 1
             self.show_sequence()
     
     def update_index(self, event=None):
@@ -306,22 +304,24 @@ class App(BaseApp):
                 elif event.keysym == 'Left':
                     self.idx_video.set(self.idx_video.get() - 1)
                 elif event.keysym == 'Up':
-                    self.selected_layer.set(max(0, self.selected_layer.get() - 1))
+                    self.layer_idx = max(0, self.layer_idx - 1)
                 elif event.keysym == 'Down':
-                    self.selected_layer.set(min(self.layers_video-1, self.selected_layer.get() + 1))
+                    self.layer_idx = min(self.layers_video-1, self.layer_idx + 1)
             self.show_sequence(forced=True)
             if hasattr(self, "img_labels"):
-                labels = self.img_labels[self.idx_video.get()]
+                labels = self.img_labels[self.idx_video.get()-1]
                 self.update_objects_list(labels=labels)
+                self.initialize_bboxes(single_select=True)
 
     def pause_resume(self, event=None):
         if not self.paused:
             self.after_cancel(self.after_seq_id)
             self.paused = True
             if hasattr(self, "img_labels"):
-                labels = self.img_labels[self.idx_video.get()]
+                labels = self.img_labels[self.idx_video.get()-1]
                 self.update_objects_list(labels=labels)
-                self.single_bbox_select(single_select=True)
+                self.initialize_bboxes(single_select=True)
+                #self.single_bbox_select(single_select=True)
 
         else:
             self.paused = False
@@ -329,32 +329,28 @@ class App(BaseApp):
 
     def show_sequence(self, forced=False):
         if not self.paused or forced:
-            if not forced:
-                self.idx_video.set(self.idx_video.get() + 1)
-                if self.idx_video.get() >= self.video_length.get():
-                    self.idx_video.set(0)
+            # if not forced:
+            #     self.idx_video.set(self.idx_video.get() + 1)
+            if self.idx_video.get() >= self.video_length.get():
+                self.idx_video.set(0)
 
-            img_frame = self.img_frames[self.selected_layer.get()][self.idx_video.get()]
+            img_frame = self.img_frames[self.layer_idx][self.idx_video.get()]
             self.w, self.h = self.canvas.winfo_width(), self.canvas.winfo_height()
 
-            if self.old_w != self.w or self.old_h != self.h:
-                canvas_ratio = self.w / self.h
+            if (self.old_w, self.old_h) != (self.w, self.h):
                 img_w, img_h = img_frame.width, img_frame.height
-                img_ratio = img_w / img_h
+                canvas_ratio, img_ratio = self.w / self.h, img_w / img_h
 
                 if img_ratio > canvas_ratio:
-                    self.new_w = self.w
-                    self.new_h = int(self.new_w / img_ratio)
+                    self.new_w, self.new_h = self.w, int(self.w / img_ratio)
                 else:
-                    self.new_h = self.h
-                    self.new_w = int(self.new_h * img_ratio)
+                    self.new_w, self.new_h = int(self.h * img_ratio), self.h
 
                 x = (self.w - self.new_w) // 2
                 y = (self.h - self.new_h) // 2
                 self.canvas.coords("img_tag", x, y)
 
-                self.old_w = self.w
-                self.old_h = self.h
+                self.old_w, self.old_h = self.w, self.h
 
             self.img_frame = ImageTk.PhotoImage(img_frame.resize((self.new_w, self.new_h)))
             self.canvas.itemconfig(self.canvas_frame, image=self.img_frame)
@@ -363,8 +359,10 @@ class App(BaseApp):
             self.update_info_label()
 
             if not forced:
+                self.idx_video.set(self.idx_video.get() + 1)
                 self.after_seq_id = self.after(self.video_delay.get(), self.show_sequence)
 
+                
     def generate_video(self):
         if self.video_length.get() > ((len(self.ObjectDetector.dataset)-1) - self.data_idx):
             self.show_message(f"Video lenght should be between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 

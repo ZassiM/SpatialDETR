@@ -92,7 +92,7 @@ class BaseApp(tk.Tk):
         self.expl_configs = Configs(expl_configs, triggered_function=self.ExplainableModel.generate_explainability, type=1)
 
         if not self.started_app:
-            print("Starting app...\n")
+            print("Starting app...")
             self.start_app()
             self.random_data_idx()
             self.started_app = True
@@ -143,9 +143,10 @@ class BaseApp(tk.Tk):
             delay_opt.add_radiobutton(label=video_delays[i], variable=self.video_delay, value=video_delays[i])
 
         videolength_opt = tk.Menu(self.menubar)
-        video_lengths = np.arange(10, 200, 20)
+        video_lengths = np.arange(0, 1100, 100)
+        video_lengths[0] = 10
         self.video_length = tk.IntVar()
-        self.video_length.set(5)
+        self.video_length.set(video_lengths[0])
         for i in range(len(video_lengths)):
             videolength_opt.add_radiobutton(label=video_lengths[i], variable=self.video_length , value=video_lengths[i])
 
@@ -224,11 +225,12 @@ class BaseApp(tk.Tk):
 
         # Discard ratio for attention weights
         dr_opt = tk.Menu(self.menubar)
-        self.show_self_attention, self.gen_segmentation = tk.BooleanVar(), tk.BooleanVar()
+        self.show_self_attention, self.gen_segmentation, self.aggregate_layers = tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.show_self_attention.set(True)
         for i in values:
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_threshold)
         expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
+        expl_opt.add_checkbutton(label="Aggregate layers", onvalue=1, offvalue=0, variable=self.aggregate_layers)
         expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
 
 
@@ -250,16 +252,14 @@ class BaseApp(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.overlay_bool, self.bbox_2d, self.show_self_attention, self.aggregate_layers = \
-            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.GT_bool, self.overlay_bool, self.bbox_2d, self.show_self_attention = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.overlay_bool.set(True)
         #self.bbox_2d.set(True)
         self.show_self_attention.set(True)
-        self.aggregate_layers.set(True)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
-        add_opt.add_checkbutton(label=" Aggregate layers", onvalue=1, offvalue=0, variable=self.aggregate_layers)
         add_opt.add_checkbutton(label=" Show objects self-attention", onvalue=1, offvalue=0, variable=self.show_self_attention)
         add_opt.add_cascade(label=" Select maps quality", menu=quality_opt)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
@@ -481,7 +481,7 @@ class BaseApp(tk.Tk):
         
     def random_data_idx(self):
         idx = random.randint(0, len(self.ObjectDetector.dataset)-1)
-        self.data_idx = idx
+        self.data_idx = idx 
         self.update_info_label()
 
     def update_info_label(self, info=None, idx=None):
@@ -489,8 +489,9 @@ class BaseApp(tk.Tk):
             idx = self.data_idx
         if info is None:
             info = f"Model: {self.ObjectDetector.model_name} | Dataloader: {self.ObjectDetector.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
-            if self.selected_expl_type.get() != "Gradient Rollout":
-                info += f" | Layer {self.selected_layer.get()}"
+            if self.video_gen_bool:
+                if self.layers_video > 1:
+                    info += f" | Layer {self.layer_idx}"
         self.info_text.set(info)
 
     def update_objects_list(self, labels=None):
@@ -515,9 +516,12 @@ class BaseApp(tk.Tk):
                 if i != idx:
                     self.bboxes[i].set(False)
 
-    def initialize_bboxes(self, all_select=False):
+    def initialize_bboxes(self, single_select=False, all_select=False):
         if all_select:
             self.select_all_bboxes.set(True)
+        if single_select:
+            self.single_bbox.set(True)
+            self.select_all_bboxes.set(False)
         if hasattr(self, "bboxes"):
             if self.select_all_bboxes.get():
                 self.single_bbox.set(False)
