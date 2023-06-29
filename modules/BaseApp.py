@@ -134,18 +134,18 @@ class BaseApp(tk.Tk):
         dataidx_opt.add_command(label=" Show LiDAR", command=self.show_lidar)
 
 
-        framerate_opt = tk.Menu(self.menubar)
-        frame_rates = np.arange(0, 35, 5)
-        frame_rates[0] = 1
-        self.frame_rate = tk.IntVar()
-        self.frame_rate.set(frame_rates[0])
-        for i in range(len(frame_rates)):
-            framerate_opt.add_radiobutton(label=frame_rates[i], variable=self.frame_rate, value=frame_rates[i])
+        delay_opt = tk.Menu(self.menubar)
+        video_delays = np.arange(0, 35, 5)
+        video_delays[0] = 1
+        self.video_delay = tk.IntVar()
+        self.video_delay.set(video_delays[0])
+        for i in range(len(video_delays)):
+            delay_opt.add_radiobutton(label=video_delays[i], variable=self.video_delay, value=video_delays[i])
 
         videolength_opt = tk.Menu(self.menubar)
         video_lengths = np.arange(10, 200, 20)
         self.video_length = tk.IntVar()
-        self.video_length.set(video_lengths[0])
+        self.video_length.set(5)
         for i in range(len(video_lengths)):
             videolength_opt.add_radiobutton(label=video_lengths[i], variable=self.video_length , value=video_lengths[i])
 
@@ -154,7 +154,7 @@ class BaseApp(tk.Tk):
         video_opt.add_command(label=" Load", command=self.load_video)
         video_opt.add_command(label=" Show", command=self.show_video)
         video_opt.add_cascade(label=" Sequence length", menu=videolength_opt)
-        video_opt.add_cascade(label=" Frame rate", menu=framerate_opt)
+        video_opt.add_cascade(label=" Video delay", menu=delay_opt)
 
         # Cascade menu for Camera
         self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
@@ -250,23 +250,25 @@ class BaseApp(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.overlay_bool, self.bbox_2d, self.show_self_attention = \
-            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.GT_bool, self.overlay_bool, self.bbox_2d, self.show_self_attention, self.aggregate_layers = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.overlay_bool.set(True)
-        self.bbox_2d.set(True)
+        #self.bbox_2d.set(True)
         self.show_self_attention.set(True)
+        self.aggregate_layers.set(True)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
+        add_opt.add_checkbutton(label=" Aggregate layers", onvalue=1, offvalue=0, variable=self.aggregate_layers)
         add_opt.add_checkbutton(label=" Show objects self-attention", onvalue=1, offvalue=0, variable=self.show_self_attention)
         add_opt.add_cascade(label=" Select maps quality", menu=quality_opt)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
 
         # Adding all cascade menus ro the main menubar menu
         self.add_separator()
-        self.menubar.add_cascade(label="Video", menu=video_opt)
-        self.add_separator()
         self.menubar.add_cascade(label="Data", menu=dataidx_opt)
+        self.add_separator()
+        self.menubar.add_cascade(label="Video", menu=video_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Objects", menu=self.bbox_opt)
         self.add_separator()
@@ -278,7 +280,6 @@ class BaseApp(tk.Tk):
         self.add_separator("|")
         self.menubar.add_command(label="Visualize", command=self.visualize)
         self.add_separator("|")
-
 
     def show_car(self):
         img = plt.imread("misc/car.png")
@@ -392,6 +393,7 @@ class BaseApp(tk.Tk):
 
         # Extract image metas which contain, for example, the lidar to camera projection matrices
         self.img_metas = self.data["img_metas"][0]._data[0][0]
+        self.data_description = None
 
         # Extract the 6 camera images from the data and remove the padded pixels
         imgs = self.data["img"][0]._data[0].numpy()[0]
@@ -409,7 +411,6 @@ class BaseApp(tk.Tk):
             else:
                 self.select_layer(initialize_bboxes=initialize_bboxes)
 
-    
     def select_layer(self, all_select=True, initialize_bboxes=True):
         # Extract only the selected layer
         self.labels = self.labels_layers[self.selected_layer.get()]
@@ -417,7 +418,7 @@ class BaseApp(tk.Tk):
         self.thr_idxs = self.thr_idxs_layers[self.selected_layer.get()]
         self.pred_bboxes = self.pred_bboxes_layers[self.selected_layer.get()]
 
-        if initialize_bboxes and not self.video_gen_bool:
+        if (initialize_bboxes and not self.video_gen_bool) or (self.video_gen_bool and not hasattr(self, "img_labels")):
             self.update_objects_list()
             self.initialize_bboxes(all_select=all_select)
 
@@ -471,9 +472,10 @@ class BaseApp(tk.Tk):
             else:
                 self.show_message(f"Insert an integer between 0 and {len(self.ObjectDetector.dataset)}")
         elif type == 1:
-            self.select_idx_opt.add_radiobutton(label=f'{self.data_idx} | {entry}', variable=self.selected_data_idx, command=self.update_idx, value=self.data_idx)
+            self.data_description = f'{self.data_idx} | {entry}'
+            self.select_idx_opt.add_radiobutton(label=self.data_description, variable=self.selected_data_idx, command=self.update_idx, value=self.data_idx)
             with open(self.indices_file, 'a') as file:
-                file.write(f'{self.data_idx} | {entry}\n')
+                file.write(f'{self.data_description}\n')
         
         popup.destroy()
         
@@ -487,7 +489,8 @@ class BaseApp(tk.Tk):
             idx = self.data_idx
         if info is None:
             info = f"Model: {self.ObjectDetector.model_name} | Dataloader: {self.ObjectDetector.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
-        
+            if self.selected_expl_type.get() != "Gradient Rollout":
+                info += f" | Layer {self.selected_layer.get()}"
         self.info_text.set(info)
 
     def update_objects_list(self, labels=None):
@@ -536,14 +539,17 @@ class BaseApp(tk.Tk):
         if not os.path.exists(screenshots_path):
             os.makedirs(screenshots_path)
 
-        path = screenshots_path + f"{self.ObjectDetector.model_name}_{self.data_idx}"
-
-        if os.path.exists(path+"_"+str(self.file_suffix)+".png"):
-            self.file_suffix += 1
+        if self.data_description:
+            path = screenshots_path + self.data_description.replace(" | ", "_").replace(" ", "_") + ".png"
         else:
-            self.file_suffix = 0
+            expl_string = self.selected_expl_type.get().replace(" ", "_")
+            path = screenshots_path + f"{self.ObjectDetector.model_name}_{expl_string}_{self.data_idx}"
+            if os.path.exists(path+"_"+str(self.file_suffix)+".png"):
+                self.file_suffix += 1
+            else:
+                self.file_suffix = 0
+            path += "_" + str(self.file_suffix) + ".png"
 
-        path += "_" + str(self.file_suffix) + ".png"
         self.fig.savefig(path, dpi=300, transparent=True)
         print(f"Screenshot saved in {path}.")
 
@@ -569,19 +575,22 @@ class BaseApp(tk.Tk):
             with open(labels_file, 'rb') as f:
                 data = pickle.load(f)
 
-        self.img_labels = data["img_labels"]
+            self.img_labels = data["img_labels"]
 
-        image_files = os.listdir(self.video_folder)
-        image_files = [filename for filename in image_files if not filename.endswith('.pkl')]
-        image_files.sort()
+        layer_folders = [f for f in os.listdir(self.video_folder) if f.startswith('layer_') and os.path.isdir(os.path.join(self.video_folder, f))]
+        layer_folders.sort(key=lambda x: int(x.split('_')[-1]))  # Sort the folders by the layer number
+
         self.img_frames = []
-        for image_file in image_files:
-            file_path = os.path.join(self.video_folder, image_file)
-            img = Image.open(file_path)
-            self.img_frames.append(img)
-        
-        self.start_video_idx = int(image_files[0].rsplit('.')[0].rsplit('_')[-1])
-        self.video_length.set(len(self.img_frames))
+        for folder in layer_folders:
+            folder_path = os.path.join(self.video_folder, folder)
+            folder_images = os.listdir(folder_path)
+            folder_images.sort()
+            images = [Image.open(os.path.join(folder_path, img)) for img in folder_images]
+            self.img_frames.append(images)
+
+        self.start_video_idx = int(folder_images[0].split('.')[0].split('_')[-1])
+        self.video_length.set(len(self.img_frames[0]))
+        self.layers_video = len(self.img_frames)
 
         if hasattr(self, "scale"):
             self.scale.configure(to=self.video_length.get())

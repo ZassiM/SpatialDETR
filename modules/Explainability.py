@@ -186,7 +186,6 @@ class ExplainableTransformer:
         
         self.R_q_i = cam_q_i  
 
-
     def generate_gradcam(self, layer, camidx):
         ''' Generates Grad-CAM for XAI. '''      
 

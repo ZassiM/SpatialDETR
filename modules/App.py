@@ -32,10 +32,13 @@ class App(BaseApp):
             if self.video_gen_bool:
                 self.canvas.pack_forget()
                 self.scale.pack_forget()
-                #self.scale.destroy()
                 end_idx = self.menubar.index('end')
+                self.unbind('<space>')
+                self.unbind('<Right>')
+                self.unbind('<Left>')
+                self.unbind('<Up>')
+                self.unbind('<Down>')
                 self.menubar.delete(end_idx-1, end_idx)
-                self.video_gen_bool = False
             self.fig = plt.figure()
             self.fig.set_facecolor(self.bg_color)
             # self.spec = self.fig.add_gridspec(3, 3)
@@ -49,6 +52,9 @@ class App(BaseApp):
 
         self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name]
 
+        if self.video_gen_bool:
+            self.video_gen_bool = False
+
         if self.old_layer != self.selected_layer.get():
             if self.single_bbox.get():
                 self.select_layer(initialize_bboxes=False)
@@ -61,12 +67,6 @@ class App(BaseApp):
         
         if not self.no_object:
             self.update_explainability()
-            
-            # if self.selected_pert_step.get() > 0:
-            #     self.update_data(pert_step=self.selected_pert_step.get())
-
-            # Extract the selected bounding box indices from the menu
-            #self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
             self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get())
 
@@ -81,16 +81,11 @@ class App(BaseApp):
                     return
                 self.selected_camera = cam_obj
 
-            # _, indices = torch.topk(xai_map.flatten(), k=int(0.2*(1600*900)))
-            # indices = indices[xai_map.flatten()[indices] > 0.5]
-            # indices = np.array(np.unravel_index(indices.numpy(), xai_map.shape)).T
-            # cols, rows = indices[:, 0], indices[:, 1]
-            # saliency_map[cols, rows] = [0,0,0]
-
         # Generate images list with bboxes on it
         print("Generating camera images...")
         self.cam_imgs, self.saliency_maps_objects = [], []
         with_labels = True
+        roll = False
         for camidx in range(len(self.imgs)):
 
             img, bbox_coords = draw_lidar_bbox3d_on_img(
@@ -130,7 +125,10 @@ class App(BaseApp):
                         mode_2d=self.bbox_2d.get())
                 
             if self.overlay_bool.get() and not self.no_object:
-                xai_map = self.ExplainableModel.xai_maps[self.selected_layer.get()][camidx]
+                if self.aggregate_layers.get():
+                    xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
+                else:
+                    xai_map = self.ExplainableModel.xai_maps[self.selected_layer.get()][camidx]
                 saliency_map = generate_saliency_map(img, xai_map)        
                 saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                 self.cam_imgs.append(saliency_map)
@@ -172,7 +170,6 @@ class App(BaseApp):
         print("Done.\n")
         torch.cuda.empty_cache()
 
-
     def update_explainability(self):
         # Avoid selecting all layers and all cameras. Only the last layer will be visualized
         if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
@@ -180,7 +177,6 @@ class App(BaseApp):
             self.update_data(initialize_bboxes=False)
 
         self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get(), self.data_idx]   
-
 
     def show_explainability(self):
         '''
@@ -210,17 +206,10 @@ class App(BaseApp):
             att_nobbx_obj = self.saliency_maps_objects[i]
             att_nobbx_obj = att_nobbx_obj[bbox_coord[1].clip(min=0):bbox_coord[3], bbox_coord[0].clip(min=0):bbox_coord[2]]
             ax_obj_layer.imshow(att_nobbx_obj, vmin=0, vmax=1)   
-            
-            title = ""
-            if self.selected_expl_type.get() != "Gradient Rollout":
-                title = f"layer {i}"
-                if self.selected_expl_type.get() == "Raw Attention":
-                    title += f" | head {self.selected_head_fusion.get()}"
-
+    
             ax_obj_layer.axis('off')
-            #ax_obj_layer.set_title(title, fontsize=fontsize, color=text_color, pad=0)
         
-        if self.show_self_attention.get():
+        if self.show_self_attention.get() and len(self.labels) > 1:
             # Query self-attention visualization
             query_self_attn = self.ExplainableModel.self_xai_maps[self.selected_layer.get()]
             query_self_attn = query_self_attn[0]
@@ -230,50 +219,42 @@ class App(BaseApp):
             if self.selected_expl_type.get() != "Gradient Rollout":
                 title += f" | layer {self.selected_layer.get()}"
 
-            ax = self.fig.add_subplot(self.spec[1, 2])
-            percentage = query_self_attn / query_self_attn.sum() * 100
-            x = torch.arange(len(query_self_attn))
-            bars = ax.bar(x, percentage)
-            bars[self.bbox_idx[0]].set_color('red')
-            ax.set_facecolor('none')
-            ax.set_xticks(x)
-            ax.set_yticks([])
-            ax.xaxis.label.set_color(text_color)
-            ax.yaxis.label.set_color(text_color)
-            ax.tick_params(colors=text_color)
-            ax.spines['right'].set_visible(False)
-            ax.spines['top'].set_visible(False)
-            ax.spines['left'].set_visible(False)
-            ax.spines['bottom'].set_visible(False)
-
-            ax.set_xticklabels([])
-            min_font_size = 6
-            max_font_size = 12
-            num_bars = len(bars)
-            fontsize = max(min_font_size, max_font_size - num_bars // 10)
-            for i, bar in enumerate(bars):
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                        str(i), ha='center', va='bottom', color=text_color,
-                        fontsize=fontsize)
-            
-            edge_color = "black" if text_color == "white" else "white"
-            title_color = edge_color
-            ax.set_title(title, fontsize=fontsize-1, color=title_color)
-
-            ax2 = self.fig.add_subplot(self.spec[1, 0])
-
-            cmap = plt.cm.get_cmap('OrRd')  # Choose the desired colormap
-
-            # Normalize the values of query_self_attn between 0 and 1
+            cmap = plt.cm.get_cmap('OrRd')  
             norm = plt.Normalize(vmin=query_self_attn.min(), vmax=query_self_attn.max())
             color_values = cmap(norm(query_self_attn))
+
+            ax = self.fig.add_subplot(self.spec[1, 2])
+            x = torch.arange(len(query_self_attn))
+            bars = ax.bar(x, query_self_attn / query_self_attn.sum() * 100)
+
+            # Setting colors and highlighting bar
+            [b.set_color(c) for b, c in zip(bars, color_values)]
+            bars[self.bbox_idx[0]].set_edgecolor(text_color)
+            bars[self.bbox_idx[0]].set_linewidth(1)
+
+            # Setting various parameters
+            ax.set(xticks=[], yticks=[], facecolor='none')
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+
+            # Setting text labels
+            min_font_size, max_font_size = 6, 10
+            fontsize = max(min_font_size, max_font_size - len(bars) // 10)
+            for i, bar in enumerate(bars):
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), str(i),
+                        ha='center', va='bottom', color=text_color, fontsize=fontsize)
+            
+            #ax.set_title(title, color=text_color, fontsize=fontsize-4, y=0.95)
+
+            ax2 = self.fig.add_subplot(self.spec[1, 0])
+            edge_color = "black" if text_color == "white" else "white"
             labels = np.arange(len(self.labels))
             explode = [0.1 if i == self.bbox_idx[0] else 0 for i in range(len(self.labels))]
-            patches, texts = ax2.pie(query_self_attn, labels=labels, wedgeprops={'linewidth': 1.0, 'edgecolor': edge_color}, explode=explode, colors=color_values)
+            _, texts = ax2.pie(query_self_attn, labels=labels, wedgeprops={'linewidth': 1.0, 'edgecolor': edge_color}, explode=explode, colors=color_values)
             for i in range(len(texts)):
                 texts[i].set_fontweight('bold')  # make the text bold
-                texts[i].set_color(patches[i].get_facecolor())
-            ax2.set_title(title, color=title_color, fontsize=fontsize-1)
+                texts[i].set_color(text_color)
+            #ax2.set_title(title, color=text_color, fontsize=fontsize-4, y=0.95)
 
         self.fig.tight_layout()
 
@@ -281,7 +262,7 @@ class App(BaseApp):
         self.ObjectDetector.dataset.show_mod(self.outputs[self.selected_layer.get()], index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, snapshot=False, pipeline=None, score_thr=self.selected_threshold.get())
 
     def show_video(self):
-        if not hasattr(self, "img_labels"):
+        if not hasattr(self, "img_frames"):
             generated = self.generate_video()
         else:
             generated = True
@@ -291,81 +272,69 @@ class App(BaseApp):
                 if self.canvas:
                     self.canvas.get_tk_widget().pack_forget()
                 self.menubar.add_command(label="Pause/Resume", command=self.pause_resume)
+                self.bind('<space>', self.pause_resume)
+                self.bind('<Right>', self.update_index)
+                self.bind('<Left>', self.update_index)
+                self.bind('<Up>', self.update_index)
+                self.bind('<Down>', self.update_index)
+
                 self.add_separator("|")
                 self.canvas = tk.Canvas(self)
                 self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
                 self.canvas_frame = self.canvas.create_image(0, 0, image=None, anchor='nw', tags="img_tag")
                 self.canvas.update()
                 self.video_gen_bool = True
-    
+            
+            self.idx_video = tk.IntVar()
+            self.idx_video.set(max(0, self.data_idx - self.start_video_idx))
             if hasattr(self, "scale"):
                 self.scale.configure(to=self.video_length.get())
             else:
-                self.scale = tk.Scale(self.frame, from_=0, to=self.video_length.get(), showvalue=False, orient='horizontal', command=self.update_index)
+                self.scale = tk.Scale(self.frame, from_=0, to=self.video_length.get(), variable=self.idx_video, command=self.update_index, showvalue=False, orient='horizontal')
             self.scale.pack(fill='x')
-
-            self.data_idx = self.start_video_idx
 
             self.paused = False
             self.old_w, self.old_h = None, None
-            self.idx_video = 0
+            self.selected_layer.set(self.layers_video - 1)
             self.show_sequence()
     
-    def update_index(self, value):
+    def update_index(self, event=None):
         if self.paused:
-            self.idx_video = int(value)
+            if not isinstance(event, str):
+                if event.keysym == 'Right':
+                    self.idx_video.set(self.idx_video.get() + 1)
+                elif event.keysym == 'Left':
+                    self.idx_video.set(self.idx_video.get() - 1)
+                elif event.keysym == 'Up':
+                    self.selected_layer.set(max(0, self.selected_layer.get() - 1))
+                elif event.keysym == 'Down':
+                    self.selected_layer.set(min(self.layers_video-1, self.selected_layer.get() + 1))
             self.show_sequence(forced=True)
+            if hasattr(self, "img_labels"):
+                labels = self.img_labels[self.idx_video.get()]
+                self.update_objects_list(labels=labels)
 
-    def generate_video(self, save_img=True):
-        if self.video_length.get() > ((len(self.ObjectDetector.dataset)-1) - self.data_idx):
-            self.show_message(f"Video lenght should be between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
-            return False
+    def pause_resume(self, event=None):
+        if not self.paused:
+            self.after_cancel(self.after_seq_id)
+            self.paused = True
+            if hasattr(self, "img_labels"):
+                labels = self.img_labels[self.idx_video.get()]
+                self.update_objects_list(labels=labels)
+                self.single_bbox_select(single_select=True)
 
-
-        self.video_folder = f"video_{self.data_idx}_{self.video_length.get()}"
-        os.makedirs(self.video_folder)
-
-        self.select_all_bboxes.set(True)
-        self.img_labels = []
-        self.start_video_idx = self.data_idx
-
-        print("\nGenerating video frames...\n")
-        prog_bar = mmcv.ProgressBar(self.video_length.get())
-        for i in range(self.data_idx, self.data_idx + self.video_length.get()):
-            self.data_idx = i
-            labels = self.generate_video_frame()
-            self.img_labels.append(labels)
-            prog_bar.update()
-
-        self.data_idx = self.start_video_idx
-
-        self.img_frames = []
-        image_files = os.listdir(self.video_folder)
-        image_files.sort()
-        for image_file in image_files:
-            file_path = os.path.join(self.video_folder, image_file)
-            img = Image.open(file_path)
-            self.img_frames.append(img)
-
-        data = {"img_labels": self.img_labels}
-
-        file_path = os.path.join(self.video_folder, "labels.pkl")
-
-        with open(file_path, 'wb') as f:
-            pickle.dump(data, f)
-
-        print(f"\nVideo generated inside {self.video_folder} folder.\n")
-
-        return True
+        else:
+            self.paused = False
+            self.show_sequence()
 
     def show_sequence(self, forced=False):
         if not self.paused or forced:
             if not forced:
-                self.idx_video += 1
-            if self.idx_video >= self.video_length.get():
-                self.idx_video = 0
+                self.idx_video.set(self.idx_video.get() + 1)
+                if self.idx_video.get() >= self.video_length.get():
+                    self.idx_video.set(0)
 
-            img_frame = self.img_frames[self.idx_video]
+            img_frame = self.img_frames[self.selected_layer.get()][self.idx_video.get()]
             self.w, self.h = self.canvas.winfo_width(), self.canvas.winfo_height()
 
             if self.old_w != self.w or self.old_h != self.h:
@@ -380,7 +349,6 @@ class App(BaseApp):
                     self.new_h = self.h
                     self.new_w = int(self.new_h * img_ratio)
 
-                # Center image in canvas
                 x = (self.w - self.new_w) // 2
                 y = (self.h - self.new_h) // 2
                 self.canvas.coords("img_tag", x, y)
@@ -389,28 +357,61 @@ class App(BaseApp):
                 self.old_h = self.h
 
             self.img_frame = ImageTk.PhotoImage(img_frame.resize((self.new_w, self.new_h)))
-
-            # self.img_frame = ImageTk.PhotoImage(Image.fromarray((img_frame * 255).astype(np.uint8)).resize((self.new_w, self.new_h)))
             self.canvas.itemconfig(self.canvas_frame, image=self.img_frame)
+            
+            self.data_idx = self.start_video_idx + self.idx_video.get()
+            self.update_info_label()
 
-            self.update_info_label(idx=self.data_idx + self.idx_video)
-            self.scale.set(self.idx_video)
+            if not forced:
+                self.after_seq_id = self.after(self.video_delay.get(), self.show_sequence)
 
-            self.after_seq_id = self.after(self.frame_rate.get(), self.show_sequence)
+    def generate_video(self):
+        if self.video_length.get() > ((len(self.ObjectDetector.dataset)-1) - self.data_idx):
+            self.show_message(f"Video lenght should be between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
+            return False
 
-    def pause_resume(self):
-        if not self.paused:
-            self.after_cancel(self.after_seq_id)
-            self.paused = True
-            labels = self.img_labels[self.idx_video]
-            self.update_objects_list(labels=labels)
-            #self.single_bbox_select(idx=5)
-            self.data_idx = self.start_video_idx + self.idx_video
+        self.video_folder = f"video_{self.data_idx}_{self.video_length.get()}"
+        if os.path.isdir(self.video_folder):
+            shutil.rmtree(self.video_folder)
+        os.makedirs(self.video_folder)
 
-        else:
-            self.paused = False
-            self.show_sequence()
+        self.select_all_bboxes.set(True)
+        self.img_labels = []
+        self.start_video_idx = self.data_idx
+        self.video_gen_bool = True
+        print(f"\nGenerating video frames inside \"{self.video_folder}\"...")
+        prog_bar = mmcv.ProgressBar(self.video_length.get())
+        for i in range(self.data_idx, self.data_idx + self.video_length.get()):
+            self.data_idx = i
+            labels = self.generate_video_frame()
+            self.img_labels.append(labels)
+            prog_bar.update()
 
+        data = {"img_labels": self.img_labels}
+        file_path = os.path.join(self.video_folder, "labels.pkl")
+
+        with open(file_path, 'wb') as f:
+            pickle.dump(data, f)
+
+        self.data_idx = self.start_video_idx
+
+        self.img_frames = []
+        layer_folders = [f for f in os.listdir(self.video_folder) if f.startswith('layer_') and os.path.isdir(os.path.join(self.video_folder, f))]
+        layer_folders.sort(key=lambda x: int(x.split('_')[-1]))  # Sort the folders by the layer number
+
+        for folder in layer_folders:
+            folder_path = os.path.join(self.video_folder, folder)
+            folder_images = os.listdir(folder_path)
+            folder_images.sort()
+            images = [Image.open(os.path.join(folder_path, img)) for img in folder_images]
+            self.img_frames.append(images)
+        
+        self.layers_video = len(self.img_frames)
+            
+        print(f"\nVideo generated inside \"{self.video_folder}\" folder.\n")
+
+        return True
+    
     def generate_video_frame(self):
 
         self.update_data(initialize_bboxes=False)
@@ -422,8 +423,7 @@ class App(BaseApp):
         self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get())
 
         # Generate images list with bboxes on it
-        cam_imgs = []  # Used for video generation
-
+        cam_imgs = []  
         for camidx in range(len(self.imgs)):
 
             img, _ = draw_lidar_bbox3d_on_img(
@@ -436,25 +436,35 @@ class App(BaseApp):
                     bbx_idx=self.bbox_idx,
                     mode_2d=self.bbox_2d.get())
             
-            if self.selected_expl_type.get() == "Gradient Rollout":
-                attn = self.ExplainableModel.xai_maps[0][camidx]
-            else:
-                attn = self.ExplainableModel.xai_maps[self.selected_layer.get()][camidx]
+            if not self.no_object:
+                cam_layers = []
+                if self.aggregate_layers.get():
+                    xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
+                    saliency_map = generate_saliency_map(img, xai_map)        
+                    saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
+                    cam_layers.append(saliency_map)
+                else:
+                    for layer in range(len(self.ExplainableModel.xai_maps)):
+                        xai_map = self.ExplainableModel.xai_maps[layer][camidx]
+                        saliency_map = generate_saliency_map(img, xai_map)  
+                        saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
+                        cam_layers.append(saliency_map)
 
-            img = generate_saliency_map(img, attn)   
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                cam_imgs.append(cam_layers)     
 
-            cam_imgs.append(img)     
-
-        hori = np.concatenate((cam_imgs[2], cam_imgs[0], cam_imgs[1]), axis=1)
-        ver = np.concatenate((cam_imgs[5], cam_imgs[3], cam_imgs[4]), axis=1)
-        img_frame = np.concatenate((hori, ver), axis=0)
-
-        img = (img_frame * 255).astype(np.uint8)
-        img = Image.fromarray(img)
-        name = self.selected_expl_type.get().replace(" ", "_")
-        file_name = f"{name}_{self.data_idx}.jpeg"
-        file_path = os.path.join(self.video_folder, file_name)
-        img.save(file_path)
+        for layer in range(len(cam_imgs[0])):
+            hori = np.concatenate((cam_imgs[2][layer], cam_imgs[0][layer], cam_imgs[1][layer]), axis=1)
+            ver = np.concatenate((cam_imgs[5][layer], cam_imgs[3][layer], cam_imgs[4][layer]), axis=1)
+            img = np.concatenate((hori, ver), axis=0)
+            if not self.no_object:
+                img = (img * 255).astype(np.uint8)
+            img = Image.fromarray(img)
+            name = self.selected_expl_type.get().replace(" ", "_")
+            file_name = f"{name}_{self.data_idx}.jpeg"
+            layer_folder = os.path.join(self.video_folder, f"layer_{layer}")
+            if not os.path.exists(layer_folder):
+                os.makedirs(layer_folder)
+            file_path = os.path.join(layer_folder, file_name)
+            img.save(file_path)
 
         return self.labels
