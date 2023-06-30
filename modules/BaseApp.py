@@ -51,9 +51,6 @@ class BaseApp(tk.Tk):
         self.video_gen_bool = False
         self.layers_video = 0
 
-        self.old_layer = None
-        self.old_bbox_idx = None
-
         self.bbox_coords, self.saliency_maps_objects = [], []
         
         # Main Tkinter menu in which all other cascade menus are added
@@ -253,15 +250,16 @@ class BaseApp(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.overlay_bool, self.bbox_2d, self.show_self_attention = \
-            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.GT_bool, self.overlay_bool, self.bbox_2d, self.show_self_attention, self.capture_object = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.overlay_bool.set(True)
         #self.bbox_2d.set(True)
-        self.show_self_attention.set(True)
+        #self.show_self_attention.set(True)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
         add_opt.add_checkbutton(label=" Show objects self-attention", onvalue=1, offvalue=0, variable=self.show_self_attention)
+        add_opt.add_checkbutton(label=" Capture saliency maps", onvalue=1, offvalue=0, variable=self.capture_object)
         add_opt.add_cascade(label=" Select maps quality", menu=quality_opt)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
 
@@ -305,7 +303,7 @@ class BaseApp(tk.Tk):
         readme_text.configure(state='disabled')
         readme_text.pack()
 
-    def update_data(self, select_layer=True, initialize_bboxes=True, pert_step=None):
+    def update_data(self, initialize_bboxes=True, pert_step=None):
         '''
         Predict bboxes and extracts attentions.
         '''
@@ -338,33 +336,19 @@ class BaseApp(tk.Tk):
             mask = torch.Tensor(-mean)
             img_pert_list = []
             for camidx in range(len(xai_maps)):
-                #  {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
 
                 img_pert = img[camidx].permute(1, 2, 0).numpy()
                 xai = xai_maps[camidx]
                 filter_mask = xai > 0.2
-
-                # apply the filter_mask to xai and flatten it
                 filtered_xai = xai[filter_mask].flatten()
-
-                # create a tensor of original indices
                 original_indices = torch.arange(xai.numel()).reshape(xai.shape)[filter_mask].flatten()
-
-                # compute the threshold for top 20% values
                 top_k = int(pert_step * filtered_xai.numel())
-
-                # get the top k values and their indices
                 values, indices = torch.topk(filtered_xai, top_k)
-
-                # get the indices with respect to the original tensor
                 original_indices = original_indices[indices]
-
-                # convert the 1D indices back to 2D
                 row_indices, col_indices = original_indices // xai.size(1), original_indices % xai.size(1)
-
                 img_pert[row_indices, col_indices] = mask
-
                 img_pert_list.append(img_pert)
+
             if len(img_pert_list) > 0:
                 # save_img the perturbed 6 camera images into the data input
                 img_pert_list = torch.from_numpy(np.stack(img_pert_list))
@@ -380,14 +364,14 @@ class BaseApp(tk.Tk):
         self.bbox_scores_layers = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_scores()
         self.outputs = outputs[0]["pts_bbox"]
         self.thr_idxs_layers = [output_layer['scores_3d'] > self.selected_threshold.get() for output_layer in self.outputs]
-        self.pred_bboxes_layers = [output_layer["boxes_3d"][thr_layer] for output_layer,thr_layer in zip(self.outputs, self.thr_idxs_layers)]
-        for i in range(len(self.pred_bboxes_layers)):
-            self.pred_bboxes_layers[i].tensor.detach()
-                       
         self.labels_layers = [output_layer['labels_3d'][thr_layer] for output_layer,thr_layer in zip(self.outputs, self.thr_idxs_layers)]
+        self.labels = self.labels_layers[-1]
+        self.nms_idxs = self.nms_îdxs_layers[-1]
+        self.thr_idxs = self.thr_idxs_layers[-1]
+        self.pred_bboxes = self.outputs[-1]["boxes_3d"][self.thr_idxs]
 
         self.no_object = False
-        if len(self.labels_layers[self.selected_layer.get()]) == 0:
+        if len(self.labels_layers[-1]) == 0:
             self.no_object = True
             if not self.video_gen_bool:
                 print("No object detected.")
@@ -407,23 +391,14 @@ class BaseApp(tk.Tk):
             imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
         self.imgs = imgs.astype(np.uint8)
 
-        if select_layer:
-            if pert_step:
-                self.select_layer(initialize_bboxes=initialize_bboxes, all_select=False)
-            else:
-                self.select_layer(initialize_bboxes=initialize_bboxes)
-
-    def select_layer(self, all_select=True, initialize_bboxes=True):
-        # Extract only the selected layer
-        self.labels = self.labels_layers[self.selected_layer.get()]
-        self.nms_idxs = self.nms_îdxs_layers[self.selected_layer.get()]
-        self.bbox_scores = self.bbox_scores_layers[self.selected_layer.get()]
-        self.thr_idxs = self.thr_idxs_layers[self.selected_layer.get()]
-        self.pred_bboxes = self.pred_bboxes_layers[self.selected_layer.get()]
-
+        all_select = True
+        if pert_step:
+            all_select = False
         if (initialize_bboxes and not self.video_gen_bool) or (self.video_gen_bool and not hasattr(self, "img_labels")):
-            self.update_objects_list()
-            self.initialize_bboxes(all_select=all_select)
+            self.update_objects_list(all_select=all_select)
+        
+        if self.video_gen_bool:
+            self.video_gen_bool = False
 
     def add_separator(self, sep=""):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
@@ -499,7 +474,7 @@ class BaseApp(tk.Tk):
                     info += f" | Layer {self.selected_layer.get()}"
         self.info_text.set(info)
 
-    def update_objects_list(self, labels=None):
+    def update_objects_list(self, labels=None, single_select=False, all_select=True):
         if labels is None:
             labels = self.labels
         self.bboxes = []
@@ -508,18 +483,9 @@ class BaseApp(tk.Tk):
             view_bbox = tk.BooleanVar()
             view_bbox.set(False)
             self.bboxes.append(view_bbox)
-            self.bbox_opt.add_checkbutton(label=f" {i}: {self.ObjectDetector.class_names[labels[i].item()].capitalize()} ({round(self.bbox_scores[i].item(), 2)} %)", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
+            self.bbox_opt.add_checkbutton(label=f" {i}: {self.ObjectDetector.class_names[labels[i].item()].capitalize()}", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
 
-    def single_bbox_select(self, idx=None, single_select=False):
-        self.select_all_bboxes.set(False)
-        if single_select:
-            self.single_bbox.set(True)
-        if self.single_bbox.get():
-            if idx is None:
-                idx = 0
-            for i in range(len(self.bboxes)):
-                if i != idx:
-                    self.bboxes[i].set(False)
+        self.initialize_bboxes(single_select, all_select)
 
     def initialize_bboxes(self, single_select=False, all_select=False):
         if all_select:
@@ -535,6 +501,19 @@ class BaseApp(tk.Tk):
             else:
                 if len(self.bboxes) > 0:
                     self.bboxes[0].set(True)
+
+    def single_bbox_select(self, idx=None, single_select=False):
+        self.select_all_bboxes.set(False)
+        if single_select:
+            self.single_bbox.set(True)
+        if self.single_bbox.get():
+            if idx is None:
+                idx = 0
+            for i in range(len(self.bboxes)):
+                if i != idx:
+                    self.bboxes[i].set(False)
+
+
 
     def get_camera_object(self):
         scores = self.ExplainableModel.scores

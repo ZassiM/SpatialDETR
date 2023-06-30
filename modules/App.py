@@ -39,7 +39,6 @@ class App(BaseApp):
                 self.menubar.delete(end_idx-1, end_idx)
             self.fig = plt.figure()
             self.fig.set_facecolor(self.bg_color)
-            # self.spec = self.fig.add_gridspec(3, 3)
             self.canvas = FigureCanvasTkAgg(self.fig, master=self)
             self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
@@ -50,19 +49,8 @@ class App(BaseApp):
 
         self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name]
 
-        if self.video_gen_bool:
-            self.video_gen_bool = False
-
-        if self.old_layer != self.selected_layer.get():
-            if self.single_bbox.get():
-                self.select_layer(all_select=False)
-            else:
-                self.select_layer()
-            self.old_layer = self.selected_layer.get()
-
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
-        
         if not self.no_object:
             self.update_explainability()
 
@@ -203,9 +191,21 @@ class App(BaseApp):
 
             att_nobbx_obj = self.saliency_maps_objects[i]
             att_nobbx_obj = att_nobbx_obj[bbox_coord[1].clip(min=0):bbox_coord[3], bbox_coord[0].clip(min=0):bbox_coord[2]]
-            ax_obj_layer.imshow(att_nobbx_obj, vmin=0, vmax=1)   
-    
+            ax_obj_layer.imshow(att_nobbx_obj, vmin=0, vmax=1)
             ax_obj_layer.axis('off')
+            
+            if self.capture_object.get():
+                fig_save, ax_save = plt.subplots()
+                ax_save.imshow(att_nobbx_obj, vmin=0, vmax=1)
+                ax_save.axis('off')  # Turn off axis
+                class_name = self.ObjectDetector.class_names[self.labels[self.bbox_idx[0]].item()]
+                folder_path = f"Thesis/{self.data_idx}_{self.selected_expl_type.get()}_{class_name}"
+                if not os.path.exists(folder_path):
+                    os.makedirs(folder_path)
+                fig_save.savefig(os.path.join(folder_path, f"layer_{i}.png"), transparent=True, bbox_inches='tight', pad_inches=0)
+                plt.close(fig_save)
+    
+
         
         if self.show_self_attention.get() and len(self.labels) > 1:
             # Query self-attention visualization
@@ -330,11 +330,11 @@ class App(BaseApp):
                     self.layer_idx = max(0, self.layer_idx - 1)
                 elif event.keysym == 'Down':
                     self.layer_idx = min(self.layers_video-1, self.layer_idx + 1)
+                self.frame.focus_set()
             self.show_sequence(forced=True)
             if hasattr(self, "img_labels"):
                 labels = self.img_labels[self.idx_video.get()-1]
-                self.update_objects_list(labels=labels)
-                self.initialize_bboxes(single_select=True)
+                self.update_objects_list(labels=labels, single_select=True)
 
     def pause_resume(self, event=None):
         if not self.paused:
@@ -342,9 +342,7 @@ class App(BaseApp):
             self.paused = True
             if hasattr(self, "img_labels"):
                 labels = self.img_labels[self.idx_video.get()-1]
-                self.update_objects_list(labels=labels)
-                self.initialize_bboxes(single_select=True)
-                #self.single_bbox_select(single_select=True)
+                self.update_objects_list(labels=labels, single_select=True)
 
         else:
             self.paused = False
@@ -389,7 +387,7 @@ class App(BaseApp):
             self.show_message(f"Video lenght should be between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
             return False
 
-        self.video_folder = f"video_{self.data_idx}_{self.video_length.get()}"
+        self.video_folder = f"videos/video_{self.data_idx}_{self.video_length.get()}"
         if os.path.isdir(self.video_folder):
             shutil.rmtree(self.video_folder)
         os.makedirs(self.video_folder)
