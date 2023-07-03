@@ -1,3 +1,3 @@
-video_folder="video_3000_1000/layer_5"
+video_folder="videos/video_0_1000/layer_0"
 video_name=$(basename $(dirname "$video_folder"))
-ffmpeg -framerate 24  -i "${video_folder}/Raw_Attention_3%03d.jpeg" "${video_name}.mp4"
+ffmpeg -y -framerate 24 -pattern_type glob -i "${video_folder}"/*_*.jpeg -c:v libx264 "${video_name}.mp4"

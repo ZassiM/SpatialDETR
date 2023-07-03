@@ -12,14 +12,6 @@ def handle_residual(orig_self_attention):
     self_attention += torch.eye(self_attention.shape[-1]).to(self_attention.device)
     return self_attention
 
-def generate_saliency_map(img, xai_map, intensity=210):
-    xai_map = cv2.applyColorMap(np.uint8(xai_map * intensity), cv2.COLORMAP_JET)
-    xai_map = np.float32(xai_map) 
-    xai_map = cv2.resize(xai_map, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
-    img = xai_map + np.float32(img)
-    img = img / np.max(img)
-    return img
-
     
 def compute_rollout_attention(all_layer_matrices, start_layer=0):
     num_tokens = all_layer_matrices[0].shape[1]

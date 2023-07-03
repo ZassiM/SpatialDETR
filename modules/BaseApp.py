@@ -17,7 +17,6 @@ from PIL import Image, ImageTk
 
 from modules.Configs import Configs
 from modules.Explainability import ExplainableTransformer
-from modules.Explainability  import generate_saliency_map
 from modules.Model import Model
 from scripts.evaluate import evaluate
 
@@ -144,7 +143,7 @@ class BaseApp(tk.Tk):
         video_lengths = np.arange(0, 1100, 100)
         video_lengths[0] = 10
         self.video_length = tk.IntVar()
-        self.video_length.set(video_lengths[0])
+        self.video_length.set(6000)
         for i in range(len(video_lengths)):
             videolength_opt.add_radiobutton(label=video_lengths[i], variable=self.video_length , value=video_lengths[i])
 
@@ -171,9 +170,6 @@ class BaseApp(tk.Tk):
         self.selected_head_fusion.set(self.head_fusion_types[0])
 
         hf_opt = tk.Menu(self.menubar)
-        self.selected_discard_threshold = tk.DoubleVar()
-        self.selected_discard_threshold.set(0.1)
-        values = np.arange(0.0, 1, 0.1).round(1)
         for i in range(len(self.head_fusion_types)):
             hf_opt.add_radiobutton(label=self.head_fusion_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_fusion_types[i])
         for head in range(self.ObjectDetector.num_heads):
@@ -214,13 +210,29 @@ class BaseApp(tk.Tk):
         expl_opt.add_cascade(label="Perturbate image", menu=pert_opt)
 
         # Discard ratio for attention weights
-        dr_opt = tk.Menu(self.menubar)
+        dr_opt, int_opt, beta_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.show_self_attention, self.gen_segmentation, self.aggregate_layers = tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.show_self_attention.set(True)
         self.aggregate_layers.set(True)
+        self.selected_discard_threshold = tk.DoubleVar()
+        self.selected_discard_threshold.set(0.1)
+        self.selected_intensity = tk.IntVar()
+        self.selected_beta = tk.DoubleVar()
+        values = np.arange(0.0, 1, 0.1).round(1)
+        intensities = np.arange(200, 270, 10)
+        betas = np.round(np.arange(0, 1.1, 0.1), 1)
+        intensities[-1] = 255
+        self.selected_intensity.set(intensities[-1])
+        self.selected_beta.set(betas[-1])
         for i in values:
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_threshold)
+        for i in intensities:
+            int_opt.add_radiobutton(label=i, variable=self.selected_intensity)
+        for i in betas:
+            beta_opt.add_radiobutton(label=i, variable=self.selected_beta)
         expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
+        expl_opt.add_cascade(label="Saliency map intensity", menu=int_opt)
+        expl_opt.add_cascade(label="Saliency map beta", menu=beta_opt)
         expl_opt.add_checkbutton(label="Aggregate layers", onvalue=1, offvalue=0, variable=self.aggregate_layers)
         expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
 
@@ -384,8 +396,6 @@ class BaseApp(tk.Tk):
             all_select = False
         if (initialize_bboxes and not self.video_gen_bool) or (self.video_gen_bool and not hasattr(self, "img_labels")):
             self.update_objects_list(all_select=all_select)
-        if self.video_gen_bool:
-            self.video_gen_bool = False
 
     def add_separator(self, sep=""):
         self.menubar.add_command(label=sep, activebackground=self.menubar.cget("background"))
@@ -422,8 +432,8 @@ class BaseApp(tk.Tk):
         popup = tk.Toplevel(self)
         popup.geometry("80x50")
 
-        self.entry = tk.Entry(popup, width=20)
-        self.entry.pack()
+        self.entry = tk.Entry(popup)
+        self.entry.pack(fill=tk.BOTH, expand=True)
 
         button = tk.Button(popup, text="OK", command=lambda: self.close_entry(popup, type))
         button.pack()
@@ -537,6 +547,20 @@ class BaseApp(tk.Tk):
         self.fig.set_facecolor(self.bg_color)
         self.canvas.draw()
 
+    def generate_saliency_map(self, img, xai_map):
+        xai_map_colored = cv2.applyColorMap(np.uint8(xai_map * self.selected_intensity.get()), cv2.COLORMAP_JET)
+        xai_map_colored = cv2.resize(xai_map_colored, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
+        xai_map_colored = np.float32(xai_map_colored)
+
+        # normalize xai_map to create an alpha mask with values in range 0-1
+        xai_map_normalized = cv2.normalize(np.uint8(xai_map * self.selected_intensity.get()), None, alpha=0, beta=self.selected_beta.get(), norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+        xai_map_mask = cv2.resize(xai_map_normalized, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
+
+        # use alpha mask to blend the image with the colored xai_map
+        img = img * (1 - xai_map_mask[..., None]) + xai_map_colored * xai_map_mask[..., None]
+        img = img / np.max(img)
+        return img
+
     def load_video(self):
 
         self.video_folder = fd.askdirectory() 
@@ -565,7 +589,7 @@ class BaseApp(tk.Tk):
         for folder in layer_folders:
             folder_path = os.path.join(self.video_folder, folder)
             folder_images = os.listdir(folder_path)
-            folder_images.sort()
+            folder_images.sort(key=lambda x: int(x.split('_')[-1].split(".")[0]))
             images = [Image.open(os.path.join(folder_path, img)) for img in folder_images]
             self.img_frames.append(images)
 

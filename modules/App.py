@@ -4,7 +4,7 @@ from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 import matplotlib.transforms as mtransforms
 
 
-from modules.BaseApp import BaseApp, tk, np, cv2, plt, mmcv, torch, DC, generate_saliency_map, pickle
+from modules.BaseApp import BaseApp, tk, np, cv2, plt, mmcv, torch, DC, pickle
 import shutil
 import os
 
@@ -49,6 +49,9 @@ class App(BaseApp):
 
         self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name]
 
+        if self.video_gen_bool:
+            self.video_gen_bool = False
+
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
         if not self.no_object:
@@ -69,10 +72,8 @@ class App(BaseApp):
                     self.show_message("Please check the selected options.")
                     return
                 self.selected_camera = cam_obj
-                self.overlay_bool.set(False)
                 self.spec = self.fig.add_gridspec(3, 3, wspace=0, hspace=0)
             else:
-                self.overlay_bool.set(True)
                 self.spec = self.fig.add_gridspec(2, 3, wspace=0, hspace=0)
 
         # Generate images list with bboxes on it
@@ -101,7 +102,7 @@ class App(BaseApp):
                         _, xai_map = cv2.threshold(xai_map, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
                         xai_map[xai_map == 255] = 1
                         xai_map = torch.from_numpy(xai_map)
-                    saliency_map = generate_saliency_map(og_img, xai_map)      
+                    saliency_map = self.generate_saliency_map(og_img, xai_map)      
                     saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                     self.saliency_maps_objects.append(saliency_map)
 
@@ -122,7 +123,7 @@ class App(BaseApp):
                     xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
                 else:
                     xai_map = self.ExplainableModel.xai_maps[-1][camidx]
-                saliency_map = generate_saliency_map(img, xai_map)        
+                saliency_map = self.generate_saliency_map(img, xai_map)        
                 saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                 self.cam_imgs.append(saliency_map)
             else:
@@ -130,10 +131,7 @@ class App(BaseApp):
                 self.cam_imgs.append(img)
 
         if self.single_bbox.get():
-            self.overlay_bool.set(False)
             self.show_explainability()
-        else:
-            self.overlay_bool.set(True)
 
         # Visualize the generated images list on the figure subplots
         print("Plotting...")
@@ -445,7 +443,6 @@ class App(BaseApp):
         # Extract the selected bounding box indices from the menu
         self.bbox_idx = list(range(len(self.labels)))
         self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get())
-
         self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get())
 
         # Generate images list with bboxes on it
@@ -462,21 +459,25 @@ class App(BaseApp):
                     bbx_idx=self.bbox_idx,
                     mode_2d=self.bbox_2d.get())
             
+            cam_layers = []
             if not self.no_object:
-                cam_layers = []
                 if self.aggregate_layers.get():
                     xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
-                    saliency_map = generate_saliency_map(img, xai_map)        
+                    saliency_map = self.generate_saliency_map(img, xai_map)        
                     saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                     cam_layers.append(saliency_map)
                 else:
                     for layer in range(len(self.ExplainableModel.xai_maps)):
                         xai_map = self.ExplainableModel.xai_maps[layer][camidx]
-                        saliency_map = generate_saliency_map(img, xai_map)  
+                        saliency_map = self.generate_saliency_map(img, xai_map)  
                         saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                         cam_layers.append(saliency_map)
 
-                cam_imgs.append(cam_layers)     
+                cam_imgs.append(cam_layers)   
+            else:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                cam_layers.append(img)
+                cam_imgs.append(cam_layers)  
 
         for layer in range(len(cam_imgs[0])):
             hori = np.concatenate((cam_imgs[2][layer], cam_imgs[0][layer], cam_imgs[1][layer]), axis=1)
@@ -486,7 +487,8 @@ class App(BaseApp):
                 img = (img * 255).astype(np.uint8)
             img = Image.fromarray(img)
             name = self.selected_expl_type.get().replace(" ", "_")
-            file_name = f"{name}_{self.data_idx}.jpeg"
+            data_idx_str = str(self.data_idx).zfill(4) 
+            file_name = f"{name}_{data_idx_str}.jpeg"
             layer_folder = os.path.join(self.video_folder, f"layer_{layer}")
             if not os.path.exists(layer_folder):
                 os.makedirs(layer_folder)
