@@ -57,7 +57,6 @@ class App(BaseApp):
                 self.update_data(initialize_bboxes=False)
 
             self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get(), self.data_idx]  
-
             self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get())
 
             if self.selected_pert_step.get() > 0:
@@ -277,7 +276,6 @@ class App(BaseApp):
             explode = [0.1 if i == self.bbox_idx[0] else 0 for i in range(len(self.labels))]
             _, texts = ax2.pie(query_self_attn, labels=labels, wedgeprops={'linewidth': 1.0, 'edgecolor': edge_color}, explode=explode, colors=color_values)
             for i in range(len(texts)):
-                texts[i].set_fontweight('bold')  # make the text bold
                 texts[i].set_color(text_color)
             #ax2.set_title(title, color=text_color, fontsize=fontsize-4, y=0.95)
 
@@ -321,11 +319,17 @@ class App(BaseApp):
             self.paused = False
             self.old_w, self.old_h = None, None
             self.layer_idx = self.layers_video - 1
+            self.flag = False
+            self.delay = 20  # Initial delay
             self.show_sequence()
     
     def update_index(self, event=None):
         if self.paused:
             if not isinstance(event, str):
+                if self.flag: 
+                    return
+                self.flag = True
+                self.after(self.delay, lambda: setattr(self, 'flag', False))  # Reset flag after delay
                 if event.keysym == 'Right':
                     self.idx_video.set(self.idx_video.get() + 1)
                 elif event.keysym == 'Left':
@@ -339,6 +343,7 @@ class App(BaseApp):
             if hasattr(self, "img_labels"):
                 labels = self.img_labels[self.idx_video.get()-1]
                 self.update_objects_list(labels=labels, single_select=True)
+
 
     def pause_resume(self, event=None):
         if not self.paused:

@@ -547,11 +547,19 @@ class BaseApp(tk.Tk):
         if os.path.exists(labels_file):
             with open(labels_file, 'rb') as f:
                 data = pickle.load(f)
-
             self.img_labels = data["img_labels"]
+        else:
+            self.update_objects_list(labels=[])
 
-        layer_folders = [f for f in os.listdir(self.video_folder) if f.startswith('layer_') and os.path.isdir(os.path.join(self.video_folder, f))]
-        layer_folders.sort(key=lambda x: int(x.split('_')[-1]))  # Sort the folders by the layer number
+        # Get all the items in the directory
+        items = os.listdir(self.video_folder)
+
+        # Check if there are any directories in the list
+        if any(os.path.isdir(os.path.join(self.video_folder, item)) for item in items):
+            layer_folders = [f for f in items if f.startswith('layer_') and os.path.isdir(os.path.join(self.video_folder, f))]
+            layer_folders.sort(key=lambda x: int(x.split('_')[-1]))  # Sort the folders by the layer number
+        else:  # If there are no directories, consider the entire folder as a single layer
+            layer_folders = ['']
 
         self.img_frames = []
         for folder in layer_folders:
@@ -561,9 +569,14 @@ class BaseApp(tk.Tk):
             images = [Image.open(os.path.join(folder_path, img)) for img in folder_images]
             self.img_frames.append(images)
 
-        self.start_video_idx = int(folder_images[0].split('.')[0].split('_')[-1])
-        self.video_length.set(len(self.img_frames[0]))
-        self.layers_video = len(self.img_frames)
+        # Assuming that there's at least one image
+        if len(folder_images) > 0:
+            self.start_video_idx = int(folder_images[0].split('.')[0].split('_')[-1])
+            self.video_length.set(len(self.img_frames[0]))
+            self.layers_video = len(self.img_frames)
+        else:
+            self.show_message("The folder should contain at least one image!")
+            return
 
         if hasattr(self, "scale"):
             self.scale.configure(to=self.video_length.get())
