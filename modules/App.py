@@ -237,7 +237,6 @@ class App(BaseApp):
             #ax.set_title(f'Position of object {self.ObjectDetector.class_names[self.labels[self.bbox_idx[0]]]} in each layer')
 
             query_self_attn = self.ExplainableModel.self_xai_maps
-            query_self_attn = query_self_attn[0]
             query_self_attn = query_self_attn[self.thr_idxs]
             norm = plt.Normalize(vmin=min(query_self_attn), vmax=max(query_self_attn))  # Use positions min and max for normalization
             color_values = cmap(norm(query_self_attn))
@@ -443,7 +442,7 @@ class App(BaseApp):
         # Extract the selected bounding box indices from the menu
         self.bbox_idx = list(range(len(self.labels)))
         self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get())
-        self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get())
+        self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get(), remove_pad=self.remove_pad.get())
 
         # Generate images list with bboxes on it
         cam_imgs = []  

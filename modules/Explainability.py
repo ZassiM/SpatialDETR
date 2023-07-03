@@ -117,7 +117,7 @@ class ExplainableTransformer:
      
             outputs = self.Model.model(return_loss=False, rescale=True, all_layers=True, **data)
 
-            output_scores = outputs[0]["pts_bbox"][-1]["scores_3d"]
+            output_scores = outputs[0]["pts_bbox"]["scores_3d"]
             one_hot = torch.zeros_like(output_scores).to(output_scores.device)
             one_hot[target_index] = 1
             one_hot.requires_grad_(True)
@@ -227,7 +227,6 @@ class ExplainableTransformer:
                 self.generate_gradroll(camidx, handle_residual, apply_rule)
                 xai_maps_camera.append(self.R_q_i.detach().cpu())
             xai_maps.append(xai_maps_camera)
-            self_xai_maps = self.R_q_q.detach().cpu()
 
         else:
             for layer in range(self.num_layers):
@@ -240,8 +239,8 @@ class ExplainableTransformer:
                     xai_maps_camera.append(self.R_q_i.detach().cpu())
                 xai_maps.append(xai_maps_camera)
 
-            self_attn_rollout = compute_rollout_attention(self.dec_self_attn_weights)
-            self_xai_maps = self_attn_rollout.detach().cpu()
+        self_attn_rollout = compute_rollout_attention(self.dec_self_attn_weights)
+        self_xai_maps = self_attn_rollout.detach().cpu()
 
         # num_layers x num_cams x num_objects x 1450
         xai_maps = torch.stack([torch.stack(layer) for layer in xai_maps])
@@ -257,7 +256,7 @@ class ExplainableTransformer:
 
     def select_explainability(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True):
         self.xai_maps = self.xai_maps_full[:, nms_idxs[bbox_idx], :, :]
-        self.self_xai_maps = self.self_xai_maps_full[nms_idxs[bbox_idx]][:, nms_idxs]
+        self.self_xai_maps = self.self_xai_maps_full[nms_idxs[bbox_idx]][:, nms_idxs][0]
 
         # now attention maps can be overlayed
         if self.xai_maps.shape[1] > 0:
@@ -279,8 +278,10 @@ class ExplainableTransformer:
             xai_maps_cameras = []
             for camidx in range(len(xai_maps[layer])):
                 xai_map = xai_maps[layer][camidx].reshape(1, 1, self.height_feats, self.width_feats)
-                xai_map[0,0,:,0] = 0
-                xai_map[0,0,:,-1] = 0
+                # xai_map[0,0,:,0] = 0
+                # xai_map[0,0,:,-1] = 0# Assume 'tensor' is your input tensor
+                xai_map = xai_map.roll(-1, dims=-1)
+                xai_map[0, 0, :, -1] = 0
                 xai_map = torch.nn.functional.interpolate(xai_map, scale_factor=interpol_res[maps_quality], mode='bilinear')
                 xai_map = xai_map.reshape(xai_map.shape[2], xai_map.shape[3])
                 if remove_pad:

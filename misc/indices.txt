@@ -11,7 +11,7 @@
 4521 | car influences attention
 1391 | lot of cars5479 | no objects
 129 | test
-271 | pedestrians
+271 | pedestrians in one bbox
 4964 | truck and passenger influence
 2865 | nice car162 | test cars
 633 | bus near car
@@ -23,3 +23,7 @@
 1211 | many cars
 1276 | construction vehicle
 177 | moto with person
+742 | bike
+2870 | tesla
+1276 | bike occluded by cone
+167 | bike occluded by tree

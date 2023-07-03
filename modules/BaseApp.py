@@ -111,7 +111,7 @@ class BaseApp(tk.Tk):
         self.info_label.pack(side=tk.TOP)
 
         # Cascade menu for Data settings
-        dataidx_opt, self.select_idx_opt, saved_indices, thr_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
+        dataidx_opt, self.select_idx_opt, thr_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.selected_threshold = tk.DoubleVar()
         self.selected_threshold.set(0.5)
         values = np.arange(0.0, 1, 0.1).round(1)
@@ -129,7 +129,6 @@ class BaseApp(tk.Tk):
         dataidx_opt.add_cascade(label=" Select prediction threshold", menu=thr_opt)
         dataidx_opt.add_separator()
         dataidx_opt.add_command(label=" Show LiDAR", command=self.show_lidar)
-
 
         delay_opt = tk.Menu(self.menubar)
         video_delays = np.arange(0, 35, 5)
@@ -220,10 +219,10 @@ class BaseApp(tk.Tk):
         self.selected_beta = tk.DoubleVar()
         values = np.arange(0.0, 1, 0.1).round(1)
         intensities = np.arange(200, 270, 10)
-        betas = np.round(np.arange(0, 1.1, 0.1), 1)
+        betas = np.round(np.arange(0.1, 1.1, 0.1), 1)
         intensities[-1] = 255
-        self.selected_intensity.set(intensities[-1])
-        self.selected_beta.set(betas[-1])
+        self.selected_intensity.set(intensities[3])
+        self.selected_beta.set(betas[6])
         for i in values:
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_threshold)
         for i in intensities:
@@ -255,16 +254,18 @@ class BaseApp(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.overlay_bool, self.bbox_2d, self.show_self_attention, self.capture_object = \
-            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.GT_bool, self.overlay_bool, self.bbox_2d, self.show_self_attention, self.capture_object, self.remove_pad = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.overlay_bool.set(True)
-        self.bbox_2d.set(True)
+        #self.bbox_2d.set(True)
         self.show_self_attention.set(True)
+        self.remove_pad.set(True)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
         add_opt.add_checkbutton(label=" Show objects self-attention", onvalue=1, offvalue=0, variable=self.show_self_attention)
         add_opt.add_checkbutton(label=" Capture saliency maps", onvalue=1, offvalue=0, variable=self.capture_object)
+        add_opt.add_checkbutton(label=" Remove pad", onvalue=1, offvalue=0, variable=self.remove_pad)
         add_opt.add_cascade(label=" Select maps quality", menu=quality_opt)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
 
@@ -384,7 +385,9 @@ class BaseApp(tk.Tk):
         # Extract the 6 camera images from the data and remove the padded pixels
         imgs = self.data["img"][0]._data[0].numpy()[0]
         # imgs = imgs.transpose(0, 2, 3, 1)
-        imgs = imgs.transpose(0, 2, 3, 1)[:, :self.ObjectDetector.ori_shape[0], :self.ObjectDetector.ori_shape[1], :]  # [num_cams x height x width x channels]
+        imgs = imgs.transpose(0, 2, 3, 1)
+        if self.remove_pad.get():
+            imgs = imgs[:, :self.ObjectDetector.ori_shape[0], :self.ObjectDetector.ori_shape[1], :]  # [num_cams x height x width x channels]
         
         # Denormalize the images
         for i in range(len(imgs)):
@@ -605,4 +608,4 @@ class BaseApp(tk.Tk):
         if hasattr(self, "scale"):
             self.scale.configure(to=self.video_length.get())
 
-        print(f"Video loaded from ({self.video_length.get()} images).\n")
+        print(f"Video loaded ({self.video_length.get()} images).\n")
