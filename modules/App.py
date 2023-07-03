@@ -229,8 +229,6 @@ class App(BaseApp):
             #     else:
             #         positions.append(0)  # Lowest possible score
 
-            # norm = plt.Normalize(vmin=min(positions), vmax=max(positions))  # Use positions min and max for normalization
-            # color_values = cmap(norm(positions))
             # ax.bar(range(1, len(queries_id) + 1), positions, color=color_values)
 
             # ax.set_xlabel('Layers')
@@ -239,6 +237,12 @@ class App(BaseApp):
             # for spine in ax.spines.values():
             #     spine.set_visible(False)
             #ax.set_title(f'Position of object {self.ObjectDetector.class_names[self.labels[self.bbox_idx[0]]]} in each layer')
+
+            query_self_attn = self.ExplainableModel.self_xai_maps[self.selected_layer.get()]
+            query_self_attn = query_self_attn[0]
+            query_self_attn = query_self_attn[self.thr_idxs]
+            norm = plt.Normalize(vmin=min(query_self_attn), vmax=max(query_self_attn))  # Use positions min and max for normalization
+            color_values = cmap(norm(query_self_attn))
 
             x = torch.arange(len(query_self_attn))
             bars = ax.bar(x, query_self_attn / query_self_attn.sum() * 100)
@@ -262,9 +266,9 @@ class App(BaseApp):
             
             #ax.set_title(title, color=text_color, fontsize=fontsize-4, y=0.95)
             ax2 = self.fig.add_subplot(self.spec[1, 0])
-            query_self_attn = self.ExplainableModel.self_xai_maps[self.selected_layer.get()]
-            query_self_attn = query_self_attn[0]
-            query_self_attn = query_self_attn[self.thr_idxs]
+            # query_self_attn = self.ExplainableModel.self_xai_maps[self.selected_layer.get()]
+            # query_self_attn = query_self_attn[0]
+            # query_self_attn = query_self_attn[self.thr_idxs]
             norm = plt.Normalize(vmin=min(query_self_attn), vmax=max(query_self_attn))  # Use positions min and max for normalization
             color_values = cmap(norm(query_self_attn))
             edge_color = "black" if text_color == "white" else "white"

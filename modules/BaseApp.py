@@ -203,7 +203,6 @@ class BaseApp(tk.Tk):
         grad_rollout.add_checkbutton(label=" Handle residual", variable=self.handle_residual, onvalue=1, offvalue=0)
         grad_rollout.add_checkbutton(label=" Apply rule 10", variable=self.apply_rule, onvalue=1, offvalue=0)
 
-
         expl_opt.add_separator()
 
         # Explainable mechanism selection
@@ -225,6 +224,7 @@ class BaseApp(tk.Tk):
         dr_opt = tk.Menu(self.menubar)
         self.show_self_attention, self.gen_segmentation, self.aggregate_layers = tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.show_self_attention.set(True)
+        self.aggregate_layers.set(True)
         for i in values:
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_threshold)
         expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
@@ -467,11 +467,9 @@ class BaseApp(tk.Tk):
             idx = self.data_idx
         if info is None:
             info = f"Model: {self.ObjectDetector.model_name} | Dataloader: {self.ObjectDetector.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
-            if self.video_gen_bool or self.selected_expl_type.get() != "Gradient Rollout":
+            if self.video_gen_bool:
                 if self.layers_video > 1:
                     info += f" | Layer {self.layer_idx}"
-                else:
-                    info += f" | Layer {self.selected_layer.get()}"
         self.info_text.set(info)
 
     def update_objects_list(self, labels=None, single_select=False, all_select=True):

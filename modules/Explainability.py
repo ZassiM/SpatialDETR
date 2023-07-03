@@ -257,7 +257,6 @@ class ExplainableTransformer:
     def select_explainability(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True):
         self.xai_maps = self.xai_maps_full[:, nms_idxs[bbox_idx], :, :]
         self.self_xai_maps = []
-        rint(nms_idxs[bbox_idx])
         for layer in range(len(self.self_xai_maps_full)):
             self.self_xai_maps.append(self.self_xai_maps_full[layer][nms_idxs[bbox_idx]][:, nms_idxs])
 
