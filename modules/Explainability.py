@@ -237,8 +237,10 @@ class ExplainableTransformer:
                     xai_maps_camera.append(self.R_q_i.detach().cpu())
                 xai_maps.append(xai_maps_camera)
 
+            self_attn_rollout = compute_rollout_attention(self.dec_self_attn_weights)
             for layer in range(self.num_layers):
-                self_xai_maps.append(self.dec_self_attn_weights[layer].detach().cpu())
+                #self_xai_maps.append(self.dec_self_attn_weights[layer].detach().cpu())
+                self_xai_maps.append(self_attn_rollout.detach().cpu())
 
         # num_layers x num_cams x num_objects x 1450
         xai_maps = torch.stack([torch.stack(layer) for layer in xai_maps])
@@ -255,6 +257,7 @@ class ExplainableTransformer:
     def select_explainability(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True):
         self.xai_maps = self.xai_maps_full[:, nms_idxs[bbox_idx], :, :]
         self.self_xai_maps = []
+        rint(nms_idxs[bbox_idx])
         for layer in range(len(self.self_xai_maps_full)):
             self.self_xai_maps.append(self.self_xai_maps_full[layer][nms_idxs[bbox_idx]][:, nms_idxs])
 

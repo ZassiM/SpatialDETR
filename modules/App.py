@@ -208,10 +208,6 @@ class App(BaseApp):
 
         
         if self.show_self_attention.get() and len(self.labels) > 1:
-            # Query self-attention visualization
-            query_self_attn = self.ExplainableModel.self_xai_maps[self.selected_layer.get()]
-            query_self_attn = query_self_attn[0]
-            query_self_attn = query_self_attn[self.thr_idxs]
 
             title = "Self-attention"
             if self.selected_expl_type.get() != "Gradient Rollout":
@@ -220,52 +216,55 @@ class App(BaseApp):
             cmap = plt.cm.get_cmap('OrRd')  
 
             ax = self.fig.add_subplot(self.spec[1, 2])
-            num_objects = self.thr_idxs_layers[-1].sum()
-            queries_id = [nms_idxs[:num_objects] for nms_idxs in self.nms_îdxs_layers]
-            queries_scores = [scores[:num_objects] for scores in self.bbox_scores_layers]
-            selected_id = queries_id[self.selected_layer.get()][self.bbox_idx[0]]
-            positions = []
-            for ids, scores in zip(queries_id, queries_scores):
-                if selected_id in ids:
-                    index = (ids == selected_id).nonzero().item()
-                    positions.append(scores[index])
-                else:
-                    positions.append(0)  # Lowest possible score
+            # num_objects = self.thr_idxs_layers[-1].sum()
+            # queries_id = [nms_idxs[:num_objects] for nms_idxs in self.nms_îdxs_layers]
+            # queries_scores = [scores[:num_objects] for scores in self.bbox_scores_layers]
+            # #selected_id = queries_id[self.selected_layer.get()][self.bbox_idx[0]]
+            # selected_id = queries_id[-1][self.bbox_idx[0]]
+            # positions = []
+            # for ids, scores in zip(queries_id, queries_scores):
+            #     if selected_id in ids:
+            #         index = (ids == selected_id).nonzero().item()
+            #         positions.append(scores[index])
+            #     else:
+            #         positions.append(0)  # Lowest possible score
 
-            norm = plt.Normalize(vmin=min(positions), vmax=max(positions))  # Use positions min and max for normalization
-            color_values = cmap(norm(positions))
-            ax.bar(range(1, len(queries_id) + 1), positions, color=color_values)
+            # norm = plt.Normalize(vmin=min(positions), vmax=max(positions))  # Use positions min and max for normalization
+            # color_values = cmap(norm(positions))
+            # ax.bar(range(1, len(queries_id) + 1), positions, color=color_values)
 
-            ax.set_xlabel('Layers')
-            ax.set_ylim([self.selected_threshold.get(), ax.get_ylim()[1]])  # set the minimum y limit to y_limit
-            ax.set(xticks=[], yticks=[], facecolor='none')
-            for spine in ax.spines.values():
-                spine.set_visible(False)
-            #ax.set_title(f'Position of object {self.ObjectDetector.class_names[self.labels[self.bbox_idx[0]]]} in each layer')
-
-            # x = torch.arange(len(query_self_attn))
-            # bars = ax.bar(x, query_self_attn / query_self_attn.sum() * 100)
-
-            # # Setting colors and highlighting bar
-            # [b.set_color(c) for b, c in zip(bars, color_values)]
-            # bars[self.bbox_idx[0]].set_edgecolor(text_color)
-            # bars[self.bbox_idx[0]].set_linewidth(1)
-
-            # # Setting various parameters
+            # ax.set_xlabel('Layers')
+            # ax.set_ylim([self.selected_threshold.get(), ax.get_ylim()[1]])  # set the minimum y limit to y_limit
             # ax.set(xticks=[], yticks=[], facecolor='none')
             # for spine in ax.spines.values():
             #     spine.set_visible(False)
+            #ax.set_title(f'Position of object {self.ObjectDetector.class_names[self.labels[self.bbox_idx[0]]]} in each layer')
 
-            # # Setting text labels
-            # min_font_size, max_font_size = 6, 10
-            # fontsize = max(min_font_size, max_font_size - len(bars) // 10)
-            # for i, bar in enumerate(bars):
-            #     ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), str(i),
-            #             ha='center', va='bottom', color=text_color, fontsize=fontsize)
+            x = torch.arange(len(query_self_attn))
+            bars = ax.bar(x, query_self_attn / query_self_attn.sum() * 100)
+
+            # Setting colors and highlighting bar
+            [b.set_color(c) for b, c in zip(bars, color_values)]
+            bars[self.bbox_idx[0]].set_edgecolor(text_color)
+            bars[self.bbox_idx[0]].set_linewidth(1)
+
+            # Setting various parameters
+            ax.set(xticks=[], yticks=[], facecolor='none')
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+
+            # Setting text labels
+            min_font_size, max_font_size = 6, 10
+            fontsize = max(min_font_size, max_font_size - len(bars) // 10)
+            for i, bar in enumerate(bars):
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), str(i),
+                        ha='center', va='bottom', color=text_color, fontsize=fontsize)
             
             #ax.set_title(title, color=text_color, fontsize=fontsize-4, y=0.95)
-
             ax2 = self.fig.add_subplot(self.spec[1, 0])
+            query_self_attn = self.ExplainableModel.self_xai_maps[self.selected_layer.get()]
+            query_self_attn = query_self_attn[0]
+            query_self_attn = query_self_attn[self.thr_idxs]
             norm = plt.Normalize(vmin=min(query_self_attn), vmax=max(query_self_attn))  # Use positions min and max for normalization
             color_values = cmap(norm(query_self_attn))
             edge_color = "black" if text_color == "white" else "white"
