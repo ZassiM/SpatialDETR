@@ -21,3 +21,5 @@
 1061 | car back
 788 | pedestrians
 1211 | many cars
+1276 | construction vehicle
+177 | moto with person

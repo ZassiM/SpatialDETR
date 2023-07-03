@@ -44,15 +44,19 @@ class App(BaseApp):
 
         self.fig.clear()
 
-        if self.selected_expl_type.get() == "Gradient Rollout":
-                self.selected_layer.set(0)
+        # if self.selected_expl_type.get() == "Gradient Rollout":
+        #         self.selected_layer.set(0)
 
         self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name]
 
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
         if not self.no_object:
-            self.update_explainability()
+            if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
+                print("Calculating gradients...")
+                self.update_data(initialize_bboxes=False)
+
+            self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get(), self.data_idx]  
 
             self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get())
 
@@ -66,12 +70,16 @@ class App(BaseApp):
                     self.show_message("Please check the selected options.")
                     return
                 self.selected_camera = cam_obj
+                self.overlay_bool.set(False)
+                self.spec = self.fig.add_gridspec(3, 3, wspace=0, hspace=0)
+            else:
+                self.overlay_bool.set(True)
+                self.spec = self.fig.add_gridspec(2, 3, wspace=0, hspace=0)
 
         # Generate images list with bboxes on it
         print("Generating camera images...")
         self.cam_imgs, self.saliency_maps_objects = [], []
         with_labels = True
-        roll = False
         for camidx in range(len(self.imgs)):
 
             img, bbox_coords = draw_lidar_bbox3d_on_img(
@@ -114,7 +122,7 @@ class App(BaseApp):
                 if self.aggregate_layers.get():
                     xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
                 else:
-                    xai_map = self.ExplainableModel.xai_maps[self.selected_layer.get()][camidx]
+                    xai_map = self.ExplainableModel.xai_maps[-1][camidx]
                 saliency_map = generate_saliency_map(img, xai_map)        
                 saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                 self.cam_imgs.append(saliency_map)
@@ -122,10 +130,11 @@ class App(BaseApp):
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 self.cam_imgs.append(img)
 
-        if not self.single_bbox.get():
-            self.spec = self.fig.add_gridspec(2, 3, wspace=0, hspace=0)
+        if self.single_bbox.get():
+            self.overlay_bool.set(False)
+            self.show_explainability()
         else:
-            self.spec = self.fig.add_gridspec(3, 3, wspace=0, hspace=0)
+            self.overlay_bool.set(True)
 
         # Visualize the generated images list on the figure subplots
         print("Plotting...")
@@ -141,7 +150,7 @@ class App(BaseApp):
             ax.imshow(self.cam_imgs[self.cam_idx[i]])
 
             if self.single_bbox.get():
-                score = self.ExplainableModel.scores[self.selected_layer.get()][self.cam_idx[i]]
+                score = self.ExplainableModel.scores[self.cam_idx[i]]
                 ax.axhline(y=0, color='black', linewidth=10)
                 ax.axhline(y=0, color='green', linewidth=10, xmax=score/100)
 
@@ -154,15 +163,7 @@ class App(BaseApp):
         self.canvas.draw()
         
         print("Done.\n")
-        torch.cuda.empty_cache()
-
-    def update_explainability(self):
-        # Avoid selecting all layers and all cameras. Only the last layer will be visualized
-        if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
-            print("Calculating gradients...")
-            self.update_data(initialize_bboxes=False)
-
-        self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get(), self.data_idx]   
+        torch.cuda.empty_cache() 
 
     def show_explainability(self):
         '''
@@ -209,9 +210,9 @@ class App(BaseApp):
         
         if self.show_self_attention.get() and len(self.labels) > 1:
 
-            title = "Self-attention"
-            if self.selected_expl_type.get() != "Gradient Rollout":
-                title += f" | layer {self.selected_layer.get()}"
+            # title = "Self-attention"
+            # if self.selected_expl_type.get() != "Gradient Rollout":
+            #     title += f" | layer {self.selected_layer.get()}"
 
             cmap = plt.cm.get_cmap('OrRd')  
 
@@ -238,7 +239,7 @@ class App(BaseApp):
             #     spine.set_visible(False)
             #ax.set_title(f'Position of object {self.ObjectDetector.class_names[self.labels[self.bbox_idx[0]]]} in each layer')
 
-            query_self_attn = self.ExplainableModel.self_xai_maps[self.selected_layer.get()]
+            query_self_attn = self.ExplainableModel.self_xai_maps
             query_self_attn = query_self_attn[0]
             query_self_attn = query_self_attn[self.thr_idxs]
             norm = plt.Normalize(vmin=min(query_self_attn), vmax=max(query_self_attn))  # Use positions min and max for normalization
@@ -283,7 +284,7 @@ class App(BaseApp):
         self.fig.tight_layout()
 
     def show_lidar(self):
-        self.ObjectDetector.dataset.show_mod(self.outputs[self.selected_layer.get()], index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, snapshot=False, pipeline=None, score_thr=self.selected_threshold.get())
+        self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, snapshot=False, pipeline=None, score_thr=self.selected_threshold.get())
 
     def show_video(self):
         if not hasattr(self, "img_frames"):

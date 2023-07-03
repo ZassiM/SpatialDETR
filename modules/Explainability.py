@@ -12,7 +12,7 @@ def handle_residual(orig_self_attention):
     self_attention += torch.eye(self_attention.shape[-1]).to(self_attention.device)
     return self_attention
 
-def generate_saliency_map(img, xai_map, intensity=255):
+def generate_saliency_map(img, xai_map, intensity=210):
     xai_map = cv2.applyColorMap(np.uint8(xai_map * intensity), cv2.COLORMAP_JET)
     xai_map = np.float32(xai_map) 
     xai_map = cv2.resize(xai_map, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
@@ -151,24 +151,35 @@ class ExplainableTransformer:
         scores = []
         scores_perc = [] 
 
-        for layer in range(len(self.xai_maps)):
-            scores_cam = []
-            for camidx in range(len(self.xai_maps[layer])):
-                cam_map = self.xai_maps[layer][camidx]
-                score = round(cam_map.sum().item(), 2)
-                scores_cam.append(score)
-            scores.append(scores_cam)
+        for camidx in range(len(self.xai_maps[-1])):
+            cam_map = self.xai_maps[-1][camidx]
+            score = round(cam_map.sum().item(), 2)
+            scores.append(score)
+
+        sum_scores = sum(scores)
+        if sum_scores > 0 and not np.isnan(sum_scores):
+            for camidx in range(len(scores)):
+                score_perc = round(((scores[camidx]/sum_scores)*100))
+                scores_perc.append(score_perc)
+
+        # for layer in range(len(self.xai_maps)):
+        #     scores_cam = []
+        #     for camidx in range(len(self.xai_maps[layer])):
+        #         cam_map = self.xai_maps[layer][camidx]
+        #         score = round(cam_map.sum().item(), 2)
+        #         scores_cam.append(score)
+        #     scores.append(scores_cam)
         
-        for layer in range(len(self.xai_maps)):
-            sum_scores = sum(scores[layer])
-            if sum_scores > 0 and not np.isnan(sum_scores):
-                scores_perc_cam = []
-                for camidx in range(len(scores[layer])):
-                    score_perc = round(((scores[layer][camidx]/sum_scores)*100))
-                    scores_perc_cam.append(score_perc)
-                scores_perc.append(scores_perc_cam)
-            else:
-                continue
+        # for layer in range(len(self.xai_maps)):
+        #     sum_scores = sum(scores[layer])
+        #     if sum_scores > 0 and not np.isnan(sum_scores):
+        #         scores_perc_cam = []
+        #         for camidx in range(len(scores[layer])):
+        #             score_perc = round(((scores[layer][camidx]/sum_scores)*100))
+        #             scores_perc_cam.append(score_perc)
+        #         scores_perc.append(scores_perc_cam)
+        #     else:
+        #         continue
         return scores_perc
         
     def generate_raw_att(self, layer, camidx, head_fusion="min"):  
@@ -224,7 +235,7 @@ class ExplainableTransformer:
                 self.generate_gradroll(camidx, handle_residual, apply_rule)
                 xai_maps_camera.append(self.R_q_i.detach().cpu())
             xai_maps.append(xai_maps_camera)
-            self_xai_maps.append(self.R_q_q.detach().cpu())
+            self_xai_maps = self.R_q_q.detach().cpu()
 
         else:
             for layer in range(self.num_layers):
@@ -238,9 +249,7 @@ class ExplainableTransformer:
                 xai_maps.append(xai_maps_camera)
 
             self_attn_rollout = compute_rollout_attention(self.dec_self_attn_weights)
-            for layer in range(self.num_layers):
-                #self_xai_maps.append(self.dec_self_attn_weights[layer].detach().cpu())
-                self_xai_maps.append(self_attn_rollout.detach().cpu())
+            self_xai_maps = self_attn_rollout.detach().cpu()
 
         # num_layers x num_cams x num_objects x 1450
         xai_maps = torch.stack([torch.stack(layer) for layer in xai_maps])
@@ -256,9 +265,7 @@ class ExplainableTransformer:
 
     def select_explainability(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True):
         self.xai_maps = self.xai_maps_full[:, nms_idxs[bbox_idx], :, :]
-        self.self_xai_maps = []
-        for layer in range(len(self.self_xai_maps_full)):
-            self.self_xai_maps.append(self.self_xai_maps_full[layer][nms_idxs[bbox_idx]][:, nms_idxs])
+        self.self_xai_maps = self.self_xai_maps_full[nms_idxs[bbox_idx]][:, nms_idxs]
 
         # now attention maps can be overlayed
         if self.xai_maps.shape[1] > 0:

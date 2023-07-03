@@ -159,13 +159,6 @@ class BaseApp(tk.Tk):
         self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
         self.cam_idx = [2, 0, 1, 5, 3, 4]  # Used for visualizing camera outputs properly
 
-        # Cascade menu for Attention layer
-        layer_opt = tk.Menu(self.menubar)
-        self.selected_layer = tk.IntVar()
-        for i in range(self.ObjectDetector.num_layers):
-            layer_opt.add_radiobutton(label=i, variable=self.selected_layer, command=self.update_info_label)
-        self.selected_layer.set(self.ExplainableModel.num_layers - 1)
-
         # Cascade menus for Explainable options
         expl_opt = tk.Menu(self.menubar)
         raw_attention, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
@@ -253,8 +246,8 @@ class BaseApp(tk.Tk):
         self.GT_bool, self.overlay_bool, self.bbox_2d, self.show_self_attention, self.capture_object = \
             tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.overlay_bool.set(True)
-        #self.bbox_2d.set(True)
-        #self.show_self_attention.set(True)
+        self.bbox_2d.set(True)
+        self.show_self_attention.set(True)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
@@ -270,8 +263,6 @@ class BaseApp(tk.Tk):
         self.menubar.add_cascade(label="Video", menu=video_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Objects", menu=self.bbox_opt)
-        self.add_separator()
-        self.menubar.add_cascade(label="Layer", menu=layer_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Explainability", menu=expl_opt)
         self.add_separator()
@@ -329,14 +320,14 @@ class BaseApp(tk.Tk):
             else:
                 outputs = self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
         else:
-            xai_maps = self.ExplainableModel.xai_maps[self.selected_layer.get()]
+            # PERTURBATE THE AGGREGATED ATTENTION!!
+            xai_maps = self.ExplainableModel.xai_maps.max(dim=0)[0]
             img = img[0][0]
             img = img[:, :, :self.ObjectDetector.ori_shape[0], :self.ObjectDetector.ori_shape[1]]  # [num_cams x height x width x channels]
 
             mask = torch.Tensor(-mean)
             img_pert_list = []
             for camidx in range(len(xai_maps)):
-
                 img_pert = img[camidx].permute(1, 2, 0).numpy()
                 xai = xai_maps[camidx]
                 filter_mask = xai > 0.2
@@ -360,18 +351,15 @@ class BaseApp(tk.Tk):
 
 
         # Those are needed to index the bboxes decoded by the NMS-Free decoder
-        self.nms_îdxs_layers = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()
-        self.bbox_scores_layers = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_scores()
+        self.nms_idxs = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()
+        self.bbox_scores = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_scores()
         self.outputs = outputs[0]["pts_bbox"]
-        self.thr_idxs_layers = [output_layer['scores_3d'] > self.selected_threshold.get() for output_layer in self.outputs]
-        self.labels_layers = [output_layer['labels_3d'][thr_layer] for output_layer,thr_layer in zip(self.outputs, self.thr_idxs_layers)]
-        self.labels = self.labels_layers[-1]
-        self.nms_idxs = self.nms_îdxs_layers[-1]
-        self.thr_idxs = self.thr_idxs_layers[-1]
-        self.pred_bboxes = self.outputs[-1]["boxes_3d"][self.thr_idxs]
+        self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
+        self.labels = self.outputs['labels_3d'][self.thr_idxs]
+        self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
 
         self.no_object = False
-        if len(self.labels_layers[-1]) == 0:
+        if len(self.labels) == 0:
             self.no_object = True
             if not self.video_gen_bool:
                 print("No object detected.")
@@ -396,7 +384,6 @@ class BaseApp(tk.Tk):
             all_select = False
         if (initialize_bboxes and not self.video_gen_bool) or (self.video_gen_bool and not hasattr(self, "img_labels")):
             self.update_objects_list(all_select=all_select)
-        
         if self.video_gen_bool:
             self.video_gen_bool = False
 
@@ -517,7 +504,7 @@ class BaseApp(tk.Tk):
         scores = self.ExplainableModel.scores
         if not scores:
             return -1
-        cam_obj = scores[self.selected_layer.get()].index(max(scores[self.selected_layer.get()]))
+        cam_obj = scores.index(max(scores))
         return cam_obj
 
     def capture(self):
