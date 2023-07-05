@@ -152,8 +152,8 @@ class BaseApp(tk.Tk):
         filter_opt = tk.Menu(self.menubar)
         self.selected_filter = tk.IntVar()
         for label, class_name in enumerate(self.ObjectDetector.class_names):
-            filter_opt.add_radiobutton(label=class_name.capitalize(), variable=self.selected_filter, value=label)
-        filter_opt.add_radiobutton(label="All", variable=self.selected_filter, value=label+1)
+            filter_opt.add_radiobutton(label=class_name.capitalize(), variable=self.selected_filter, value=label, command=self.update_object_filter)
+        filter_opt.add_radiobutton(label="All", variable=self.selected_filter, value=label+1,  command=self.update_object_filter)
         self.selected_filter.set(label+1)
 
         self.aggregate_layers = tk.BooleanVar()
@@ -202,7 +202,7 @@ class BaseApp(tk.Tk):
         self.handle_residual.set(True)
         self.apply_rule.set(True)
         grad_rollout.add_checkbutton(label=" Handle residual", variable=self.handle_residual, onvalue=1, offvalue=0)
-        grad_rollout.add_checkbutton(label=" Apply rule 10", variable=self.apply_rule, onvalue=1, offvalue=0)
+        grad_rollout.add_checkbutton(label=" Apply rule", variable=self.apply_rule, onvalue=1, offvalue=0)
 
         expl_opt.add_separator()
 
@@ -273,7 +273,7 @@ class BaseApp(tk.Tk):
         self.remove_pad.set(True)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
-        add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
+        #add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
         add_opt.add_checkbutton(label=" Capture saliency maps", onvalue=1, offvalue=0, variable=self.capture_object)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
 
@@ -341,7 +341,6 @@ class BaseApp(tk.Tk):
             else:
                 outputs = self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
         else:
-            # PERTURBATE THE AGGREGATED ATTENTION!!
             xai_maps = self.ExplainableModel.xai_maps.max(dim=0)[0]
             img = img[0][0]
             img = img[:, :, :self.ObjectDetector.ori_shape[0], :self.ObjectDetector.ori_shape[1]]  # [num_cams x height x width x channels]
@@ -368,7 +367,7 @@ class BaseApp(tk.Tk):
                 self.data['img'][0] = DC(img)
                 
                 with torch.no_grad():
-                    outputs = self.ObjectDetector.model(return_loss=False, rescale=True, all_layers=True, **self.data)
+                    outputs = self.ObjectDetector.model(return_loss=False, rescale=True, **self.data)
 
 
         # Those are needed to index the bboxes decoded by the NMS-Free decoder
@@ -579,6 +578,13 @@ class BaseApp(tk.Tk):
         img = img * (1 - xai_map_mask[..., None]) + xai_map_colored * xai_map_mask[..., None]
         img = img / np.max(img)
         return img
+        # xai_map = cv2.applyColorMap(np.uint8(xai_map * self.selected_intensity.get()), cv2.COLORMAP_JET)
+        # xai_map = np.float32(xai_map) 
+        # xai_map = cv2.resize(xai_map, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
+        # img = xai_map + np.float32(img)
+        # img = img / np.max(img)
+        return img
+
 
     def load_video(self):
 

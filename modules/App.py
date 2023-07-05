@@ -45,9 +45,6 @@ class App(BaseApp):
 
         self.fig.clear()
 
-        # if self.selected_expl_type.get() == "Gradient Rollout":
-        #         self.selected_layer.set(0)
-
         self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name]
 
         if self.video_gen_bool:
@@ -105,7 +102,10 @@ class App(BaseApp):
                     saliency_map = self.generate_saliency_map(og_img, xai_map)      
                     saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                     self.saliency_maps_objects.append(saliency_map)
-
+                xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
+                saliency_map = self.generate_saliency_map(og_img, xai_map)      
+                saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
+                self.saliency_maps_objects.append(saliency_map)
                 self.bbox_coords = bbox_coords
 
             # Extract Ground Truth bboxes if wanted
@@ -187,12 +187,14 @@ class App(BaseApp):
                 break
         
         for i in range(len(self.saliency_maps_objects)):
-            ax_obj_layer = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
 
             att_nobbx_obj = self.saliency_maps_objects[i]
             att_nobbx_obj = att_nobbx_obj[bbox_coord[1].clip(min=0):bbox_coord[3], bbox_coord[0].clip(min=0):bbox_coord[2]]
-            ax_obj_layer.imshow(att_nobbx_obj, vmin=0, vmax=1)
-            ax_obj_layer.axis('off')
+
+            if i != len(self.saliency_maps_objects) - 1:
+                ax_obj_layer = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
+                ax_obj_layer.imshow(att_nobbx_obj, vmin=0, vmax=1)
+                ax_obj_layer.axis('off')
             
             if self.capture_object.get():
                 fig_save, ax_save = plt.subplots()
@@ -204,9 +206,12 @@ class App(BaseApp):
                     folder_path += f"_{self.object_description}"
                 if not os.path.exists(folder_path):
                     os.makedirs(folder_path)
-                fig_save.savefig(os.path.join(folder_path, f"layer_{i}.png"), transparent=True, bbox_inches='tight', pad_inches=0)
+                fig_name = f"layer_{i}.png"
+                if i == len(self.saliency_maps_objects) - 1:
+                    fig_name = "full.png"
+                fig_save.savefig(os.path.join(folder_path, fig_name), transparent=True, bbox_inches='tight', pad_inches=0)
                 plt.close(fig_save)
-    
+
 
         
         if self.show_self_attention.get() and len(self.labels) > 1:
@@ -303,20 +308,20 @@ class App(BaseApp):
                 self.canvas.update()
                 self.video_gen_bool = True
 
-            self.target_class = self.target_classes[self.selected_filter.get()]
-            if len(self.target_class) == 0:
-                self.show_message(f"No {self.ObjectDetector.class_names[self.selected_filter.get()]} found.")
-                self.target_class = self.target_classes[-1]
-            self.video_length.set(len(self.target_class))
-            #self.start_video_idx = self.target_class[0]
+            self.update_object_filter()
+            # self.target_class = self.target_classes[self.selected_filter.get()]
+            # if len(self.target_class) == 0:
+            #     self.show_message(f"No {self.ObjectDetector.class_names[self.selected_filter.get()]} found.")
+            #     self.target_class = self.target_classes[-1]
+            # self.video_length.set(len(self.target_class))
 
-            if hasattr(self, "scale"):
-                self.scale.configure(to=self.video_length.get())
-                self.idx_video.set(max(0, self.data_idx - self.start_video_idx))
-            else:
-                self.idx_video = tk.IntVar()
-                self.scale = tk.Scale(self.frame, from_=0, to=self.video_length.get(), variable=self.idx_video, command=self.update_index, showvalue=False, orient='horizontal')
-            self.scale.pack(fill='x')
+            # if hasattr(self, "scale"):
+            #     self.scale.configure(to=self.video_length.get())
+            #     self.idx_video.set(max(0, self.data_idx - self.start_video_idx))
+            # else:
+            #     self.idx_video = tk.IntVar()
+            #     self.scale = tk.Scale(self.frame, from_=0, to=self.video_length.get(), variable=self.idx_video, command=self.update_index, showvalue=False, orient='horizontal')
+            # self.scale.pack(fill='x')
 
             self.paused = False
             self.old_w, self.old_h = None, None
@@ -325,6 +330,20 @@ class App(BaseApp):
             self.delay = 20  # Initial delay
             self.show_sequence()
     
+    def update_object_filter(self):
+        self.target_class = self.target_classes[self.selected_filter.get()]
+        if len(self.target_class) == 0:
+            self.show_message(f"No {self.ObjectDetector.class_names[self.selected_filter.get()]} found.")
+            self.target_class = self.target_classes[-1]
+        self.video_length.set(len(self.target_class))
+        if hasattr(self, "scale"):
+            self.scale.configure(to=self.video_length.get())
+            self.idx_video.set(max(0, min(self.video_length.get(), self.data_idx - self.start_video_idx)))
+        else:
+            self.idx_video = tk.IntVar()
+            self.scale = tk.Scale(self.frame, from_=0, to=self.video_length.get(), variable=self.idx_video, command=self.update_index, showvalue=False, orient='horizontal')
+        self.scale.pack(fill='x')
+
     def update_index(self, event=None):
         if self.paused:
             if not isinstance(event, str):

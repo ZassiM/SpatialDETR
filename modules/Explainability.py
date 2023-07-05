@@ -47,8 +47,9 @@ def avg_heads_og(cam, grad):
 def gradcam(cam, grad):
     cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
     grad = grad.reshape(-1, grad.shape[-2], grad.shape[-1])
-    grad = grad.mean(dim=0, keepdim=True)
-    cam = (cam * grad).mean(0).clamp(min=0)
+    # grad = grad.mean(dim=0, keepdim=True)
+    # cam = (cam * grad).mean(0).clamp(min=0)
+    cam = (cam * grad).clamp(min=0).mean(dim=0)
     return cam
 
 
@@ -64,10 +65,10 @@ class ExplainableTransformer:
         self.height_feats, self.width_feats = None, None
             
     def handle_co_attn_self_query(self, layer):
-        # grad = self.dec_self_attn_grads[layer]
         cam = self.dec_self_attn_weights[layer]
+        # grad = self.dec_self_attn_grads[layer]
         # cam = avg_heads_og(cam, grad)
-        self.R_q_i += torch.matmul(cam, self.R_q_i)
+        #self.R_q_i += torch.matmul(cam, self.R_q_i)
         self.R_q_q += torch.matmul(cam, self.R_q_q)
 
     def handle_co_attn_query(self, layer, camidx, handle_residual_bool, apply_rule):
@@ -84,18 +85,8 @@ class ExplainableTransformer:
         self.R_q_i += R_qi_addition
 
     def extract_attentions(self, data, target_index=None):
-        self.dec_cross_attn_weights, self.dec_cross_attn_grads, self.dec_self_attn_weights, self.dec_self_attn_grads = [], [], [], [] 
 
         hooks = []
-        for layer in self.Model.model.module.pts_bbox_head.transformer.decoder.layers:
-            hooks.append(
-                layer.attentions[0].attn.register_forward_hook(
-                    lambda _, input, output: self.dec_self_attn_weights.append(output[1][0].cpu())
-                ))
-            hooks.append(
-                layer.attentions[1].attn.register_forward_hook(
-                    lambda _, input, output: self.dec_cross_attn_weights.append(output[1].cpu())
-                ))
         
         if self.height_feats is None:
             conv_feats = []
@@ -105,17 +96,29 @@ class ExplainableTransformer:
             ))
 
         if target_index is None:
+            self.dec_cross_attn_weights, self.dec_self_attn_weights = [], []
+            for layer in self.Model.model.module.pts_bbox_head.transformer.decoder.layers:
+                hooks.append(
+                    layer.attentions[0].attn.register_forward_hook(
+                        lambda _, input, output: self.dec_self_attn_weights.append(output[1][0].cpu())
+                    ))
+                hooks.append(
+                    layer.attentions[1].attn.register_forward_hook(
+                        lambda _, input, output: self.dec_cross_attn_weights.append(output[1].cpu())
+                    ))
             with torch.no_grad():
-                outputs = self.Model.model(return_loss=False, rescale=True, all_layers=True, **data)
+                outputs = self.Model.model(return_loss=False, rescale=True, **data)
 
         else:
+            self.dec_cross_attn_grads, self.dec_self_attn_grads = [], []
+
             for layer in self.Model.model.module.pts_bbox_head.transformer.decoder.layers:
                 hooks.append(
                     layer.attentions[0].attn.register_backward_hook(
                         lambda _, grad_input, grad_output: self.dec_self_attn_grads.append(grad_input[0].permute(1, 0, 2)[0].cpu())
                     ))
      
-            outputs = self.Model.model(return_loss=False, rescale=True, all_layers=True, **data)
+            outputs = self.Model.model(return_loss=False, rescale=True, **data)
 
             output_scores = outputs[0]["pts_bbox"]["scores_3d"]
             one_hot = torch.zeros_like(output_scores).to(output_scores.device)
@@ -154,24 +157,6 @@ class ExplainableTransformer:
                 score_perc = round(((scores[camidx]/sum_scores)*100))
                 scores_perc.append(score_perc)
 
-        # for layer in range(len(self.xai_maps)):
-        #     scores_cam = []
-        #     for camidx in range(len(self.xai_maps[layer])):
-        #         cam_map = self.xai_maps[layer][camidx]
-        #         score = round(cam_map.sum().item(), 2)
-        #         scores_cam.append(score)
-        #     scores.append(scores_cam)
-        
-        # for layer in range(len(self.xai_maps)):
-        #     sum_scores = sum(scores[layer])
-        #     if sum_scores > 0 and not np.isnan(sum_scores):
-        #         scores_perc_cam = []
-        #         for camidx in range(len(scores[layer])):
-        #             score_perc = round(((scores[layer][camidx]/sum_scores)*100))
-        #             scores_perc_cam.append(score_perc)
-        #         scores_perc.append(scores_perc_cam)
-        #     else:
-        #         continue
         return scores_perc
         
     def generate_raw_att(self, layer, camidx, head_fusion="min"):  
@@ -239,7 +224,8 @@ class ExplainableTransformer:
                     xai_maps_camera.append(self.R_q_i.detach().cpu())
                 xai_maps.append(xai_maps_camera)
 
-        self_attn_rollout = compute_rollout_attention(self.dec_self_attn_weights)
+        #self_attn_rollout = compute_rollout_attention(self.dec_self_attn_weights)
+        self_attn_rollout = self.dec_self_attn_weights[-1]
         self_xai_maps = self_attn_rollout.detach().cpu()
 
         # num_layers x num_cams x num_objects x 1450
