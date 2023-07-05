@@ -135,7 +135,7 @@ class Model():
             distributed = True
             init_dist(args["launcher"], **cfg.dist_params)
 
-        dataset = build_dataset(cfg.data.test)
+        dataset = build_dataset(cfg.data.val)
         data_loader = build_dataloader(
             dataset,
             samples_per_gpu=samples_per_gpu,

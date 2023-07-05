@@ -64,17 +64,16 @@ class App(BaseApp):
 
             if self.selected_pert_step.get() > 0:
                 self.update_data(pert_step=self.selected_pert_step.get())
+                self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get())
+                self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get())
 
             if self.single_bbox.get():
                 # Extract camera with highest attention
                 cam_obj = self.get_camera_object()
                 if cam_obj == -1:
-                    self.show_message("Please check the selected options.")
+                    self.show_message("Please change the selected options.")
                     return
                 self.selected_camera = cam_obj
-                self.spec = self.fig.add_gridspec(3, 3, wspace=0, hspace=0)
-            else:
-                self.spec = self.fig.add_gridspec(2, 3, wspace=0, hspace=0)
 
         # Generate images list with bboxes on it
         print("Generating camera images...")
@@ -119,10 +118,7 @@ class App(BaseApp):
                         mode_2d=self.bbox_2d.get())
                 
             if self.overlay_bool.get() and not self.no_object:
-                if self.aggregate_layers.get():
-                    xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
-                else:
-                    xai_map = self.ExplainableModel.xai_maps[-1][camidx]
+                xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
                 saliency_map = self.generate_saliency_map(img, xai_map)        
                 saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                 self.cam_imgs.append(saliency_map)
@@ -130,6 +126,11 @@ class App(BaseApp):
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 self.cam_imgs.append(img)
 
+        if self.single_bbox.get():
+            self.spec = self.fig.add_gridspec(3, 3, wspace=0, hspace=0)
+        else:
+            self.spec = self.fig.add_gridspec(2, 3, wspace=0, hspace=0)
+            
         if self.single_bbox.get():
             self.show_explainability()
 
@@ -148,7 +149,7 @@ class App(BaseApp):
 
             if self.single_bbox.get():
                 score = self.ExplainableModel.scores[self.cam_idx[i]]
-                ax.axhline(y=0, color='black', linewidth=10)
+                ax.axhline(y=0, color=self.bg_color, linewidth=10)
                 ax.axhline(y=0, color='green', linewidth=10, xmax=score/100)
 
             ax.axis('off')
@@ -198,6 +199,8 @@ class App(BaseApp):
                 ax_save.axis('off')  # Turn off axis
                 class_name = self.ObjectDetector.class_names[self.labels[self.bbox_idx[0]].item()]
                 folder_path = f"Thesis/{self.data_idx}_{self.selected_expl_type.get()}_{class_name}"
+                if self.object_description:
+                    folder_path += f"_{self.object_description}"
                 if not os.path.exists(folder_path):
                     os.makedirs(folder_path)
                 fig_save.savefig(os.path.join(folder_path, f"layer_{i}.png"), transparent=True, bbox_inches='tight', pad_inches=0)
@@ -210,10 +213,6 @@ class App(BaseApp):
             # title = "Self-attention"
             # if self.selected_expl_type.get() != "Gradient Rollout":
             #     title += f" | layer {self.selected_layer.get()}"
-
-            cmap = plt.cm.get_cmap('OrRd')  
-
-            ax = self.fig.add_subplot(self.spec[1, 2])
             # num_objects = self.thr_idxs_layers[-1].sum()
             # queries_id = [nms_idxs[:num_objects] for nms_idxs in self.nms_îdxs_layers]
             # queries_scores = [scores[:num_objects] for scores in self.bbox_scores_layers]
@@ -239,11 +238,12 @@ class App(BaseApp):
             query_self_attn = self.ExplainableModel.self_xai_maps
             query_self_attn = query_self_attn[self.thr_idxs]
             norm = plt.Normalize(vmin=min(query_self_attn), vmax=max(query_self_attn))  # Use positions min and max for normalization
+            cmap = plt.cm.get_cmap('OrRd')  
             color_values = cmap(norm(query_self_attn))
 
+            ax = self.fig.add_subplot(self.spec[1, 2])
             x = torch.arange(len(query_self_attn))
             bars = ax.bar(x, query_self_attn / query_self_attn.sum() * 100)
-
             # Setting colors and highlighting bar
             [b.set_color(c) for b, c in zip(bars, color_values)]
             bars[self.bbox_idx[0]].set_edgecolor(text_color)
@@ -261,11 +261,7 @@ class App(BaseApp):
                 ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), str(i),
                         ha='center', va='bottom', color=text_color, fontsize=fontsize)
             
-            #ax.set_title(title, color=text_color, fontsize=fontsize-4, y=0.95)
             ax2 = self.fig.add_subplot(self.spec[1, 0])
-            # query_self_attn = self.ExplainableModel.self_xai_maps[self.selected_layer.get()]
-            # query_self_attn = query_self_attn[0]
-            # query_self_attn = query_self_attn[self.thr_idxs]
             norm = plt.Normalize(vmin=min(query_self_attn), vmax=max(query_self_attn))  # Use positions min and max for normalization
             color_values = cmap(norm(query_self_attn))
             edge_color = "black" if text_color == "white" else "white"
@@ -274,7 +270,6 @@ class App(BaseApp):
             _, texts = ax2.pie(query_self_attn, labels=labels, wedgeprops={'linewidth': 1.0, 'edgecolor': edge_color}, explode=explode, colors=color_values)
             for i in range(len(texts)):
                 texts[i].set_color(text_color)
-            #ax2.set_title(title, color=text_color, fontsize=fontsize-4, y=0.95)
 
         self.fig.tight_layout()
 
@@ -304,7 +299,14 @@ class App(BaseApp):
                 self.canvas_frame = self.canvas.create_image(0, 0, image=None, anchor='nw', tags="img_tag")
                 self.canvas.update()
                 self.video_gen_bool = True
-                       
+
+            self.target_class = self.target_classes[self.selected_filter.get()]
+            if len(self.target_class) == 0:
+                self.show_message(f"No {self.ObjectDetector.class_names[self.selected_filter.get()]} found.")
+                self.target_class = self.target_classes[-1]
+            self.video_length.set(len(self.target_class))
+            #self.start_video_idx = self.target_class[0]
+
             if hasattr(self, "scale"):
                 self.scale.configure(to=self.video_length.get())
                 self.idx_video.set(max(0, self.data_idx - self.start_video_idx))
@@ -338,7 +340,7 @@ class App(BaseApp):
                 self.frame.focus_set()
             self.show_sequence(forced=True)
             if hasattr(self, "img_labels"):
-                labels = self.img_labels[self.idx_video.get()-1]
+                labels = self.img_labels[self.target_class[self.idx_video.get()]]
                 self.update_objects_list(labels=labels, single_select=True)
 
 
@@ -346,20 +348,22 @@ class App(BaseApp):
         if not self.paused:
             self.after_cancel(self.after_seq_id)
             self.paused = True
+            self.idx_video.set(self.idx_video.get() - 1)
             if hasattr(self, "img_labels"):
-                labels = self.img_labels[self.idx_video.get()-1]
+                labels = self.img_labels[self.target_class[self.idx_video.get()]]
                 self.update_objects_list(labels=labels, single_select=True)
-
         else:
             self.paused = False
             self.show_sequence()
+        self.frame.focus_set()
 
     def show_sequence(self, forced=False):
         if not self.paused or forced:
             if self.idx_video.get() >= self.video_length.get():
                 self.idx_video.set(0)
 
-            img_frame = self.img_frames[self.layer_idx][self.idx_video.get()]
+            img_frame = self.img_frames[self.layer_idx][self.target_class[self.idx_video.get()]]
+
             self.w, self.h = self.canvas.winfo_width(), self.canvas.winfo_height()
 
             if (self.old_w, self.old_h) != (self.w, self.h):
@@ -380,14 +384,13 @@ class App(BaseApp):
             self.img_frame = ImageTk.PhotoImage(img_frame.resize((self.new_w, self.new_h)))
             self.canvas.itemconfig(self.canvas_frame, image=self.img_frame)
             
-            self.data_idx = self.start_video_idx + self.idx_video.get()
+            self.data_idx = self.start_video_idx + self.target_class[self.idx_video.get()]
             self.update_info_label()
 
             if not forced:
                 self.idx_video.set(self.idx_video.get() + 1)
                 self.after_seq_id = self.after(self.video_delay.get(), self.show_sequence)
 
-                
     def generate_video(self):
         if self.video_length.get() > ((len(self.ObjectDetector.dataset)-1) - self.data_idx):
             self.show_message(f"Video lenght should be between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
@@ -416,6 +419,10 @@ class App(BaseApp):
         with open(file_path, 'wb') as f:
             pickle.dump(data, f)
 
+        target_classes = np.arange(0, 10, 1)
+        self.target_classes = [[i for i, tensor in enumerate(self.img_labels) if target_class in tensor.tolist()] for target_class in target_classes]
+        self.target_classes.append(list(range(self.video_length.get())))
+
         self.data_idx = self.start_video_idx
 
         self.img_frames = []
@@ -441,8 +448,9 @@ class App(BaseApp):
 
         # Extract the selected bounding box indices from the menu
         self.bbox_idx = list(range(len(self.labels)))
-        self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get())
-        self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get(), remove_pad=self.remove_pad.get())
+        if not self.no_object:
+            self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get())
+            self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get(), remove_pad=self.remove_pad.get())
 
         # Generate images list with bboxes on it
         cam_imgs = []  

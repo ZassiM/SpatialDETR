@@ -48,6 +48,7 @@ class BaseApp(tk.Tk):
         self.bg_color = self.option_get('background', '*')
         self.started_app = False
         self.video_gen_bool = False
+        self.img_labels = None
         self.layers_video = 0
 
         self.bbox_coords, self.saliency_maps_objects = [], []
@@ -63,6 +64,7 @@ class BaseApp(tk.Tk):
         file_opt.add_command(label=" Load model", command=self.load_model)
         file_opt.add_command(label=" Load model from config file", command=lambda: self.load_model(from_config=True))
         file_opt.add_command(label=" Save index", command=lambda: self.insert_entry(type=1))
+        file_opt.add_command(label=" Object description", command=lambda: self.insert_entry(type=2))
         file_opt.add_command(label=" Capture screen", command=self.capture)
         file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
         file_opt.add_separator()
@@ -119,7 +121,7 @@ class BaseApp(tk.Tk):
             thr_opt.add_radiobutton(label=i, variable=self.selected_threshold)
 
 
-        self.select_idx_opt.add_command(label="Insert index", command=lambda: self.insert_entry(type=0))
+        self.select_idx_opt.add_command(label="         Insert index", command=lambda: self.insert_entry(type=0))
         self.selected_data_idx = tk.IntVar()
         with open(self.indices_file, 'r') as file:
             for line in file:
@@ -142,16 +144,27 @@ class BaseApp(tk.Tk):
         video_lengths = np.arange(0, 1100, 100)
         video_lengths[0] = 10
         self.video_length = tk.IntVar()
-        self.video_length.set(6000)
+        self.video_length.set(video_lengths[0])
         for i in range(len(video_lengths)):
             videolength_opt.add_radiobutton(label=video_lengths[i], variable=self.video_length , value=video_lengths[i])
 
+        filter_opt = tk.Menu(self.menubar)
+        self.selected_filter = tk.IntVar()
+        for label, class_name in enumerate(self.ObjectDetector.class_names):
+            filter_opt.add_radiobutton(label=class_name.capitalize(), variable=self.selected_filter, value=label)
+        filter_opt.add_radiobutton(label="All", variable=self.selected_filter, value=label+1)
+        self.selected_filter.set(label+1)
+
+        self.aggregate_layers = tk.BooleanVar()
+        self.aggregate_layers.set(True)
         video_opt = tk.Menu(self.menubar)
         video_opt.add_command(label=" Generate", command=self.generate_video)
         video_opt.add_command(label=" Load", command=self.load_video)
         video_opt.add_command(label=" Show", command=self.show_video)
         video_opt.add_cascade(label=" Sequence length", menu=videolength_opt)
         video_opt.add_cascade(label=" Video delay", menu=delay_opt)
+        video_opt.add_cascade(label=" Filter object", menu=filter_opt)
+        video_opt.add_checkbutton(label=" Aggregate layers", onvalue=1, offvalue=0, variable=self.aggregate_layers)
 
         # Cascade menu for Camera
         self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
@@ -210,30 +223,28 @@ class BaseApp(tk.Tk):
 
         # Discard ratio for attention weights
         dr_opt, int_opt, beta_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
-        self.show_self_attention, self.gen_segmentation, self.aggregate_layers = tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.show_self_attention, self.gen_segmentation = tk.BooleanVar(), tk.BooleanVar()
         self.show_self_attention.set(True)
-        self.aggregate_layers.set(True)
         self.selected_discard_threshold = tk.DoubleVar()
-        self.selected_discard_threshold.set(0.1)
         self.selected_intensity = tk.IntVar()
         self.selected_beta = tk.DoubleVar()
-        values = np.arange(0.0, 1, 0.1).round(1)
+        discard_ratios = np.arange(0.0, 1, 0.1).round(1)
         intensities = np.arange(200, 270, 10)
         betas = np.round(np.arange(0.1, 1.1, 0.1), 1)
         intensities[-1] = 255
+        self.selected_discard_threshold.set(discard_ratios[5])
         self.selected_intensity.set(intensities[3])
         self.selected_beta.set(betas[6])
-        for i in values:
+        for i in discard_ratios:
             dr_opt.add_radiobutton(label=i, variable=self.selected_discard_threshold)
         for i in intensities:
             int_opt.add_radiobutton(label=i, variable=self.selected_intensity)
         for i in betas:
             beta_opt.add_radiobutton(label=i, variable=self.selected_beta)
         expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
-        expl_opt.add_cascade(label="Saliency map intensity", menu=int_opt)
-        expl_opt.add_cascade(label="Saliency map beta", menu=beta_opt)
-        expl_opt.add_checkbutton(label="Aggregate layers", onvalue=1, offvalue=0, variable=self.aggregate_layers)
-        expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
+        # expl_opt.add_cascade(label="Saliency map intensity", menu=int_opt)
+        # expl_opt.add_cascade(label="Saliency map beta", menu=beta_opt)
+        # expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
 
 
         # Cascade menus for object selection
@@ -263,10 +274,7 @@ class BaseApp(tk.Tk):
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
-        add_opt.add_checkbutton(label=" Show objects self-attention", onvalue=1, offvalue=0, variable=self.show_self_attention)
         add_opt.add_checkbutton(label=" Capture saliency maps", onvalue=1, offvalue=0, variable=self.capture_object)
-        add_opt.add_checkbutton(label=" Remove pad", onvalue=1, offvalue=0, variable=self.remove_pad)
-        add_opt.add_cascade(label=" Select maps quality", menu=quality_opt)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
 
         # Adding all cascade menus ro the main menubar menu
@@ -370,7 +378,7 @@ class BaseApp(tk.Tk):
         self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
         self.labels = self.outputs['labels_3d'][self.thr_idxs]
         self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
-
+        
         self.no_object = False
         if len(self.labels) == 0:
             self.no_object = True
@@ -381,6 +389,7 @@ class BaseApp(tk.Tk):
         # Extract image metas which contain, for example, the lidar to camera projection matrices
         self.img_metas = self.data["img_metas"][0]._data[0][0]
         self.data_description = None
+        self.object_description = None
 
         # Extract the 6 camera images from the data and remove the padded pixels
         imgs = self.data["img"][0]._data[0].numpy()[0]
@@ -397,7 +406,7 @@ class BaseApp(tk.Tk):
         all_select = True
         if pert_step:
             all_select = False
-        if (initialize_bboxes and not self.video_gen_bool) or (self.video_gen_bool and not hasattr(self, "img_labels")):
+        if initialize_bboxes and not self.img_labels:
             self.update_objects_list(all_select=all_select)
 
     def add_separator(self, sep=""):
@@ -454,6 +463,13 @@ class BaseApp(tk.Tk):
             self.select_idx_opt.add_radiobutton(label=self.data_description, variable=self.selected_data_idx, command=self.update_idx, value=self.data_idx)
             with open(self.indices_file, 'a') as file:
                 file.write(f'{self.data_description}\n')
+            with open(self.indices_file, 'r') as file:
+                lines = file.readlines()
+            lines.sort(key=lambda x: int(x.split(' | ')[0]))
+            with open(self.indices_file, 'w') as file:
+                file.writelines(lines)
+        elif type == 2:
+            self.object_description = entry
         
         popup.destroy()
         
@@ -571,10 +587,13 @@ class BaseApp(tk.Tk):
             print("No directory selected.")
             return
         labels_file = os.path.join(self.video_folder, "labels.pkl")
+        self.img_labels = None
+        target_classes = np.arange(0, 10, 1)
         if os.path.exists(labels_file):
             with open(labels_file, 'rb') as f:
                 data = pickle.load(f)
             self.img_labels = data["img_labels"]
+            self.target_classes = [[i for i, tensor in enumerate(self.img_labels) if target_class in tensor.tolist()] for target_class in target_classes]
         else:
             self.update_objects_list(labels=[])
 
@@ -601,6 +620,7 @@ class BaseApp(tk.Tk):
             self.start_video_idx = int(folder_images[0].split('.')[0].split('_')[-1])
             self.video_length.set(len(self.img_frames[0]))
             self.layers_video = len(self.img_frames)
+            self.target_classes.append(list(range(self.video_length.get())))
         else:
             self.show_message("The folder should contain at least one image!")
             return

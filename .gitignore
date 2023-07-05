@@ -140,6 +140,7 @@ screenshots/
 training_logs/*
 config.toml
 points/
-video*/
+videos/
+Thesis/
 backups/*
 *.mp4
