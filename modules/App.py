@@ -32,11 +32,12 @@ class App(BaseApp):
             if self.video_gen_bool:
                 self.canvas.pack_forget()
                 self.scale.pack_forget()
-                end_idx = self.menubar.index('end')
                 for key in ['<space>', '<Right>', '<Left>', '<Up>', '<Down>']:
                     self.unbind(key)
-
+                end_idx = self.menubar.index('end')
                 self.menubar.delete(end_idx-1, end_idx)
+                self.menubar.add_command(label="Show video", command=self.show_video)
+                self.add_separator("|")
             self.fig = plt.figure()
             self.fig.set_facecolor(self.bg_color)
             self.canvas = FigureCanvasTkAgg(self.fig, master=self)
@@ -277,23 +278,25 @@ class App(BaseApp):
         self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="points/", show_gt=self.GT_bool.get(), show=True, snapshot=False, pipeline=None, score_thr=self.selected_threshold.get())
 
     def show_video(self):
-        if not hasattr(self, "img_frames"):
-            generated = self.generate_video()
+
+        if not self.video_loaded:
+            self.show_message("First load a video from a folder.")
+            return        
         else:
-            generated = True
-        
-        if generated:
             if self.canvas and not self.video_gen_bool or not self.canvas:
                 if self.canvas:
                     self.canvas.get_tk_widget().pack_forget()
+                end_idx = self.menubar.index('end')
+                self.menubar.delete(end_idx-1, end_idx)
                 self.menubar.add_command(label="Pause/Resume", command=self.pause_resume)
+                self.add_separator("|")
+
                 self.bind('<space>', self.pause_resume)
                 self.bind('<Right>', self.update_index)
                 self.bind('<Left>', self.update_index)
                 self.bind('<Up>', self.update_index)
                 self.bind('<Down>', self.update_index)
 
-                self.add_separator("|")
                 self.canvas = tk.Canvas(self)
                 self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
                 self.canvas_frame = self.canvas.create_image(0, 0, image=None, anchor='nw', tags="img_tag")
@@ -419,28 +422,25 @@ class App(BaseApp):
         with open(file_path, 'wb') as f:
             pickle.dump(data, f)
 
-        target_classes = np.arange(0, 10, 1)
-        self.target_classes = [[i for i, tensor in enumerate(self.img_labels) if target_class in tensor.tolist()] for target_class in target_classes]
-        self.target_classes.append(list(range(self.video_length.get())))
+        # target_classes = np.arange(0, 10, 1)
+        # self.target_classes = [[i for i, tensor in enumerate(self.img_labels) if target_class in tensor.tolist()] for target_class in target_classes]
+        # self.target_classes.append(list(range(self.video_length.get())))
 
-        self.data_idx = self.start_video_idx
+        # self.data_idx = self.start_video_idx
 
-        self.img_frames = []
-        layer_folders = [f for f in os.listdir(self.video_folder) if f.startswith('layer_') and os.path.isdir(os.path.join(self.video_folder, f))]
-        layer_folders.sort(key=lambda x: int(x.split('_')[-1]))  # Sort the folders by the layer number
+        # self.img_frames = []
+        # layer_folders = [f for f in os.listdir(self.video_folder) if f.startswith('layer_') and os.path.isdir(os.path.join(self.video_folder, f))]
+        # layer_folders.sort(key=lambda x: int(x.split('_')[-1]))  # Sort the folders by the layer number
 
-        for folder in layer_folders:
-            folder_path = os.path.join(self.video_folder, folder)
-            folder_images = os.listdir(folder_path)
-            folder_images.sort()
-            images = [Image.open(os.path.join(folder_path, img)) for img in folder_images]
-            self.img_frames.append(images)
+        # for folder in layer_folders:
+        #     folder_path = os.path.join(self.video_folder, folder)
+        #     folder_images = os.listdir(folder_path)
+        #     folder_images.sort()
+        #     images = [Image.open(os.path.join(folder_path, img)) for img in folder_images]
+        #     self.img_frames.append(images)
         
-        self.layers_video = len(self.img_frames)
-            
-        print(f"\nVideo generated inside \"{self.video_folder}\" folder.\n")
-
-        return True
+        # self.layers_video = len(self.img_frames) 
+        self.show_message(f"Video generated inside \"{self.video_folder}\" folder.")
     
     def generate_video_frame(self):
 

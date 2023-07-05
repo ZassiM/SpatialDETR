@@ -49,6 +49,7 @@ class BaseApp(tk.Tk):
         self.started_app = False
         self.video_gen_bool = False
         self.img_labels = None
+        self.video_loaded = False
         self.layers_video = 0
 
         self.bbox_coords, self.saliency_maps_objects = [], []
@@ -160,8 +161,7 @@ class BaseApp(tk.Tk):
         video_opt = tk.Menu(self.menubar)
         video_opt.add_command(label=" Generate", command=self.generate_video)
         video_opt.add_command(label=" Load", command=self.load_video)
-        video_opt.add_command(label=" Show", command=self.show_video)
-        video_opt.add_cascade(label=" Sequence length", menu=videolength_opt)
+        video_opt.add_cascade(label=" Video length", menu=videolength_opt)
         video_opt.add_cascade(label=" Video delay", menu=delay_opt)
         video_opt.add_cascade(label=" Filter object", menu=filter_opt)
         video_opt.add_checkbutton(label=" Aggregate layers", onvalue=1, offvalue=0, variable=self.aggregate_layers)
@@ -597,10 +597,7 @@ class BaseApp(tk.Tk):
         else:
             self.update_objects_list(labels=[])
 
-        # Get all the items in the directory
         items = os.listdir(self.video_folder)
-
-        # Check if there are any directories in the list
         if any(os.path.isdir(os.path.join(self.video_folder, item)) for item in items):
             layer_folders = [f for f in items if f.startswith('layer_') and os.path.isdir(os.path.join(self.video_folder, f))]
             layer_folders.sort(key=lambda x: int(x.split('_')[-1]))  # Sort the folders by the layer number
@@ -628,4 +625,8 @@ class BaseApp(tk.Tk):
         if hasattr(self, "scale"):
             self.scale.configure(to=self.video_length.get())
 
-        print(f"Video loaded ({self.video_length.get()} images).\n")
+        self.show_message(f"Video loaded ({self.video_length.get()} images).")
+        if not self.video_loaded:
+            self.menubar.add_command(label="Show video", command=self.show_video)
+            self.add_separator("|")
+            self.video_loaded = True
