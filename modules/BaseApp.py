@@ -152,7 +152,7 @@ class BaseApp(tk.Tk):
         filter_opt = tk.Menu(self.menubar)
         self.selected_filter = tk.IntVar()
         for label, class_name in enumerate(self.ObjectDetector.class_names):
-            filter_opt.add_radiobutton(label=class_name.capitalize(), variable=self.selected_filter, value=label, command=self.update_object_filter)
+            filter_opt.add_radiobutton(label=class_name.replace("_", " ", 1).capitalize(), variable=self.selected_filter, value=label, command=self.update_object_filter)
         filter_opt.add_radiobutton(label="All", variable=self.selected_filter, value=label+1,  command=self.update_object_filter)
         self.selected_filter.set(label+1)
 
@@ -232,7 +232,7 @@ class BaseApp(tk.Tk):
         intensities = np.arange(200, 270, 10)
         betas = np.round(np.arange(0.1, 1.1, 0.1), 1)
         intensities[-1] = 255
-        self.selected_discard_threshold.set(discard_ratios[5])
+        self.selected_discard_threshold.set(discard_ratios[3])
         self.selected_intensity.set(intensities[3])
         self.selected_beta.set(betas[6])
         for i in discard_ratios:
@@ -389,6 +389,7 @@ class BaseApp(tk.Tk):
         self.img_metas = self.data["img_metas"][0]._data[0][0]
         self.data_description = None
         self.object_description = None
+        self.color_dict = None
 
         # Extract the 6 camera images from the data and remove the padded pixels
         imgs = self.data["img"][0]._data[0].numpy()[0]
@@ -496,7 +497,8 @@ class BaseApp(tk.Tk):
             view_bbox = tk.BooleanVar()
             view_bbox.set(False)
             self.bboxes.append(view_bbox)
-            self.bbox_opt.add_checkbutton(label=f" {i}: {self.ObjectDetector.class_names[labels[i].item()].capitalize()}", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
+            object_class = self.ObjectDetector.class_names[labels[i].item()].replace("_", " ", 1).capitalize()
+            self.bbox_opt.add_checkbutton(label=f" {i}: {object_class}", onvalue=1, offvalue=0, variable=self.bboxes[i], command=lambda idx=i: self.single_bbox_select(idx))
 
         self.initialize_bboxes(single_select, all_select)
 
@@ -566,7 +568,7 @@ class BaseApp(tk.Tk):
         self.canvas.draw()
 
     def generate_saliency_map(self, img, xai_map):
-        xai_map_colored = cv2.applyColorMap(np.uint8(xai_map * self.selected_intensity.get()), cv2.COLORMAP_JET)
+        xai_map_colored = cv2.applyColorMap(np.uint8(xai_map * self.selected_intensity.get()), cv2.COLORMAP_TURBO)
         xai_map_colored = cv2.resize(xai_map_colored, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
         xai_map_colored = np.float32(xai_map_colored)
 

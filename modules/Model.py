@@ -164,6 +164,9 @@ class Model():
         elif hasattr(dataset, 'PALETTE'):
             # segmentation dataset has `PALETTE` attribute
             model.PALETTE = dataset.PALETTE
+
+        #model.pts_bbox_head.transformer.init_layers()
+        #model.pts_bbox_head.transformer.init_weights()
         
         if not distributed:
             self.model = MMDataParallel(model, device_ids=[self.gpu_id])
