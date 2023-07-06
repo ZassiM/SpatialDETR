@@ -225,8 +225,8 @@ class ExplainableTransformer:
                 xai_maps.append(xai_maps_camera)
 
         #self_attn_rollout = compute_rollout_attention(self.dec_self_attn_weights)
-        self_attn_rollout = self.dec_self_attn_weights[-1]
-        self_xai_maps = self_attn_rollout.detach().cpu()
+        for layer in range(self.num_layers):
+            self_xai_maps.append(self.dec_self_attn_weights[layer])
 
         # num_layers x num_cams x num_objects x 1450
         xai_maps = torch.stack([torch.stack(layer) for layer in xai_maps])
@@ -242,7 +242,9 @@ class ExplainableTransformer:
 
     def select_explainability(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True):
         self.xai_maps = self.xai_maps_full[:, nms_idxs[bbox_idx], :, :]
-        self.self_xai_maps = self.self_xai_maps_full[nms_idxs[bbox_idx]][:, nms_idxs][0]
+        self.self_xai_maps = []
+        for layer in range(self.num_layers):
+            self.self_xai_maps.append(self.self_xai_maps_full[layer][nms_idxs[bbox_idx]][:, nms_idxs][0])
 
         # now attention maps can be overlayed
         if self.xai_maps.shape[1] > 0:

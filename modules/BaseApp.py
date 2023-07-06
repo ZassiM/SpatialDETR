@@ -243,6 +243,7 @@ class BaseApp(tk.Tk):
             beta_opt.add_radiobutton(label=i, variable=self.selected_beta)
         expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
         expl_opt.add_cascade(label="Saliency map intensity", menu=int_opt)
+        expl_opt.add_checkbutton(label="Show queries self-attention", onvalue=1, offvalue=0, variable=self.show_self_attention)
         # expl_opt.add_cascade(label="Saliency map beta", menu=beta_opt)
         # expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
 
@@ -265,11 +266,10 @@ class BaseApp(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.overlay_bool, self.bbox_2d, self.show_self_attention, self.capture_object, self.remove_pad = \
-            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.GT_bool, self.overlay_bool, self.bbox_2d, self.capture_object, self.remove_pad = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.overlay_bool.set(True)
         #self.bbox_2d.set(True)
-        self.show_self_attention.set(True)
         self.remove_pad.set(True)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
