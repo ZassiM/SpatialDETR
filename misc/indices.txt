@@ -5,15 +5,18 @@
 177 | moto with person
 253 | pedestrians
 271 | pedestrians in one bbox
+445 | bus cam contr
 479 | no object
 633 | bus near car
 742 | bike
 788 | pedestrians
+1039 | car cam contr
 1061 | car back
 1211 | many cars
 1276 | bike occluded by cone
 1276 | construction vehicle
 1391 | lot of cars
+1522 | self attention trailer and truck
 2015 | bus camera contr
 2157 | screenshot ui
 2279 | pedestrian, truck

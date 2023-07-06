@@ -242,7 +242,7 @@ class BaseApp(tk.Tk):
         for i in betas:
             beta_opt.add_radiobutton(label=i, variable=self.selected_beta)
         expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
-        # expl_opt.add_cascade(label="Saliency map intensity", menu=int_opt)
+        expl_opt.add_cascade(label="Saliency map intensity", menu=int_opt)
         # expl_opt.add_cascade(label="Saliency map beta", menu=beta_opt)
         # expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
 
@@ -273,7 +273,7 @@ class BaseApp(tk.Tk):
         self.remove_pad.set(True)
         add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
         add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
-        #add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
+        add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
         add_opt.add_checkbutton(label=" Capture saliency maps", onvalue=1, offvalue=0, variable=self.capture_object)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
 
@@ -405,7 +405,7 @@ class BaseApp(tk.Tk):
         all_select = True
         if pert_step:
             all_select = False
-        if initialize_bboxes and not self.img_labels:
+        if (initialize_bboxes and not self.img_labels) or not self.video_gen_bool:
             self.update_objects_list(all_select=all_select)
 
     def add_separator(self, sep=""):
@@ -630,7 +630,8 @@ class BaseApp(tk.Tk):
 
         if hasattr(self, "scale"):
             self.scale.configure(to=self.video_length.get())
-
+        
+        self.selected_filter.set(10)
         self.show_message(f"Video loaded ({self.video_length.get()} images).")
         if not self.video_loaded:
             self.menubar.add_command(label="Show video", command=self.show_video)

@@ -125,6 +125,7 @@ class App(BaseApp):
                 self.cam_imgs.append(saliency_map)
             else:
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                
                 self.cam_imgs.append(img)
 
         if self.single_bbox.get():
