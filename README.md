@@ -86,9 +86,14 @@ The application provides a GUI with a series of dropdown menus for customization
 
 **Visualization Options**: Visualize a Bird's Eye View (BEV) perspective using LiDAR points and bounding boxes for a broad environmental view. You can convert 3D bounding boxes into 2D for simpler visualization and overlay ground truth bounding boxes on model predictions to compare performance. You can also create a segmentation mask from the saliency map, helpful when comparing with the dataset's ground truth.
 
-This figure shows how the application looks like when visualizing the saliency maps of a truck for every layer of the model. The charts show the self-attention contributions for each object.
+Overview of the GUI application:
+![](misc/ui-overview.png "Overview of the GUI application")  
 
-![](misc/readme_overview.png "Overview of the GUI application")  
+Figure showing saliency maps of a car through the layers:
+![](misc/ui-crossattn.png "Saliency map of a car through the layers")  
+
+Figure illustrating the self attention of a car with other objects in the scene:
+![](misc/ui-selfattn.png "Self attention of a car with other objects in the scene")  
 
 ## Issues and To-Do
 - The shell for running the docker container makes sure that the display environment is correctly forwarded to the docker and ssh server. However, some display errors still can be faced reported while trying to run the GUI application. For testing the GUI inside the Docker container, run `xclock` and see if a window opens. The following guides are useful: https://www.baeldung.com/linux/forward-x-over-ssh, https://x410.dev/cookbook/enabling-ssh-x11-forwarding-in-visual-studio-code-for-remote-development/
