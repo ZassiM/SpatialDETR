@@ -68,12 +68,14 @@ class App(BaseApp):
 
             if self.selected_pert_step.get() > 0:
                 self.update_data(pert_step=self.selected_pert_step.get())
+                            
                 self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get())
-                self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get())
+                for obj in self.bbox_idx:
+                    self.ExplainableModel.select_explainability(self.nms_idxs, obj, self.selected_discard_threshold.get(), self.selected_map_quality.get())
 
             if self.single_bbox.get():
                 # Extract camera with highest attention
-                cam_obj = self.get_camera_object()
+                cam_obj = self.get_object_camera()
                 if cam_obj == -1:
                     self.show_message("Please change the selected options.")
                     return
@@ -104,16 +106,16 @@ class App(BaseApp):
                 og_img = self.imgs[camidx].astype(np.uint8)
                 for layer in range(len(self.ExplainableModel.xai_maps)):
                     xai_map = self.ExplainableModel.xai_maps[layer][camidx]
-                    if self.gen_segmentation.get():
-                        xai_map = xai_map.numpy() * 255
-                        xai_map = xai_map.astype(np.uint8)
-                        _, xai_map = cv2.threshold(xai_map, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-                        xai_map[xai_map == 255] = 1
-                        xai_map = torch.from_numpy(xai_map)
                     saliency_map = self.generate_saliency_map(og_img, xai_map)      
                     saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                     self.saliency_maps_objects.append(saliency_map)
                 xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
+                if self.gen_segmentation.get():
+                    xai_map = xai_map.numpy() * 255
+                    xai_map = xai_map.astype(np.uint8)
+                    _, xai_map = cv2.threshold(xai_map, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                    xai_map[xai_map == 255] = 1
+                    xai_map = torch.from_numpy(xai_map)
                 saliency_map = self.generate_saliency_map(og_img, xai_map)      
                 saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                 self.saliency_maps_objects.append(saliency_map)
@@ -136,7 +138,6 @@ class App(BaseApp):
                 self.cam_imgs.append(saliency_map)
             else:
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                
                 self.cam_imgs.append(img)
             
 
@@ -149,7 +150,7 @@ class App(BaseApp):
                 if not self.single_bbox.get() or self.show_self_attention.get():
                     ax = self.fig.add_subplot(self.spec[1, i-3])
                 else:
-                    ax = self.fig.add_subplot(self.spec[2, i-3])
+                    ax = self.fig.add_subplot(self.spec[1, i-3])
 
             ax.imshow(self.cam_imgs[self.cam_idx[i]])
 
@@ -267,10 +268,10 @@ class App(BaseApp):
         '''
         if self.selected_expl_type.get() != "Gradient Rollout":
             # Select the center of the grid to plot the attentions and add 2x2 subgrid
-            layer_grid = self.spec[1, 1].subgridspec(2, 3)
+            layer_grid = self.spec[2, 1].subgridspec(2, 3)
             fontsize = 8
         else:
-            layer_grid = self.spec[1, 1].subgridspec(1, 1)
+            layer_grid = self.spec[2, 1].subgridspec(1, 1)
             fontsize = 12
 
         for b in self.bbox_coords:
@@ -287,6 +288,11 @@ class App(BaseApp):
                 ax_obj_layer = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
                 ax_obj_layer.imshow(att_nobbx_obj, vmin=0, vmax=1)
                 ax_obj_layer.axis('off')
+            
+            elif self.gen_segmentation.get():
+                ax_obj_seg = self.fig.add_subplot(self.spec[2, 2])
+                ax_obj_seg.imshow(att_nobbx_obj, vmin=0, vmax=1)
+                ax_obj_seg.axis('off')             
             
             if self.capture_object.get():
                 fig_save, ax_save = plt.subplots()
@@ -427,7 +433,7 @@ class App(BaseApp):
                 self.after_seq_id = self.after(self.video_delay.get(), self.show_sequence)
 
     def generate_video(self):
-        if self.video_length.get() > ((len(self.ObjectDetector.dataset)-1) - self.data_idx):
+        if self.video_length.get() > (len(self.ObjectDetector.dataset) - self.data_idx):
             self.show_message(f"Video lenght should be between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
             return False
 

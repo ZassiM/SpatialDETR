@@ -142,8 +142,9 @@ class BaseApp(tk.Tk):
             delay_opt.add_radiobutton(label=video_delays[i], variable=self.video_delay, value=video_delays[i])
 
         videolength_opt = tk.Menu(self.menubar)
-        video_lengths = np.arange(0, 1100, 100)
+        video_lengths = np.arange(0, 1200, 100)
         video_lengths[0] = 10
+        video_lengths[-1] = 6019
         self.video_length = tk.IntVar()
         self.video_length.set(video_lengths[0])
         for i in range(len(video_lengths)):
@@ -224,7 +225,7 @@ class BaseApp(tk.Tk):
         # Discard ratio for attention weights
         dr_opt, int_opt, beta_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.show_self_attention, self.gen_segmentation = tk.BooleanVar(), tk.BooleanVar()
-        self.show_self_attention.set(True)
+        #self.show_self_attention.set(True)
         self.selected_discard_threshold = tk.DoubleVar()
         self.selected_intensity = tk.IntVar()
         self.selected_beta = tk.DoubleVar()
@@ -245,7 +246,7 @@ class BaseApp(tk.Tk):
         expl_opt.add_cascade(label="Saliency map intensity", menu=int_opt)
         expl_opt.add_checkbutton(label="Show queries self-attention", onvalue=1, offvalue=0, variable=self.show_self_attention)
         # expl_opt.add_cascade(label="Saliency map beta", menu=beta_opt)
-        # expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
+        expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
 
 
         # Cascade menus for object selection
@@ -357,7 +358,15 @@ class BaseApp(tk.Tk):
                 values, indices = torch.topk(filtered_xai, top_k)
                 original_indices = original_indices[indices]
                 row_indices, col_indices = original_indices // xai.size(1), original_indices % xai.size(1)
-                img_pert[row_indices, col_indices] = mask
+
+                # img_pert[row_indices, col_indices] = mask
+
+                roi = img_pert[row_indices, col_indices]
+                roi_blur = cv2.GaussianBlur(roi, (5, 5), 0)
+                img_pert[row_indices, col_indices] = roi_blur
+                # roi = img[:, 100:200]
+                # roi_blur = cv2.GaussianBlur(roi, (21,21), 0)
+                # img[:, 100:200] = roi_blur
                 img_pert_list.append(img_pert)
 
             if len(img_pert_list) > 0:
@@ -530,7 +539,7 @@ class BaseApp(tk.Tk):
 
 
 
-    def get_camera_object(self):
+    def get_object_camera(self):
         scores = self.ExplainableModel.scores
         if not scores:
             return -1
@@ -579,12 +588,6 @@ class BaseApp(tk.Tk):
         # use alpha mask to blend the image with the colored xai_map
         img = img * (1 - xai_map_mask[..., None]) + xai_map_colored * xai_map_mask[..., None]
         img = img / np.max(img)
-        return img
-        # xai_map = cv2.applyColorMap(np.uint8(xai_map * self.selected_intensity.get()), cv2.COLORMAP_JET)
-        # xai_map = np.float32(xai_map) 
-        # xai_map = cv2.resize(xai_map, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
-        # img = xai_map + np.float32(img)
-        # img = img / np.max(img)
         return img
 
 

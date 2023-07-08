@@ -72,13 +72,19 @@ python scripts/main.py
 ## Usage
 The application provides a GUI with a series of dropdown menus for customization.
 
-1. **Change Prediction Threshold**: This filters out queries with scores below the chosen threshold. By default, the threshold is set at 0.5.
-2. **Select Object for Explainability Map**: This allows you to select specific objects for individual saliency map visualization.
-3. **Select Explainability Technique**: Choose between Raw Attention, Grad-CAM, and Gradient Rollout. For raw attention, there are further options to select a particular head, or to fuse them by taking the maximum, minimum, or mean. You can also adjust the discard threshold.
-4. **Objects Self-Attention Visualization**: Shows the attention score between the selected object query and all other objects in the images.
-5. **Conversion of 3D to 2D Bounding Boxes**: This will convert the bounding boxes from LiDAR to camera coordinates, which are easier to visualize on top of a 2D bounding box.
-6. **Use Otsu's Thresholding Method**: This will generate a segmentation mask from the saliency map.
-7. **Generate Video**: Allows the generation of a video-like visualization of a scene. The generated sequence can be saved as a collection of images or can be visualized directly on the UI. During the video, you can pause, select an object for explainability, and then resume the video.
+**Model Configuration**: Start by loading a SpatialDETR model configuration. You can opt for random sample data or choose a specific index.
+
+**Prediction Threshold**: Set your prediction threshold. This helps to disregard low score queries and focus on confident predictions. The default threshold of 0.5 will streamline visualization by eliminating redundant queries.
+
+**Explainability Methods**: Choose between Raw Attention, Grad-CAM, or Gradient Rollout to understand the model's decisions. Each method offers unique insights. With Raw Attention, you can select a specific head or fuse them using maximum, minimum, or mean. You can also set a discard threshold to filter out lower attention maps.
+
+**Saliency Maps Generation**: The app will then generate saliency maps—heat maps of the model's "attention"—across all six cameras for your chosen sample data. 
+
+**Object-specific Analysis**: View saliency maps for all objects in a sample or focus on a specific one for detailed analysis. The app generates saliency maps for all layers and self-attention scores for the selected object, helping you understand the detection process layer-by-layer.
+
+**Real-time Visualization**: You can generate and view a sequence of images with saliency maps for all objects, giving a sense of the attention mechanism's dynamics. Pause the sequence, select objects for further analysis, and resume. Apply an object-specific filter to focus on samples containing a certain object.
+
+**Visualization Options**: Visualize a Bird's Eye View (BEV) perspective using LiDAR points and bounding boxes for a broad environmental view. You can convert 3D bounding boxes into 2D for simpler visualization and overlay ground truth bounding boxes on model predictions to compare performance. You can also create a segmentation mask from the saliency map, helpful when comparing with the dataset's ground truth.
 
 This figure shows how the application looks like when visualizing the saliency maps of a truck for every layer of the model. The charts show the self-attention contributions for each object.
 
