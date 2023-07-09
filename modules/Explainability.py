@@ -205,7 +205,7 @@ class ExplainableTransformer:
             self.handle_co_attn_query(self.num_layers-1, camidx, handle_residual, apply_rule)
 
     def generate_explainability(self, expl_type, head_fusion="max", handle_residual=True, apply_rule=True):
-        xai_maps, self_xai_maps, xai_maps_camera = [], [], []
+        xai_maps, self.self_xai_maps_full, xai_maps_camera = [], [], []
 
         if expl_type == "Gradient Rollout":
             for camidx in range(6):
@@ -225,8 +225,9 @@ class ExplainableTransformer:
                 xai_maps.append(xai_maps_camera)
 
         #self_attn_rollout = compute_rollout_attention(self.dec_self_attn_weights)
-        for layer in range(self.num_layers):
-            self_xai_maps.append(self.dec_self_attn_weights[layer])
+        if expl_type in ["Self Attention", "Gradient Rollout"]:
+            for layer in range(self.num_layers):
+                self.self_xai_maps_full.append(self.dec_self_attn_weights[layer])
 
         # num_layers x num_cams x num_objects x 1450
         xai_maps = torch.stack([torch.stack(layer) for layer in xai_maps])
@@ -238,12 +239,11 @@ class ExplainableTransformer:
                 xai_maps[layer][object] = (xai_maps[layer][object] - xai_maps[layer][object].min()) / (xai_maps[layer][object].max() - xai_maps[layer][object].min())
 
         self.xai_maps_full = xai_maps
-        self.self_xai_maps_full = self_xai_maps
 
     def select_explainability(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True):
         self.xai_maps = self.xai_maps_full[:, nms_idxs[bbox_idx], :, :]
         self.self_xai_maps = []
-        for layer in range(self.num_layers):
+        for layer in range(len(self.self_xai_maps_full)):
             self.self_xai_maps.append(self.self_xai_maps_full[layer][nms_idxs[bbox_idx]][:, nms_idxs][0])
 
         # now attention maps can be overlayed
@@ -253,8 +253,9 @@ class ExplainableTransformer:
             self.xai_maps[mask] = 0 
             self.xai_maps = self.interpolate_expl(self.xai_maps, maps_quality, remove_pad)
 
-        if len(bbox_idx) == 1:
-            self.scores = self.get_camera_scores()
+        # if len(bbox_idx) == 1:
+        #     self.scores = self.get_camera_scores()
+        self.scores = self.get_camera_scores()
 
     def interpolate_expl(self, xai_maps, maps_quality,remove_pad):
         xai_maps_inter = []

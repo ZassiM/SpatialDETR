@@ -82,7 +82,7 @@ class App(BaseApp):
                 self.selected_camera = cam_obj
                 self.color_dict = None
 
-                if self.show_self_attention.get():
+                if self.selected_expl_type.get() == "Self Attention":
                     self.show_xai_self_attention()
         
         # Generate images list with bboxes on it
@@ -147,21 +147,21 @@ class App(BaseApp):
             if i < 3:
                 ax = self.fig.add_subplot(self.spec[0, i])
             else:
-                if not self.single_bbox.get() or self.show_self_attention.get():
+                if not self.single_bbox.get() or self.selected_expl_type.get() == "Self Attention":
                     ax = self.fig.add_subplot(self.spec[1, i-3])
                 else:
                     ax = self.fig.add_subplot(self.spec[1, i-3])
 
             ax.imshow(self.cam_imgs[self.cam_idx[i]])
-
-            if self.single_bbox.get():
+            ax.axis('off')
+            
+            # if self.single_bbox.get():
+            if self.selected_expl_type.get() != "Self Attention":
                 score = self.ExplainableModel.scores[self.cam_idx[i]]
                 ax.axhline(y=0, color=self.bg_color, linewidth=10)
                 ax.axhline(y=0, color='green', linewidth=10, xmax=score/100)
 
-            ax.axis('off')
-
-        if self.single_bbox.get() and not self.show_self_attention.get():
+        if self.single_bbox.get() and self.selected_expl_type.get() != "Self Attention":
             self.show_xai_cross_attention()
 
         self.fig.tight_layout(pad=0)

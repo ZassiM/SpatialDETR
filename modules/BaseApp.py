@@ -174,7 +174,7 @@ class BaseApp(tk.Tk):
         # Cascade menus for Explainable options
         expl_opt = tk.Menu(self.menubar)
         raw_attention, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
-        self.expl_options = ["Raw Attention", "Grad-CAM", "Gradient Rollout"]
+        self.expl_options = ["Raw Attention", "Grad-CAM", "Gradient Rollout", "Self Attention"]
 
         # Raw Attention
         expl_opt.add_cascade(label=self.expl_options[0], menu=raw_attention)
@@ -214,7 +214,7 @@ class BaseApp(tk.Tk):
         self.selected_expl_type.set(self.expl_options[0])
         for i in range(len(self.expl_options)):
             expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i], command=self.update_info_label)
-        
+
         pert_opt = tk.Menu(self.menubar)
         self.selected_pert_step = tk.DoubleVar()
         pert_steps = np.arange(0, 1, 0.1)
@@ -224,8 +224,7 @@ class BaseApp(tk.Tk):
 
         # Discard ratio for attention weights
         dr_opt, int_opt, beta_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
-        self.show_self_attention, self.gen_segmentation = tk.BooleanVar(), tk.BooleanVar()
-        #self.show_self_attention.set(True)
+        self.gen_segmentation = tk.BooleanVar()
         self.selected_discard_threshold = tk.DoubleVar()
         self.selected_intensity = tk.IntVar()
         self.selected_beta = tk.DoubleVar()
@@ -244,7 +243,6 @@ class BaseApp(tk.Tk):
             beta_opt.add_radiobutton(label=i, variable=self.selected_beta)
         expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
         expl_opt.add_cascade(label="Saliency map intensity", menu=int_opt)
-        expl_opt.add_checkbutton(label="Show queries self-attention", onvalue=1, offvalue=0, variable=self.show_self_attention)
         # expl_opt.add_cascade(label="Saliency map beta", menu=beta_opt)
         expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
 
@@ -415,7 +413,7 @@ class BaseApp(tk.Tk):
         all_select = True
         if pert_step:
             all_select = False
-        if (initialize_bboxes and not self.img_labels) or not self.video_gen_bool:
+        if (initialize_bboxes and not self.img_labels):
             self.update_objects_list(all_select=all_select)
 
     def add_separator(self, sep=""):
