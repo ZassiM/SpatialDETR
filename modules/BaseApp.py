@@ -7,6 +7,9 @@ import os
 import random
 import pickle
 import tomli
+from tkinterhtml import HtmlFrame
+import markdown
+import codecs
 from tkinter import filedialog as fd
 from mmcv.parallel import DataContainer as DC
 from tkinter.messagebox import showinfo
@@ -127,8 +130,8 @@ class BaseApp(tk.Tk):
         with open(self.indices_file, 'r') as file:
             for line in file:
                 self.select_idx_opt.add_radiobutton(label=line.strip(), variable=self.selected_data_idx, command=self.update_idx, value=line.split()[0])
-        dataidx_opt.add_command(label=" Select random sample", command=self.random_data_idx)
         dataidx_opt.add_cascade(label=" Select sample index", menu=self.select_idx_opt)
+        dataidx_opt.add_command(label=" Select random sample", command=self.random_data_idx)
         dataidx_opt.add_cascade(label=" Select prediction threshold", menu=thr_opt)
         dataidx_opt.add_separator()
         dataidx_opt.add_command(label=" Show LiDAR", command=self.show_lidar)
@@ -215,12 +218,21 @@ class BaseApp(tk.Tk):
         for i in range(len(self.expl_options)):
             expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i], command=self.update_info_label)
 
-        pert_opt = tk.Menu(self.menubar)
+        pert_opt, pert_step_opt, pert_type_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
+        
         self.selected_pert_step = tk.DoubleVar()
-        pert_steps = np.arange(0, 1, 0.1)
+        self.selected_pert_type = tk.StringVar()
+        pert_types = ["Mask", "Blur"]
+        self.selected_pert_type .set(pert_types[0])
+        pert_steps = np.arange(0, 1.1, 0.1)
         for step in pert_steps:
-            pert_opt.add_radiobutton(label=f"{int(step*100)} %", variable=self.selected_pert_step, value=step)
-        expl_opt.add_cascade(label="Perturbate image", menu=pert_opt)
+            pert_step_opt.add_radiobutton(label=f"{int(step*100)} %", variable=self.selected_pert_step, value=step)
+        for type in pert_types:
+            pert_type_opt.add_radiobutton(label=type, variable=self.selected_pert_type, value=type)
+
+        pert_opt.add_cascade(label="Step", menu=pert_step_opt)
+        pert_opt.add_cascade(label="Type", menu=pert_type_opt)
+        expl_opt.add_cascade(label="Perturbation", menu=pert_opt)
 
         # Discard ratio for attention weights
         dr_opt, int_opt, beta_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
@@ -292,29 +304,31 @@ class BaseApp(tk.Tk):
         self.add_separator("|")
 
     def show_car(self):
-        img = plt.imread("misc/car.png")
-        plt.imshow(img)
-        plt.axis("off")
-        plt.show()
+        image_window = tk.Toplevel()
+        image_path = 'misc/car.jpg'
+        image = Image.open(image_path)
+        photo = ImageTk.PhotoImage(image)
+        label = tk.Label(image_window, image=photo)
+        label.pack()
+        image_window.mainloop()
         
     def update_idx(self):
         self.data_idx = self.selected_data_idx.get()
         self.update_info_label()
 
+    def open_md_file(self):
+        input_file = codecs.open("README.md", mode="r", encoding="utf-8")
+        text = input_file.read()
+        html = markdown.markdown(text)
+        return html
+
     def show_app_info(self):
-        readme_path = 'README.md'
-        with open(readme_path, 'r') as f:
-            readme_content = f.read()
+        top = tk.Toplevel(self)
+        frame = HtmlFrame(top, horizontal_scrollbar="auto")
+        frame.grid(sticky=tk.NSEW)
+        frame.set_content(self.open_md_file())
 
-        readme_window = tk.Toplevel(self)
-        readme_window.title("App information")
-
-        readme_text = tk.Text(readme_window, wrap=tk.WORD)
-        readme_text.insert(tk.END, readme_content)
-        readme_text.configure(state='disabled')
-        readme_text.pack()
-
-    def update_data(self, initialize_bboxes=True, pert_step=None):
+    def update_data(self, initialize_bboxes=True):
         '''
         Predict bboxes and extracts attentions.
         '''
@@ -333,14 +347,9 @@ class BaseApp(tk.Tk):
         if "points" in self.data.keys():
             self.data.pop("points")
 
-        if not pert_step:
-            # Attention scores are extracted, together with gradients if grad-CAM is selected
-            if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
-                outputs = self.ExplainableModel.extract_attentions(self.data)
-            else:
-                outputs = self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
-        else:
-            xai_maps = self.ExplainableModel.xai_maps.max(dim=0)[0]
+        if self.selected_pert_step.get() > 0:
+            print("Perturbating images...")
+            xai_maps = self.ExplainableModel.xai_maps_og.max(dim=0)[0]
             img = img[0][0]
             img = img[:, :, :self.ObjectDetector.ori_shape[0], :self.ObjectDetector.ori_shape[1]]  # [num_cams x height x width x channels]
 
@@ -349,22 +358,21 @@ class BaseApp(tk.Tk):
             for camidx in range(len(xai_maps)):
                 img_pert = img[camidx].permute(1, 2, 0).numpy()
                 xai = xai_maps[camidx]
-                filter_mask = xai > 0.2
+                filter_mask = xai > 0.3
                 filtered_xai = xai[filter_mask].flatten()
                 original_indices = torch.arange(xai.numel()).reshape(xai.shape)[filter_mask].flatten()
-                top_k = int(pert_step * filtered_xai.numel())
-                values, indices = torch.topk(filtered_xai, top_k)
+                top_k = int(self.selected_pert_step.get() * filtered_xai.numel())
+                _, indices = torch.topk(filtered_xai, top_k)
                 original_indices = original_indices[indices]
                 row_indices, col_indices = original_indices // xai.size(1), original_indices % xai.size(1)
 
-                # img_pert[row_indices, col_indices] = mask
+                if self.selected_pert_type.get() == "Mask":
+                    img_pert[row_indices, col_indices] = mask
+                elif self.selected_pert_type.get() == "Blur":
+                    blur_section  = img_pert[row_indices, col_indices]
+                    blurred_section = cv2.GaussianBlur(blur_section, (9, 9), 0)
+                    img_pert[row_indices, col_indices] = blurred_section
 
-                roi = img_pert[row_indices, col_indices]
-                roi_blur = cv2.GaussianBlur(roi, (5, 5), 0)
-                img_pert[row_indices, col_indices] = roi_blur
-                # roi = img[:, 100:200]
-                # roi_blur = cv2.GaussianBlur(roi, (21,21), 0)
-                # img[:, 100:200] = roi_blur
                 img_pert_list.append(img_pert)
 
             if len(img_pert_list) > 0:
@@ -372,9 +380,12 @@ class BaseApp(tk.Tk):
                 img_pert_list = torch.from_numpy(np.stack(img_pert_list))
                 img = [img_pert_list.permute(0, 3, 1, 2).unsqueeze(0)] # img = [torch.Size([1, 6, 3, 928, 1600])
                 self.data['img'][0] = DC(img)
-                
-                with torch.no_grad():
-                    outputs = self.ObjectDetector.model(return_loss=False, rescale=True, **self.data)
+
+        # Attention scores are extracted, together with gradients if grad-CAM is selected
+        if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
+            outputs = self.ExplainableModel.extract_attentions(self.data)
+        else:
+            outputs = self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
 
 
         # Those are needed to index the bboxes decoded by the NMS-Free decoder
@@ -390,7 +401,7 @@ class BaseApp(tk.Tk):
             self.no_object = True
             if not self.video_gen_bool:
                 print("No object detected.")
-                self.show_message("No object detected.")
+                self.show_message("No object detected")
 
         # Extract image metas which contain, for example, the lidar to camera projection matrices
         self.img_metas = self.data["img_metas"][0]._data[0][0]
@@ -411,9 +422,9 @@ class BaseApp(tk.Tk):
         self.imgs = imgs.astype(np.uint8)
 
         all_select = True
-        if pert_step:
+        if self.selected_pert_step.get() > 0:
             all_select = False
-        if (initialize_bboxes or not self.img_labels):
+        if (initialize_bboxes and not self.video_gen_bool):
             self.update_objects_list(all_select=all_select)
 
     def add_separator(self, sep=""):
@@ -483,6 +494,7 @@ class BaseApp(tk.Tk):
     def random_data_idx(self):
         idx = random.randint(0, len(self.ObjectDetector.dataset)-1)
         self.data_idx = idx 
+        self.selected_pert_step.set(0)
         self.update_info_label()
 
     def update_info_label(self, info=None, idx=None):
@@ -554,6 +566,8 @@ class BaseApp(tk.Tk):
         else:
             expl_string = self.selected_expl_type.get().replace(" ", "_")
             path = screenshots_path + f"{self.ObjectDetector.model_name}_{expl_string}_{self.data_idx}"
+            if self.selected_pert_step.get() > 0:
+                path += f"_p{int(self.selected_pert_step.get()*100)}"
             if os.path.exists(path+"_"+str(self.file_suffix)+".png"):
                 self.file_suffix += 1
             else:
@@ -591,7 +605,10 @@ class BaseApp(tk.Tk):
 
     def load_video(self):
 
-        self.video_folder = fd.askdirectory() 
+        self.video_folder = fd.askdirectory(
+                title='Load video directory',
+                initialdir='/workspace/videos/')
+                
         if not self.video_folder:
             print("No directory selected.")
             return
@@ -635,7 +652,7 @@ class BaseApp(tk.Tk):
             self.scale.configure(to=self.video_length.get())
         
         self.selected_filter.set(10)
-        self.show_message(f"Video loaded ({self.video_length.get()} images).")
+        self.show_message(f"Video loaded ({self.video_length.get()} images)")
         if not self.video_loaded:
             self.menubar.add_command(label="Show video", command=self.show_video)
             self.add_separator("|")

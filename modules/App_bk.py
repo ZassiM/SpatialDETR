@@ -46,7 +46,7 @@ class App(BaseApp):
 
         self.fig.clear()
 
-        self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name, self.selected_pert_step.get(), self.selected_pert_type.get()]
+        self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name]
 
         if self.video_gen_bool:
             self.video_gen_bool = False
@@ -63,8 +63,13 @@ class App(BaseApp):
                 print("Calculating gradients...")
                 self.update_data(initialize_bboxes=False)
 
-            self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get(), self.data_idx, self.selected_pert_step.get(), self.selected_pert_type.get()]  
-            self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get(), True, self.selected_pert_step.get())
+            self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get(), self.data_idx]  
+            self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get())
+
+            if self.selected_pert_step.get() > 0:
+                self.update_data(pert_step=self.selected_pert_step.get())
+                self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
+
 
             if self.single_bbox.get():
                 # Extract camera with highest attention
@@ -142,7 +147,7 @@ class App(BaseApp):
                 if not self.single_bbox.get() or self.selected_expl_type.get() == "Self Attention":
                     ax = self.fig.add_subplot(self.spec[1, i-3])
                 else:
-                    ax = self.fig.add_subplot(self.spec[2, i-3])
+                    ax = self.fig.add_subplot(self.spec[1, i-3])
 
             ax.imshow(self.cam_imgs[self.cam_idx[i]])
             ax.axis('off')
@@ -258,9 +263,9 @@ class App(BaseApp):
         '''
         if self.selected_expl_type.get() != "Gradient Rollout":
             # Select the center of the grid to plot the attentions and add 2x2 subgrid
-            layer_grid = self.spec[1, 1].subgridspec(2, 3)
+            layer_grid = self.spec[2, 1].subgridspec(2, 3)
         else:
-            layer_grid = self.spec[1, 1].subgridspec(1, 1)
+            layer_grid = self.spec[2, 1].subgridspec(1, 1)
 
         for b in self.bbox_coords:
             if self.bbox_idx[0] == b[0]:
@@ -287,7 +292,7 @@ class App(BaseApp):
                 ax_obj_layer.axis('off')
             
             elif self.gen_segmentation.get():
-                ax_obj_seg = self.fig.add_subplot(self.spec[1, 2])
+                ax_obj_seg = self.fig.add_subplot(self.spec[2, 2])
                 ax_obj_seg.imshow(att_nobbx_obj, vmin=0, vmax=1)
                 ax_obj_seg.axis('off')             
             

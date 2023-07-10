@@ -43,7 +43,7 @@ RUN pip install mmsegmentation==0.20.0 \
     && pip install mmpycocotools
 
 
-RUN pip install mlflow open3d
+RUN pip install mlflow open3d tkinterhtml
 
 RUN conda clean --all
 ENV FORCE_CUDA="1"

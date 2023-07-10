@@ -1,4 +1,4 @@
 cfg_file = "configs/submission/frozen_4/query_proj_value_proj.py"
 weights_file = "work_dirs/checkpoints/query_proj_value_proj.pth"
-gpu_id = 3
+gpu_id = 1
 launcher = "single"
