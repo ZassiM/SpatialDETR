@@ -68,7 +68,7 @@ class ExplainableTransformer:
         cam = self.dec_self_attn_weights[layer]
         # grad = self.dec_self_attn_grads[layer]
         # cam = avg_heads_og(cam, grad)
-        self.R_q_i += torch.matmul(cam, self.R_q_i)
+        #self.R_q_i += torch.matmul(cam, self.R_q_i)
         self.R_q_q += torch.matmul(cam, self.R_q_q)
 
     def handle_co_attn_query(self, layer, camidx, handle_residual_bool, apply_rule):
@@ -197,8 +197,9 @@ class ExplainableTransformer:
 
         # decoder self attention of queries followd by multi-modal attention
         if rollout:
+            self.handle_co_attn_self_query(-1)
             for layer in range(self.num_layers):
-                self.handle_co_attn_self_query(layer)
+                # self.handle_co_attn_self_query(layer)
                 self.handle_co_attn_query(layer, camidx, handle_residual, apply_rule)
         else:
             self.handle_co_attn_self_query(self.num_layers-1)

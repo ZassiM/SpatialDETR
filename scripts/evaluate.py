@@ -18,10 +18,10 @@ def main():
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
 
-    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[3], negative_pert=True, pred_threshold=0.1, remove_pad=True)
+    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=True, pred_threshold=0.1, remove_pad=True)
 
 
-def evaluate(Model, ExplGen, expl_type, negative_pert=True, pred_threshold=0.1, remove_pad=True):
+def evaluate(Model, ExplGen, expl_type, negative_pert=False, pred_threshold=0.1, remove_pad=True):
     txt_del = "*" * (38 + len(expl_type))
     info = txt_del
     if not negative_pert:
@@ -55,10 +55,9 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=True, pred_threshold=0.1, 
     print(info)
     start_time = time.time()
     for step in range(len(pert_steps)):
-        num_tokens = int(base_size * pert_steps[step])
         perc = pert_steps[step] * 100
-        print(f"\nNumber of tokens removed: {num_tokens} ({perc} %)")
-        evaluate_step(Model, ExplGen, expl_type, num_tokens=num_tokens, perc=perc, negative_pert=negative_pert, eval_file=file_path, remove_pad=remove_pad, pred_threshold=pred_threshold)
+        print(f"\nNumber of tokens removed: {perc} %")
+        evaluate_step(Model, ExplGen, expl_type, step=pert_steps[step], negative_pert=negative_pert, eval_file=file_path, remove_pad=remove_pad, pred_threshold=pred_threshold)
         gc.collect()
         torch.cuda.empty_cache()
     end_time = time.time()
@@ -70,15 +69,10 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=True, pred_threshold=0.1, 
         file.write("--------------------------\n")
         file.write(f"Elapsed time: {total_time}\n")
 
-def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negative_pert=True, pred_threshold=0.1, remove_pad=False):
-   
-    if expl_type == "Gradient Rollout":
-        layer = 0
-    else:
-        layer = Model.num_layers - 1
+def evaluate_step(Model, ExplGen, expl_type, step, eval_file, negative_pert=True, pred_threshold=0.1, remove_pad=False):
 
     head_fusion, discard_threshold, handle_residual, apply_rule = \
-        "max", 0.9, True, True
+        "max", 0.3, True, True
     
     dataset = Model.dataset
     evaluation_lenght = len(dataset)
@@ -104,7 +98,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
 
             # Extract predicted bboxes and their labels
             outputs = output_og[0]["pts_bbox"]
-            nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes()[-1].cpu()
+            nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes().cpu()
             thr_idxs = outputs['scores_3d'] > pred_threshold
             labels = outputs['labels_3d'][thr_idxs]
             
@@ -112,8 +106,8 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
             if expl_type in ["Grad-CAM", "Gradient Rollout"]:
                 ExplGen.extract_attentions(data, bbox_idx)
             ExplGen.generate_explainability(expl_type, head_fusion, handle_residual, apply_rule)
-            ExplGen.ExplainableModel.select_explainability(nms_idxs, bbox_idx, discard_threshold, maps_quality="High", remove_pad=True)
-            xai_maps = ExplGen.xai_maps[layer]
+            ExplGen.select_explainability(nms_idxs, bbox_idx, discard_threshold, maps_quality="High", remove_pad=True)
+            xai_maps = ExplGen.xai_maps.max(dim=0)[0]
         
         else:
             if remove_pad:
@@ -133,25 +127,43 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
         # defect data: 475
         img_pert_list = []  # list of perturbed images
         for cam in range(len(xai_maps)):
-            img_og = img[cam].permute(1, 2, 0).numpy()
+            img_pert = img[cam].permute(1, 2, 0).numpy()
 
             # Get the attention for the camera and negate it if doing negative perturbation
-            attn = xai_maps[cam]
+            xai_cam = xai_maps[cam]
+            filter_mask = xai_cam > 0.2
+            filtered_xai = xai_cam[filter_mask].flatten()
+            original_indices = torch.arange(xai_cam.numel()).reshape(xai_cam.shape)[filter_mask].flatten()
             if negative_pert:
-                attn = -attn
+                xai_cam = -xai_cam
 
-            # Extract topk attention
-            _, indices = torch.topk(attn.flatten(), k=num_tokens)
-            indices = np.array(np.unravel_index(indices.numpy(), attn.shape)).T
-            cols, rows = indices[:, 0], indices[:, 1]
+            top_k = int(step * filtered_xai.numel())
+            _, indices = torch.topk(filtered_xai, top_k)
+            original_indices = original_indices[indices]
+            row_indices, col_indices = original_indices // xai_cam.size(1), original_indices % xai_cam.size(1)
+            img_pert[row_indices, col_indices] = mask
 
-            # Copy the normalized original images without bboxes
-            img_pert = img_og.copy()
+            # OG_IMPL
+            # _, indices = torch.topk(xai_maps.flatten(), k=num_tokens)
+            # indices = np.array(np.unravel_index(indices.numpy(), xai_maps.shape)).T
+            # cols, rows = indices[:, 0], indices[:, 1]
+            # img_pert = img_og.copy()
+            # img_pert[cols, rows] = mask
 
-            # # Image perturbation by setting pixels to t (0,0,0)
-            img_pert[cols, rows] = mask
+            # APP_IMPL
+            # img_pert = img[camidx].permute(1, 2, 0).numpy()
+            # xai = xai_maps[camidx]
+            # filter_mask = xai > 0.2
+            # filtered_xai = xai[filter_mask].flatten()
+            # original_indices = torch.arange(xai.numel()).reshape(xai.shape)[filter_mask].flatten()
+            # top_k = int(self.selected_pert_step.get() * filtered_xai.numel())
+            # _, indices = torch.topk(filtered_xai, top_k)
+            # original_indices = original_indices[indices]
+            # row_indices, col_indices = original_indices // xai.size(1), original_indices % xai.size(1)
 
-            # Append the perturbed images to the list
+            # if self.selected_pert_type.get() == "Mask":
+            #     img_pert[row_indices, col_indices] = mask
+
             img_pert_list.append(img_pert)
         
         # if there are detected objects, apply the perturbated images to the data input
@@ -193,7 +205,7 @@ def evaluate_step(Model, ExplGen, expl_type, num_tokens, eval_file, perc, negati
     NDScore = eval_results['pts_bbox_NuScenes/NDS']
 
     with open(eval_file, "a") as file:
-        file.write(f"Number of tokens: {num_tokens} ({perc} %)\n")
+        file.write(f"Number of tokens: {int(step*100)} %\n")
         file.write(f"mAP: {mAP}\n")
         file.write(f"mATE: {mATE}\n")
         file.write(f"mASE: {mASE}\n")

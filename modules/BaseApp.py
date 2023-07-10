@@ -36,7 +36,7 @@ class BaseApp(tk.Tk):
 
         # Tkinter-related settings
         self.tk.call("source", "misc/theme/azure.tcl")
-        self.tk.call("set_theme", "light")
+        self.tk.call("set_theme", "dark")
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
         self.protocol("WM_DELETE_WINDOW", self.quit)
@@ -328,7 +328,7 @@ class BaseApp(tk.Tk):
         frame.grid(sticky=tk.NSEW)
         frame.set_content(self.open_md_file())
 
-    def update_data(self, initialize_bboxes=True):
+    def update_data(self, gradients=False, initialize_bboxes=True):
         '''
         Predict bboxes and extracts attentions.
         '''
@@ -358,7 +358,7 @@ class BaseApp(tk.Tk):
             for camidx in range(len(xai_maps)):
                 img_pert = img[camidx].permute(1, 2, 0).numpy()
                 xai = xai_maps[camidx]
-                filter_mask = xai > 0.3
+                filter_mask = xai > 0.2
                 filtered_xai = xai[filter_mask].flatten()
                 original_indices = torch.arange(xai.numel()).reshape(xai.shape)[filter_mask].flatten()
                 top_k = int(self.selected_pert_step.get() * filtered_xai.numel())
@@ -382,7 +382,7 @@ class BaseApp(tk.Tk):
                 self.data['img'][0] = DC(img)
 
         # Attention scores are extracted, together with gradients if grad-CAM is selected
-        if self.selected_expl_type.get() not in ["Grad-CAM", "Gradient Rollout"]:
+        if not gradients:
             outputs = self.ExplainableModel.extract_attentions(self.data)
         else:
             outputs = self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
