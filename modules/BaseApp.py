@@ -413,7 +413,7 @@ class BaseApp(tk.Tk):
         all_select = True
         if pert_step:
             all_select = False
-        if (initialize_bboxes and not self.img_labels):
+        if (initialize_bboxes or not self.img_labels):
             self.update_objects_list(all_select=all_select)
 
     def add_separator(self, sep=""):

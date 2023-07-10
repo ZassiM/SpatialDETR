@@ -102,7 +102,7 @@ class App(BaseApp):
                     bbx_idx=self.bbox_idx,
                     mode_2d=self.bbox_2d.get())
 
-            if self.single_bbox.get() and camidx == self.selected_camera:
+            if self.selected_expl_type.get() != "Self Attention" and self.single_bbox.get() and camidx == self.selected_camera:
                 og_img = self.imgs[camidx].astype(np.uint8)
                 for layer in range(len(self.ExplainableModel.xai_maps)):
                     xai_map = self.ExplainableModel.xai_maps[layer][camidx]
@@ -131,7 +131,7 @@ class App(BaseApp):
                         color=(255, 0, 0),
                         mode_2d=self.bbox_2d.get())
                 
-            if self.overlay_bool.get() and not self.no_object:
+            if self.selected_expl_type.get() != "Self Attention" and self.overlay_bool.get() and not self.no_object:
                 xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
                 saliency_map = self.generate_saliency_map(img, xai_map)        
                 saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
@@ -139,7 +139,6 @@ class App(BaseApp):
             else:
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 self.cam_imgs.append(img)
-            
 
         # Visualize the generated images list on the figure subplots
         print("Plotting...")
@@ -154,9 +153,8 @@ class App(BaseApp):
 
             ax.imshow(self.cam_imgs[self.cam_idx[i]])
             ax.axis('off')
-            
-            # if self.single_bbox.get():
-            if self.selected_expl_type.get() != "Self Attention":
+
+            if self.selected_expl_type.get() != "Self Attention" and self.single_bbox.get():
                 score = self.ExplainableModel.scores[self.cam_idx[i]]
                 ax.axhline(y=0, color=self.bg_color, linewidth=10)
                 ax.axhline(y=0, color='green', linewidth=10, xmax=score/100)
@@ -261,7 +259,6 @@ class App(BaseApp):
             spine.set_visible(False)
         ax.set(xticks=[], yticks=[], facecolor='none')
 
-
     def show_xai_cross_attention(self):
         '''
         Shows the saliency map for explainability.
@@ -269,15 +266,22 @@ class App(BaseApp):
         if self.selected_expl_type.get() != "Gradient Rollout":
             # Select the center of the grid to plot the attentions and add 2x2 subgrid
             layer_grid = self.spec[2, 1].subgridspec(2, 3)
-            fontsize = 8
         else:
             layer_grid = self.spec[2, 1].subgridspec(1, 1)
-            fontsize = 12
 
         for b in self.bbox_coords:
             if self.bbox_idx[0] == b[0]:
                 bbox_coord = b[1]
                 break
+
+
+        if self.capture_object.get():
+            class_name = self.ObjectDetector.class_names[self.labels[self.bbox_idx[0]].item()]
+            folder_path = f"maps/{self.ObjectDetector.model_name}/{self.data_idx}_{self.selected_expl_type.get()}_{class_name}"
+            if self.object_description:
+                folder_path += f"_{self.object_description}"
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path)
     
         for i in range(len(self.saliency_maps_objects)):
 
@@ -298,17 +302,14 @@ class App(BaseApp):
                 fig_save, ax_save = plt.subplots()
                 ax_save.imshow(att_nobbx_obj, vmin=0, vmax=1)
                 ax_save.axis('off')  # Turn off axis
-                class_name = self.ObjectDetector.class_names[self.labels[self.bbox_idx[0]].item()]
-                folder_path = f"Thesis/{self.data_idx}_{self.selected_expl_type.get()}_{class_name}"
-                if self.object_description:
-                    folder_path += f"_{self.object_description}"
-                if not os.path.exists(folder_path):
-                    os.makedirs(folder_path)
                 fig_name = f"layer_{i}.png"
                 if i == len(self.saliency_maps_objects) - 1:
                     fig_name = "full.png"
                 fig_save.savefig(os.path.join(folder_path, fig_name), transparent=True, bbox_inches='tight', pad_inches=0)
                 plt.close(fig_save)
+                
+        if self.capture_object.get():
+            print(f"Saliency maps saved in {folder_path}.")
 
         self.fig.tight_layout()
 

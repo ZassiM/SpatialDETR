@@ -68,7 +68,7 @@ class ExplainableTransformer:
         cam = self.dec_self_attn_weights[layer]
         # grad = self.dec_self_attn_grads[layer]
         # cam = avg_heads_og(cam, grad)
-        #self.R_q_i += torch.matmul(cam, self.R_q_i)
+        self.R_q_i += torch.matmul(cam, self.R_q_i)
         self.R_q_q += torch.matmul(cam, self.R_q_q)
 
     def handle_co_attn_query(self, layer, camidx, handle_residual_bool, apply_rule):
@@ -253,9 +253,8 @@ class ExplainableTransformer:
             self.xai_maps[mask] = 0 
             self.xai_maps = self.interpolate_expl(self.xai_maps, maps_quality, remove_pad)
 
-        # if len(bbox_idx) == 1:
-        #     self.scores = self.get_camera_scores()
-        self.scores = self.get_camera_scores()
+        if len(bbox_idx) == 1:
+            self.scores = self.get_camera_scores()
 
     def interpolate_expl(self, xai_maps, maps_quality,remove_pad):
         xai_maps_inter = []
