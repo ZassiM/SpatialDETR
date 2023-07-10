@@ -139,7 +139,6 @@ testing.py
 screenshots/
 training_logs/*
 config.toml
-points/
 videos/
 Thesis/
 backups/*

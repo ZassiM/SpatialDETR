@@ -33,7 +33,7 @@ class BaseApp(tk.Tk):
 
         # Tkinter-related settings
         self.tk.call("source", "misc/theme/azure.tcl")
-        self.tk.call("set_theme", "dark")
+        self.tk.call("set_theme", "light")
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
         self.protocol("WM_DELETE_WINDOW", self.quit)
@@ -65,7 +65,7 @@ class BaseApp(tk.Tk):
         file_opt.add_command(label=" Load model", command=self.load_model)
         file_opt.add_command(label=" Load model from config file", command=lambda: self.load_model(from_config=True))
         file_opt.add_command(label=" Save index", command=lambda: self.insert_entry(type=1))
-        file_opt.add_command(label=" Object description", command=lambda: self.insert_entry(type=2))
+        # file_opt.add_command(label=" Object description", command=lambda: self.insert_entry(type=2))
         file_opt.add_command(label=" Capture screen", command=self.capture)
         file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
         file_opt.add_separator()
@@ -127,8 +127,8 @@ class BaseApp(tk.Tk):
         with open(self.indices_file, 'r') as file:
             for line in file:
                 self.select_idx_opt.add_radiobutton(label=line.strip(), variable=self.selected_data_idx, command=self.update_idx, value=line.split()[0])
-        dataidx_opt.add_cascade(label=" Select data index", menu=self.select_idx_opt)
-        dataidx_opt.add_command(label=" Select random data", command=self.random_data_idx)
+        dataidx_opt.add_command(label=" Select random sample", command=self.random_data_idx)
+        dataidx_opt.add_cascade(label=" Select sample index", menu=self.select_idx_opt)
         dataidx_opt.add_cascade(label=" Select prediction threshold", menu=thr_opt)
         dataidx_opt.add_separator()
         dataidx_opt.add_command(label=" Show LiDAR", command=self.show_lidar)
@@ -489,7 +489,7 @@ class BaseApp(tk.Tk):
         if idx is None:
             idx = self.data_idx
         if info is None:
-            info = f"Model: {self.ObjectDetector.model_name} | Dataloader: {self.ObjectDetector.dataloader_name} | Data index: {idx} | Mechanism: {self.selected_expl_type.get()}"
+            info = f"Model: {self.ObjectDetector.model_name} | Dataloader: {self.ObjectDetector.dataloader_name} | Sample index: {idx} | Mechanism: {self.selected_expl_type.get()}"
             if self.video_gen_bool:
                 if self.layers_video > 1:
                     info += f" | Layer {self.layer_idx}"

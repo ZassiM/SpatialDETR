@@ -43,11 +43,12 @@ class Model():
                 initialdir='/workspace/configs/submission/',
                 filetypes=cfg_filetypes)
         
-        if weights_file is None:
-            weights_file = fd.askopenfilename(
-                title='Load weights',
-                initialdir='/workspace/work_dirs/checkpoints/',
-                filetypes=weights_filetypes)  
+        if cfg_file:
+            if weights_file is None:
+                weights_file = fd.askopenfilename(
+                    title='Load weights',
+                    initialdir='/workspace/work_dirs/checkpoints/',
+                    filetypes=weights_filetypes)  
         
         if gpu_id is not None:
             self.gpu_id = gpu_id
