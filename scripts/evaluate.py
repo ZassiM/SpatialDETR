@@ -18,7 +18,7 @@ def main():
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
 
-    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=True, pred_threshold=0.1, remove_pad=True)
+    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[3], negative_pert=True, pred_threshold=0.4, remove_pad=True)
 
 
 def evaluate(Model, ExplGen, expl_type, negative_pert=False, pred_threshold=0.1, remove_pad=True):
@@ -44,11 +44,6 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False, pred_threshold=0.1,
     file_path += ".txt"
     with open(file_path, "a") as file:
         file.write(f"{info}\n")
-
-    if remove_pad:
-        base_size = Model.ori_shape[0] * Model.ori_shape[1]
-    else:
-        base_size = Model.pad_shape[0] * Model.pad_shape[1]
 
     pert_steps = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
 
