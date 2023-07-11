@@ -42,6 +42,7 @@
 3456 | trucks
 3555 | trucks
 3917 | nicee car
+3972 | self park
 4116 | pedestrian
 4297 | cars moto
 4301 | moto and person

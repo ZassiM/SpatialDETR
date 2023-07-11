@@ -18,7 +18,7 @@ def main():
     ObjectDetector.load_from_config()
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
 
-    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[3], negative_pert=True, pred_threshold=0.4, remove_pad=True)
+    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[2], negative_pert=True, pred_threshold=0.4, remove_pad=True)
 
 
 def evaluate(Model, ExplGen, expl_type, negative_pert=False, pred_threshold=0.1, remove_pad=True):
@@ -137,27 +137,6 @@ def evaluate_step(Model, ExplGen, expl_type, step, eval_file, negative_pert=True
             original_indices = original_indices[indices]
             row_indices, col_indices = original_indices // xai_cam.size(1), original_indices % xai_cam.size(1)
             img_pert[row_indices, col_indices] = mask
-
-            # OG_IMPL
-            # _, indices = torch.topk(xai_maps.flatten(), k=num_tokens)
-            # indices = np.array(np.unravel_index(indices.numpy(), xai_maps.shape)).T
-            # cols, rows = indices[:, 0], indices[:, 1]
-            # img_pert = img_og.copy()
-            # img_pert[cols, rows] = mask
-
-            # APP_IMPL
-            # img_pert = img[camidx].permute(1, 2, 0).numpy()
-            # xai = xai_maps[camidx]
-            # filter_mask = xai > 0.2
-            # filtered_xai = xai[filter_mask].flatten()
-            # original_indices = torch.arange(xai.numel()).reshape(xai.shape)[filter_mask].flatten()
-            # top_k = int(self.selected_pert_step.get() * filtered_xai.numel())
-            # _, indices = torch.topk(filtered_xai, top_k)
-            # original_indices = original_indices[indices]
-            # row_indices, col_indices = original_indices // xai.size(1), original_indices % xai.size(1)
-
-            # if self.selected_pert_type.get() == "Mask":
-            #     img_pert[row_indices, col_indices] = mask
 
             img_pert_list.append(img_pert)
         
