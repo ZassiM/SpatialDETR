@@ -16,7 +16,7 @@ from tkinter.messagebox import showinfo
 from tkinter import scrolledtext
 import matplotlib.pyplot as plt
 from PIL import Image, ImageTk
-
+from mmcv.cnn import xavier_init
 
 from modules.Configs import Configs
 from modules.Explainability import ExplainableTransformer
@@ -234,6 +234,17 @@ class BaseApp(tk.Tk):
         pert_opt.add_cascade(label="Type", menu=pert_type_opt)
         expl_opt.add_cascade(label="Perturbation", menu=pert_opt)
 
+
+        sancheck_opt = tk.Menu(self.menubar)
+        self.selected_sancheck_layer = []
+        for layer in range(self.ObjectDetector.num_layers):
+            var = tk.IntVar()
+            self.selected_sancheck_layer.append(var)
+            sancheck_opt.add_checkbutton(label=layer,  onvalue=1, offvalue=0, variable=var)
+
+        expl_opt.add_cascade(label="Sanity check", menu=sancheck_opt)
+
+
         # Discard ratio for attention weights
         dr_opt, int_opt, beta_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.gen_segmentation = tk.BooleanVar()
@@ -380,6 +391,13 @@ class BaseApp(tk.Tk):
                 img_pert_list = torch.from_numpy(np.stack(img_pert_list))
                 img = [img_pert_list.permute(0, 3, 1, 2).unsqueeze(0)] # img = [torch.Size([1, 6, 3, 928, 1600])
                 self.data['img'][0] = DC(img)
+        
+
+        selected_layers = [index for index, value in enumerate(self.sancheck_layers) if value == 1]
+        if len(selected_layers) > 0:
+            for layer in selected_layers:
+                xavier_init(self.ExplainableModel.Model.model.module.pts_bbox_head.transformer.decoder.layers[layer].attentions[0].attn.out_proj, distribution="uniform", bias=0.0)
+                xavier_init(self.ExplainableModel.Model.model.module.pts_bbox_head.transformer.decoder.layers[layer].attentions[1].attn.out_proj, distribution="uniform", bias=0.0)
 
         # Attention scores are extracted, together with gradients if grad-CAM is selected
         if not gradients:
@@ -476,6 +494,7 @@ class BaseApp(tk.Tk):
                 self.update_info_label()
             else:
                 self.show_message(f"Insert an integer between 0 and {len(self.ObjectDetector.dataset)}")
+                return
         elif type == 1:
             self.data_description = f'{self.data_idx} | {entry}'
             self.select_idx_opt.add_radiobutton(label=self.data_description, variable=self.selected_data_idx, command=self.update_idx, value=self.data_idx)

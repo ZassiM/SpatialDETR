@@ -8,7 +8,7 @@ import matplotlib
 from modules.BaseApp import BaseApp, tk, np, cv2, plt, mmcv, torch, DC, pickle
 import shutil
 import os
-
+from mmcv.cnn import xavier_init
 
 class App(BaseApp):
     '''
@@ -46,7 +46,9 @@ class App(BaseApp):
 
         self.fig.clear()
 
-        self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name, self.selected_pert_step.get(), self.selected_pert_type.get()]
+        self.sancheck_layers = [layer.get() for layer in self.selected_sancheck_layer]
+
+        self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name, self.selected_pert_step.get(), self.selected_pert_type.get(), self.sancheck_layers]
 
         if self.video_gen_bool:
             self.video_gen_bool = False
@@ -63,7 +65,7 @@ class App(BaseApp):
                 print("Calculating gradients...")
                 self.update_data(gradients=True, initialize_bboxes=False)
 
-            self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get(), self.data_idx, self.selected_pert_step.get(), self.selected_pert_type.get()]  
+            self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get(), self.outputs]  
             self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get(), True, self.selected_pert_step.get())
 
             if self.single_bbox.get():
