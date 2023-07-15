@@ -36,7 +36,7 @@ class BaseApp(tk.Tk):
 
         # Tkinter-related settings
         self.tk.call("source", "misc/theme/azure.tcl")
-        self.tk.call("set_theme", "dark")
+        self.tk.call("set_theme", "light")
         self.title('Explainable Transformer-based 3D Object Detector')
         self.geometry('1500x1500')
         self.protocol("WM_DELETE_WINDOW", self.quit)
@@ -288,14 +288,16 @@ class BaseApp(tk.Tk):
 
         # Cascade menus for Additional options
         add_opt = tk.Menu(self.menubar)
-        self.GT_bool, self.overlay_bool, self.bbox_2d, self.capture_object, self.remove_pad = \
-            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        self.GT_bool, self.overlay_bool, self.bbox_2d, self.capture_object, self.remove_pad, self.draw_bboxes = \
+            tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.overlay_bool.set(True)
         #self.bbox_2d.set(True)
         self.remove_pad.set(True)
-        add_opt.add_checkbutton(label=" 2D bounding boxes", onvalue=1, offvalue=0, variable=self.bbox_2d)
-        add_opt.add_checkbutton(label=" Show GT Bounding Boxes", onvalue=1, offvalue=0, variable=self.GT_bool)
-        add_opt.add_checkbutton(label=" Saliency maps on images", onvalue=1, offvalue=0, variable=self.overlay_bool)
+        self.draw_bboxes.set(True)
+        add_opt.add_checkbutton(label=" Show predicted OBB", onvalue=1, offvalue=0, variable=self.draw_bboxes)
+        add_opt.add_checkbutton(label=" Show saliency maps", onvalue=1, offvalue=0, variable=self.overlay_bool)
+        add_opt.add_checkbutton(label=" 2D OBB", onvalue=1, offvalue=0, variable=self.bbox_2d)
+        add_opt.add_checkbutton(label=" Show Ground Truth OBB", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Capture saliency maps", onvalue=1, offvalue=0, variable=self.capture_object)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
 
@@ -393,9 +395,8 @@ class BaseApp(tk.Tk):
                 self.data['img'][0] = DC(img)
         
 
-        selected_layers = [index for index, value in enumerate(self.sancheck_layers) if value == 1]
-        if len(selected_layers) > 0:
-            for layer in selected_layers:
+        if len(self.selected_layers) > 0:
+            for layer in self.selected_layers:
                 xavier_init(self.ExplainableModel.Model.model.module.pts_bbox_head.transformer.decoder.layers[layer].attentions[0].attn.out_proj, distribution="uniform", bias=0.0)
                 xavier_init(self.ExplainableModel.Model.model.module.pts_bbox_head.transformer.decoder.layers[layer].attentions[1].attn.out_proj, distribution="uniform", bias=0.0)
 
@@ -577,23 +578,33 @@ class BaseApp(tk.Tk):
 
     def capture(self):
         screenshots_path = "screenshots/"
+        if self.selected_pert_step.get() != -1:
+            screenshots_path = "perturb/"
+
         if not os.path.exists(screenshots_path):
             os.makedirs(screenshots_path)
 
         if self.data_description:
-            path = screenshots_path + self.data_description.replace(" | ", "_").replace(" ", "_") + ".png"
+            path = screenshots_path + self.data_description.replace(" | ", "_").replace(" ", "_") + ".jpg"
         else:
             expl_string = self.selected_expl_type.get().replace(" ", "_")
             path = screenshots_path + f"{self.ObjectDetector.model_name}_{expl_string}_{self.data_idx}"
-            if self.selected_pert_step.get() > 0:
+            if self.selected_pert_step.get() != -1:
                 path += f"_p{int(self.selected_pert_step.get()*100)}"
-            if os.path.exists(path+"_"+str(self.file_suffix)+".png"):
+            if os.path.exists(path+"_"+str(self.file_suffix)+".jpg"):
                 self.file_suffix += 1
             else:
                 self.file_suffix = 0
-            path += "_" + str(self.file_suffix) + ".png"
-
-        self.fig.savefig(path, dpi=300, transparent=True)
+            path += "_" + str(self.file_suffix) + ".jpg"
+        
+        if self.selected_pert_step.get() != -1:
+            fig_new = plt.figure()
+            ax_new = fig_new.add_subplot(111)
+            ax_new.imshow(self.pert_ax.get_images()[0].get_array())
+            ax_new.axis("off")
+            fig_new.savefig(path, dpi=300, transparent=True, bbox_inches='tight', pad_inches=0)
+        else:
+            self.fig.savefig(path, dpi=300, transparent=True)
         print(f"Screenshot saved in {path}.")
 
     def change_theme(self):

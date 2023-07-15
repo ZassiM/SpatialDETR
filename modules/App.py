@@ -46,9 +46,9 @@ class App(BaseApp):
 
         self.fig.clear()
 
-        self.sancheck_layers = [layer.get() for layer in self.selected_sancheck_layer]
-
-        self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name, self.selected_pert_step.get(), self.selected_pert_type.get(), self.sancheck_layers]
+        sancheck_layers = [layer.get() for layer in self.selected_sancheck_layer]
+        self.selected_layers = [index for index, value in enumerate(sancheck_layers) if value == 1]
+        self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name, self.selected_pert_step.get(), self.selected_pert_type.get(), self.selected_layers]
 
         if self.video_gen_bool:
             self.video_gen_bool = False
@@ -85,17 +85,20 @@ class App(BaseApp):
         self.cam_imgs, self.saliency_maps_objects = [], []
         with_labels = True
         for camidx in range(len(self.imgs)):
-
-            img, bbox_coords = draw_lidar_bbox3d_on_img(
-                    self.pred_bboxes,
-                    self.imgs[camidx],
-                    self.img_metas['lidar2img'][camidx],
-                    color=(0, 255, 0),
-                    color_dict=self.color_dict,
-                    with_bbox_id=with_labels,
-                    all_bbx=True,
-                    bbx_idx=self.bbox_idx,
-                    mode_2d=self.bbox_2d.get())
+            
+            if self.draw_bboxes.get() or self.single_bbox.get():
+                img, bbox_coords = draw_lidar_bbox3d_on_img(
+                        self.pred_bboxes,
+                        self.imgs[camidx],
+                        self.img_metas['lidar2img'][camidx],
+                        color=(0, 255, 0),
+                        color_dict=self.color_dict,
+                        with_bbox_id=with_labels,
+                        all_bbx=True,
+                        bbx_idx=self.bbox_idx,
+                        mode_2d=self.bbox_2d.get())
+            else:
+                img = self.imgs[camidx]
 
             if self.selected_expl_type.get() != "Self Attention" and self.single_bbox.get() and camidx == self.selected_camera:
                 og_img = self.imgs[camidx].astype(np.uint8)
@@ -136,6 +139,7 @@ class App(BaseApp):
                 self.cam_imgs.append(img)
 
         # Visualize the generated images list on the figure subplots
+        pert_ax = 1
         print("Plotting...")
         for i in range(len(self.imgs)):
             if i < 3:
@@ -148,6 +152,8 @@ class App(BaseApp):
 
             ax.imshow(self.cam_imgs[self.cam_idx[i]])
             ax.axis('off')
+            if i == pert_ax:
+                self.pert_ax = ax
 
             if self.selected_expl_type.get() != "Self Attention" and self.single_bbox.get():
                 score = self.ExplainableModel.scores[self.cam_idx[i]]
@@ -264,10 +270,11 @@ class App(BaseApp):
         else:
             layer_grid = self.spec[1, 1].subgridspec(1, 1)
 
-        for b in self.bbox_coords:
-            if self.bbox_idx[0] == b[0]:
-                bbox_coord = b[1]
-                break
+        if len(self.selected_layers) == 0:
+            for b in self.bbox_coords:
+                if self.bbox_idx[0] == b[0]:
+                    self.extr_bbox_coord = b[1]
+                    break
 
 
         if self.capture_object.get():
@@ -275,13 +282,20 @@ class App(BaseApp):
             folder_path = f"maps/{self.ObjectDetector.model_name}/{self.data_idx}_{self.selected_expl_type.get()}_{class_name}"
             if self.object_description:
                 folder_path += f"_{self.object_description}"
+            if len(self.selected_layers) > 0:
+                folder_path += "_"
+                for layer in self.selected_layers:
+                    folder_path += f"{layer}"
+            score = self.bbox_scores[self.thr_idxs][self.bbox_idx].item()
+            score = int(score*100)
+            folder_path += f"_{score}"
             if not os.path.exists(folder_path):
                 os.makedirs(folder_path)
     
         for i in range(len(self.saliency_maps_objects)):
 
             att_nobbx_obj = self.saliency_maps_objects[i]
-            att_nobbx_obj = att_nobbx_obj[bbox_coord[1].clip(min=0):bbox_coord[3], bbox_coord[0].clip(min=0):bbox_coord[2]]
+            att_nobbx_obj = att_nobbx_obj[self.extr_bbox_coord[1].clip(min=0):self.extr_bbox_coord[3], self.extr_bbox_coord[0].clip(min=0):self.extr_bbox_coord[2]]
 
             if i != len(self.saliency_maps_objects) - 1:
                 ax_obj_layer = self.fig.add_subplot(layer_grid[i > 2, i if i < 3 else i - 3])
@@ -490,16 +504,19 @@ class App(BaseApp):
         # Generate images list with bboxes on it
         cam_imgs = []  
         for camidx in range(len(self.imgs)):
-
-            img, _ = draw_lidar_bbox3d_on_img(
-                    self.pred_bboxes,
-                    self.imgs[camidx],
-                    self.img_metas['lidar2img'][camidx],
-                    color=(0, 255, 0),
-                    with_bbox_id=True,
-                    all_bbx=True,
-                    bbx_idx=self.bbox_idx,
-                    mode_2d=self.bbox_2d.get())
+            
+            if self.draw_bboxes.get():
+                img, _ = draw_lidar_bbox3d_on_img(
+                        self.pred_bboxes,
+                        self.imgs[camidx],
+                        self.img_metas['lidar2img'][camidx],
+                        color=(0, 255, 0),
+                        with_bbox_id=True,
+                        all_bbx=True,
+                        bbx_idx=self.bbox_idx,
+                        mode_2d=self.bbox_2d.get())
+            else:
+                img = self.imgs[camidx]
             
             cam_layers = []
             if not self.no_object:

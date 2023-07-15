@@ -167,16 +167,9 @@ class Model():
             # segmentation dataset has `PALETTE` attribute
             model.PALETTE = dataset.PALETTE
 
-        #model.pts_bbox_head.transformer.init_layers()
-        #model.pts_bbox_head.transformer.init_weights()
-        #model.img_backbone.init_weights()
-
-        # From top to bottom: from last layer(5) to first layer(0)
-        # for id, layer in reversed(list(enumerate(model.pts_bbox_head.transformer.decoder.layers))):            
-        #     xavier_init(layer.attentions[0].attn.out_proj, distribution="uniform", bias=0.0)
-        #     xavier_init(layer.attentions[1].attn.out_proj, distribution="uniform", bias=0.0)
-        #     if id == 3:
-        #         break
+        # model.pts_bbox_head.transformer.init_layers()
+        # model.pts_bbox_head.transformer.init_weights()
+        # model.img_backbone.init_weights()
 
         if not distributed:
             self.model = MMDataParallel(model, device_ids=[self.gpu_id])
