@@ -44,6 +44,8 @@ class App(BaseApp):
             self.canvas = FigureCanvasTkAgg(self.fig, master=self)
             self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
+        self.bind('<BackSpace>', self.capture)
+
         self.fig.clear()
 
         sancheck_layers = [layer.get() for layer in self.selected_sancheck_layer]
@@ -96,7 +98,8 @@ class App(BaseApp):
                         with_bbox_id=with_labels,
                         all_bbx=True,
                         bbx_idx=self.bbox_idx,
-                        mode_2d=self.bbox_2d.get())
+                        mode_2d=self.bbox_2d.get(),
+                        labels=self.labels)
             else:
                 img = self.imgs[camidx]
 
@@ -253,7 +256,7 @@ class App(BaseApp):
                 # Calculate a font size based on the bar's width and the length of the text
                 fontsize = max(min_font_size, min(max_font_size, int(bar_width * 10 / text_length)))
 
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() / 2, object_class, ha='center', va='center', color='black', fontsize=fontsize)
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() / 2, object_class, ha='center', va='center', color='white', fontsize=fontsize)
 
         # Remove the spines and set other plot parameters
         for spine in ax.spines.values():
@@ -448,17 +451,21 @@ class App(BaseApp):
             self.show_message(f"Video lenght should be between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
             return False
 
-        self.video_folder = f"videos/video_{self.data_idx}_{self.video_length.get()}"
+        self.video_length.set(39)
+        self.video_folder = f"videos/video_{self.data_idx}_{self.video_length.get()}_camcontr"
         if os.path.isdir(self.video_folder):
             shutil.rmtree(self.video_folder)
         os.makedirs(self.video_folder)
 
-        self.select_all_bboxes.set(True)
+        #self.select_all_bboxes.set(True)
         self.img_labels = []
         self.start_video_idx = self.data_idx
         self.video_gen_bool = True
         print(f"\nGenerating video frames inside \"{self.video_folder}\"...")
         prog_bar = mmcv.ProgressBar(self.video_length.get())
+        self.indx_obj = iter([0,0,2,2,0,0,0,0,0,6,5,15,10,13,18,9,17,23,20,20,11,17,13,14,13,14,22,17,21,32,8,10,11,8,6,13,15,7,9])
+        # self.indx_obj = iter([2,2,2,2,2,1,3,2,0,0,2,8,3,9,4]) # 1369 - 1382. length=13
+        #self.indx_obj = iter([5,2,0,0,2,2,0,0,1,0,0,0,1,1]) # 1369 - 1382. length=13
         for i in range(self.data_idx, self.data_idx + self.video_length.get()):
             self.data_idx = i
             labels = self.generate_video_frame()
@@ -470,6 +477,7 @@ class App(BaseApp):
 
         with open(file_path, 'wb') as f:
             pickle.dump(data, f)
+        self.video_gen_bool = False
 
         # target_classes = np.arange(0, 10, 1)
         # self.target_classes = [[i for i, tensor in enumerate(self.img_labels) if target_class in tensor.tolist()] for target_class in target_classes]
@@ -493,14 +501,31 @@ class App(BaseApp):
     
     def generate_video_frame(self):
 
-        self.update_data(initialize_bboxes=False)
+        self.update_data(initialize_bboxes=True)
 
-        # Extract the selected bounding box indices from the menu
-        self.bbox_idx = list(range(len(self.labels)))
-        if not self.no_object:
-            self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get())
-            self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get(), remove_pad=self.remove_pad.get())
+        if self.single_bbox.get():
+            self.update_objects_list(single_select=True, all_select=False)
+            self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
 
+        else:
+            self.bbox_idx = list(range(len(self.labels)))
+
+        if self.overlay_bool.get():
+            if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
+                self.update_data(gradients=True, initialize_bboxes=False)
+
+            if not self.no_object:
+                self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get())
+                self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get(), remove_pad=self.remove_pad.get())
+
+                if self.single_bbox.get():
+                    # Extract camera with highest attention
+                    cam_obj = self.get_object_camera()
+                    if cam_obj == -1:
+                        self.show_message("Please change the selected options")
+                        return
+                    self.selected_camera = cam_obj
+        
         # Generate images list with bboxes on it
         cam_imgs = []  
         for camidx in range(len(self.imgs)):
@@ -511,18 +536,25 @@ class App(BaseApp):
                         self.imgs[camidx],
                         self.img_metas['lidar2img'][camidx],
                         color=(0, 255, 0),
-                        with_bbox_id=True,
+                        with_bbox_id=False,
                         all_bbx=True,
                         bbx_idx=self.bbox_idx,
-                        mode_2d=self.bbox_2d.get())
+                        mode_2d=self.bbox_2d.get(),
+                        labels=None if self.single_bbox.get() else self.labels)
             else:
                 img = self.imgs[camidx]
             
             cam_layers = []
-            if not self.no_object:
+            if not self.no_object and self.overlay_bool.get():
                 if self.aggregate_layers.get():
                     xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
                     saliency_map = self.generate_saliency_map(img, xai_map)        
+                    if self.selected_expl_type.get() != "Self Attention" and self.single_bbox.get():
+                        h, w, _ = saliency_map.shape
+                        score = self.ExplainableModel.scores[camidx]  # your score
+                        cv2.rectangle(saliency_map, (0, 0), (w, 15), (255,255,255), -1)
+                        score_bar_width = int((score/100) * w)
+                        cv2.rectangle(saliency_map, (0, 0), (score_bar_width, 15), (0,100,0), -1)
                     saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                     cam_layers.append(saliency_map)
                 else:
@@ -531,7 +563,7 @@ class App(BaseApp):
                         saliency_map = self.generate_saliency_map(img, xai_map)  
                         saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                         cam_layers.append(saliency_map)
-
+                
                 cam_imgs.append(cam_layers)   
             else:
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -542,7 +574,7 @@ class App(BaseApp):
             hori = np.concatenate((cam_imgs[2][layer], cam_imgs[0][layer], cam_imgs[1][layer]), axis=1)
             ver = np.concatenate((cam_imgs[5][layer], cam_imgs[3][layer], cam_imgs[4][layer]), axis=1)
             img = np.concatenate((hori, ver), axis=0)
-            if not self.no_object:
+            if not self.no_object and self.overlay_bool.get():
                 img = (img * 255).astype(np.uint8)
             img = Image.fromarray(img)
             name = self.selected_expl_type.get().replace(" ", "_")

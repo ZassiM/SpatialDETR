@@ -22,6 +22,7 @@ from modules.Configs import Configs
 from modules.Explainability import ExplainableTransformer
 from modules.Model import Model
 from scripts.evaluate import evaluate
+from PIL import ImageGrab
 
 
 class BaseApp(tk.Tk):
@@ -37,7 +38,7 @@ class BaseApp(tk.Tk):
         # Tkinter-related settings
         self.tk.call("source", "misc/theme/azure.tcl")
         self.tk.call("set_theme", "light")
-        self.title('Explainable Transformer-based 3D Object Detector')
+        self.title('Explainable Multi-Sensor 3D Object Detection with Transformers')
         self.geometry('1500x1500')
         self.protocol("WM_DELETE_WINDOW", self.quit)
         self.canvas, self.fig, self.spec, self.single_object_window, self.single_object_canvas = None, None, None, None, None
@@ -149,7 +150,7 @@ class BaseApp(tk.Tk):
         video_lengths[0] = 10
         video_lengths[-1] = 6019
         self.video_length = tk.IntVar()
-        self.video_length.set(video_lengths[0])
+        self.video_length.set(5)
         for i in range(len(video_lengths)):
             videolength_opt.add_radiobutton(label=video_lengths[i], variable=self.video_length , value=video_lengths[i])
 
@@ -264,7 +265,7 @@ class BaseApp(tk.Tk):
             int_opt.add_radiobutton(label=i, variable=self.selected_intensity)
         for i in betas:
             beta_opt.add_radiobutton(label=i, variable=self.selected_beta)
-        expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
+        # expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
         expl_opt.add_cascade(label="Saliency map intensity", menu=int_opt)
         # expl_opt.add_cascade(label="Saliency map beta", menu=beta_opt)
         expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
@@ -395,10 +396,10 @@ class BaseApp(tk.Tk):
                 self.data['img'][0] = DC(img)
         
 
-        if len(self.selected_layers) > 0:
-            for layer in self.selected_layers:
-                xavier_init(self.ExplainableModel.Model.model.module.pts_bbox_head.transformer.decoder.layers[layer].attentions[0].attn.out_proj, distribution="uniform", bias=0.0)
-                xavier_init(self.ExplainableModel.Model.model.module.pts_bbox_head.transformer.decoder.layers[layer].attentions[1].attn.out_proj, distribution="uniform", bias=0.0)
+        # if len(self.selected_layers) > 0:
+        #     for layer in self.selected_layers:
+        #         xavier_init(self.ExplainableModel.Model.model.module.pts_bbox_head.transformer.decoder.layers[layer].attentions[0].attn.out_proj, distribution="uniform", bias=0.0)
+        #         xavier_init(self.ExplainableModel.Model.model.module.pts_bbox_head.transformer.decoder.layers[layer].attentions[1].attn.out_proj, distribution="uniform", bias=0.0)
 
         # Attention scores are extracted, together with gradients if grad-CAM is selected
         if not gradients:
@@ -554,7 +555,9 @@ class BaseApp(tk.Tk):
                     self.bboxes[i].set(True)
             else:
                 if len(self.bboxes) > 0:
-                    self.bboxes[0].set(True)
+                    # 2,2,2,2,2,1,3,2,0,0,2,8,3,9,4
+                    #self.bboxes[0].set(True)
+                    self.bboxes[next(self.indx_obj)].set(True)
 
     def single_bbox_select(self, idx=None, single_select=False):
         self.select_all_bboxes.set(False)
@@ -576,36 +579,43 @@ class BaseApp(tk.Tk):
         cam_obj = scores.index(max(scores))
         return cam_obj
 
-    def capture(self):
+    def capture(self, event=None):
         screenshots_path = "screenshots/"
-        if self.selected_pert_step.get() != -1:
-            screenshots_path = "perturb/"
+        # if self.selected_pert_step.get() != -1:
+        #     screenshots_path = "perturb/"
 
         if not os.path.exists(screenshots_path):
             os.makedirs(screenshots_path)
 
         if self.data_description:
-            path = screenshots_path + self.data_description.replace(" | ", "_").replace(" ", "_") + ".jpg"
+            path = screenshots_path + self.data_description.replace(" | ", "_").replace(" ", "_") + ".png"
         else:
             expl_string = self.selected_expl_type.get().replace(" ", "_")
             path = screenshots_path + f"{self.ObjectDetector.model_name}_{expl_string}_{self.data_idx}"
             if self.selected_pert_step.get() != -1:
                 path += f"_p{int(self.selected_pert_step.get()*100)}"
-            if os.path.exists(path+"_"+str(self.file_suffix)+".jpg"):
+            if os.path.exists(path+"_"+str(self.file_suffix)+".png"):
                 self.file_suffix += 1
             else:
                 self.file_suffix = 0
-            path += "_" + str(self.file_suffix) + ".jpg"
+            path += "_" + str(self.file_suffix) + ".png"
         
-        if self.selected_pert_step.get() != -1:
-            fig_new = plt.figure()
-            ax_new = fig_new.add_subplot(111)
-            ax_new.imshow(self.pert_ax.get_images()[0].get_array())
-            ax_new.axis("off")
-            fig_new.savefig(path, dpi=300, transparent=True, bbox_inches='tight', pad_inches=0)
-        else:
-            self.fig.savefig(path, dpi=300, transparent=True)
+        # if self.selected_pert_step.get() != -1:
+        #     fig_new = plt.figure()
+        #     ax_new = fig_new.add_subplot(111)
+        #     ax_new.imshow(self.pert_ax.get_images()[0].get_array())
+        #     ax_new.axis("off")
+        #     fig_new.savefig(path, dpi=300, transparent=True, bbox_inches='tight', pad_inches=0)
+        self.fig.savefig(path, dpi=300, transparent=True)
         print(f"Screenshot saved in {path}.")
+
+
+        x = self.winfo_rootx()
+        y = self.winfo_rooty() - 26
+        h = self.winfo_height()
+        w = self.winfo_width()
+        # You can modify the bbox (bounding box) coordinates if you need only a part of window.
+        ImageGrab.grab(bbox=(x, y, x+w, y+h)).save("full_window.png")
 
     def change_theme(self):
         if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
@@ -687,3 +697,7 @@ class BaseApp(tk.Tk):
             self.menubar.add_command(label="Show video", command=self.show_video)
             self.add_separator("|")
             self.video_loaded = True
+        # else:
+        #     end_idx = self.menubar.index('end')
+        #     self.menubar.delete(end_idx-1, end_idx)
+        #     self.menubar.add_command(label="Show video", command=self.show_video)
