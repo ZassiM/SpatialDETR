@@ -331,7 +331,7 @@ class App(BaseApp):
 
     def show_lidar(self):
         file_name = f"{self.data_idx}_{self.ObjectDetector.model_name}"
-        self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="LiDAR/", show_gt=self.GT_bool.get(), show=True, snapshot=True, file_name=file_name, pipeline=None, score_thr=self.selected_threshold.get())
+        self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="LiDAR/", show_gt=self.GT_bool.get(), show=True, snapshot=False, file_name=file_name, pipeline=None, score_thr=self.selected_threshold.get())
 
     def show_video(self):
 
