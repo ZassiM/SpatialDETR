@@ -87,7 +87,7 @@ class App(BaseApp):
         self.cam_imgs, self.saliency_maps_objects = [], []
         with_labels = True
         for camidx in range(len(self.imgs)):
-            
+
             if self.draw_bboxes.get() or self.single_bbox.get():
                 img, bbox_coords = draw_lidar_bbox3d_on_img(
                         self.pred_bboxes,
@@ -102,6 +102,13 @@ class App(BaseApp):
                         labels=self.labels)
             else:
                 img = self.imgs[camidx]
+            
+            if camidx == 0:
+                fig_new = plt.figure()
+                ax_new = fig_new.add_subplot(111)
+                ax_new.imshow(img)
+                ax_new.axis("off")
+                fig_new.savefig("img_bbox.png", dpi=300, transparent=True, bbox_inches='tight', pad_inches=0)
 
             if self.selected_expl_type.get() != "Self Attention" and self.single_bbox.get() and camidx == self.selected_camera:
                 og_img = self.imgs[camidx].astype(np.uint8)
@@ -184,10 +191,8 @@ class App(BaseApp):
         group_width = 0.15 * k
         bar_width = 0.1
         ax = self.fig.add_subplot(self.spec[2, :])
-        # Generate the x coordinates for the center of each group
         group_centers = torch.arange(num_layers) * group_width
 
-        # Initialize maximum height
         max_height = 0
 
         # First loop to find the maximum height across all layers
@@ -200,6 +205,7 @@ class App(BaseApp):
         max_height += 2
 
         cmap = plt.cm.get_cmap('Reds') 
+        #cmap = plt.cm.get_cmap('YlOrRd') 
         self.color_dict = []
 
         for i in range(num_layers):
@@ -217,8 +223,11 @@ class App(BaseApp):
             sorted_indices = torch.argsort(topk_values)
 
             for j, bar in enumerate(bars):
-                bar_color = cmap(norm(sorted_indices[j]))
-                bar.set_color(bar_color)
+                if topk_values[j] == topk_values.min():  # If this bar has the lowest score
+                    bar.set_color('grey')  # Set color to blue
+                else:
+                    bar_color = cmap(norm(sorted_indices[j]))  
+                    bar.set_color(bar_color)
             
             if i == num_layers - 1:
                 for index in topk_indices:
@@ -226,7 +235,7 @@ class App(BaseApp):
 
             group_center = (bar_x[0] + bar_x[-1]) / 2
 
-            ax.text(group_center, -5, f"Layer {i}", ha='center', va='bottom', color=text_color)
+            ax.text(group_center, -5, f"Layer {i}", ha='center', va='bottom', color=text_color, fontsize = 10)
 
             # Set edge color for bbox_idx[0] if it is in the top-k indices
             if self.bbox_idx[0] in topk_indices:
@@ -240,20 +249,15 @@ class App(BaseApp):
             for j, bar in enumerate(bars):
                 ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), str(topk_indices[j].item()),
                         ha='center', va='bottom', color=text_color, fontsize=fontsize)
-            
-            # for j, bar in enumerate(bars):
-            #         object_class = self.ObjectDetector.class_names[self.labels[topk_indices[j].item()]].upper()
-            #         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() / 2, object_class,
-            #             ha='center', va='center', color='black', fontsize=fontsize)  
 
             min_font_size = 6  # smallest font size to use
-            max_font_size = 14  # largest font size to use
-
+            max_font_size = 16  # largest font size to use
+            fontsize = 10
+            
             for j, bar in enumerate(bars):
                 bar_width = bar.get_width()
                 object_class = self.ObjectDetector.class_names[self.labels[topk_indices[j].item()]].replace("_", " ").upper()
                 text_length = len(object_class)
-                # Calculate a font size based on the bar's width and the length of the text
                 fontsize = max(min_font_size, min(max_font_size, int(bar_width * 10 / text_length)))
 
                 ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() / 2, object_class, ha='center', va='center', color='white', fontsize=fontsize)
@@ -451,7 +455,7 @@ class App(BaseApp):
             self.show_message(f"Video lenght should be between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
             return False
 
-        self.video_length.set(39)
+        self.video_length.set(13)
         self.video_folder = f"videos/video_{self.data_idx}_{self.video_length.get()}_camcontr"
         if os.path.isdir(self.video_folder):
             shutil.rmtree(self.video_folder)
@@ -463,9 +467,9 @@ class App(BaseApp):
         self.video_gen_bool = True
         print(f"\nGenerating video frames inside \"{self.video_folder}\"...")
         prog_bar = mmcv.ProgressBar(self.video_length.get())
-        self.indx_obj = iter([0,0,2,2,0,0,0,0,0,6,5,15,10,13,18,9,17,23,20,20,11,17,13,14,13,14,22,17,21,32,8,10,11,8,6,13,15,7,9])
-        # self.indx_obj = iter([2,2,2,2,2,1,3,2,0,0,2,8,3,9,4]) # 1369 - 1382. length=13
-        #self.indx_obj = iter([5,2,0,0,2,2,0,0,1,0,0,0,1,1]) # 1369 - 1382. length=13
+        #self.indx_obj = iter([0,0,2,2,0,0,0,0,0,6,5,15,10,13,18,9,17,23,20,20,11,17,13,14,13,14,22,17,21,32,8,10,11,8,6,13,15,7,9])
+        #self.indx_obj = iter([2,2,2,2,2,1,3,2,0,0,2,8,3,9,4]) # 1368 - 1382. length=13
+        # self.indx_obj = iter([5,2,0,0,2,2,0,0,1,0,0,0,1,1]) #  1569- 1382. length=13
         for i in range(self.data_idx, self.data_idx + self.video_length.get()):
             self.data_idx = i
             labels = self.generate_video_frame()
@@ -479,24 +483,6 @@ class App(BaseApp):
             pickle.dump(data, f)
         self.video_gen_bool = False
 
-        # target_classes = np.arange(0, 10, 1)
-        # self.target_classes = [[i for i, tensor in enumerate(self.img_labels) if target_class in tensor.tolist()] for target_class in target_classes]
-        # self.target_classes.append(list(range(self.video_length.get())))
-
-        # self.data_idx = self.start_video_idx
-
-        # self.img_frames = []
-        # layer_folders = [f for f in os.listdir(self.video_folder) if f.startswith('layer_') and os.path.isdir(os.path.join(self.video_folder, f))]
-        # layer_folders.sort(key=lambda x: int(x.split('_')[-1]))  # Sort the folders by the layer number
-
-        # for folder in layer_folders:
-        #     folder_path = os.path.join(self.video_folder, folder)
-        #     folder_images = os.listdir(folder_path)
-        #     folder_images.sort()
-        #     images = [Image.open(os.path.join(folder_path, img)) for img in folder_images]
-        #     self.img_frames.append(images)
-        
-        # self.layers_video = len(self.img_frames) 
         self.show_message(f"Video generated inside \"{self.video_folder}\" folder")
     
     def generate_video_frame(self):
@@ -551,8 +537,7 @@ class App(BaseApp):
                     saliency_map = self.generate_saliency_map(img, xai_map)        
                     if self.selected_expl_type.get() != "Self Attention" and self.single_bbox.get():
                         h, w, _ = saliency_map.shape
-                        score = self.ExplainableModel.scores[camidx]  # your score
-                        cv2.rectangle(saliency_map, (0, 0), (w, 15), (255,255,255), -1)
+                        score = self.ExplainableModel.scores[camidx] 
                         score_bar_width = int((score/100) * w)
                         cv2.rectangle(saliency_map, (0, 0), (score_bar_width, 15), (0,100,0), -1)
                     saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)

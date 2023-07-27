@@ -222,6 +222,7 @@ class BaseApp(tk.Tk):
         pert_opt, pert_step_opt, pert_type_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         
         self.selected_pert_step = tk.DoubleVar()
+        self.selected_pert_step.set(-1)
         self.selected_pert_type = tk.StringVar()
         pert_types = ["Mask", "Blur"]
         self.selected_pert_type .set(pert_types[0])
@@ -265,7 +266,7 @@ class BaseApp(tk.Tk):
             int_opt.add_radiobutton(label=i, variable=self.selected_intensity)
         for i in betas:
             beta_opt.add_radiobutton(label=i, variable=self.selected_beta)
-        # expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
+        expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
         expl_opt.add_cascade(label="Saliency map intensity", menu=int_opt)
         # expl_opt.add_cascade(label="Saliency map beta", menu=beta_opt)
         expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
@@ -515,7 +516,7 @@ class BaseApp(tk.Tk):
     def random_data_idx(self):
         idx = random.randint(0, len(self.ObjectDetector.dataset)-1)
         self.data_idx = idx 
-        self.selected_pert_step.set(0)
+        self.selected_pert_step.set(-1)
         self.update_info_label()
 
     def update_info_label(self, info=None, idx=None):
@@ -555,9 +556,8 @@ class BaseApp(tk.Tk):
                     self.bboxes[i].set(True)
             else:
                 if len(self.bboxes) > 0:
-                    # 2,2,2,2,2,1,3,2,0,0,2,8,3,9,4
-                    #self.bboxes[0].set(True)
-                    self.bboxes[next(self.indx_obj)].set(True)
+                    self.bboxes[0].set(True)
+                    # self.bboxes[next(self.indx_obj)].set(True)
 
     def single_bbox_select(self, idx=None, single_select=False):
         self.select_all_bboxes.set(False)
@@ -600,12 +600,6 @@ class BaseApp(tk.Tk):
                 self.file_suffix = 0
             path += "_" + str(self.file_suffix) + ".png"
         
-        # if self.selected_pert_step.get() != -1:
-        #     fig_new = plt.figure()
-        #     ax_new = fig_new.add_subplot(111)
-        #     ax_new.imshow(self.pert_ax.get_images()[0].get_array())
-        #     ax_new.axis("off")
-        #     fig_new.savefig(path, dpi=300, transparent=True, bbox_inches='tight', pad_inches=0)
         self.fig.savefig(path, dpi=300, transparent=True)
         print(f"Screenshot saved in {path}.")
 

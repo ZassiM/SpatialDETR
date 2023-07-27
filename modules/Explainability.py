@@ -256,7 +256,7 @@ class ExplainableTransformer:
         if len(bbox_idx) == 1:
             self.scores = self.get_camera_scores()
 
-        if not pert_step:
+        if not pert_step or pert_step == -1:
             self.xai_maps_og = self.xai_maps
 
     def interpolate_expl(self, xai_maps, maps_quality,remove_pad):
