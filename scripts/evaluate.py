@@ -15,10 +15,10 @@ def main():
     expl_types = ['Raw Attention', 'Grad-CAM', 'Gradient Rollout', 'Random']
 
     ObjectDetector = Model()
-    ObjectDetector.load_from_config()
+    ObjectDetector.load_from_config(gpu_id=3)
     ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
 
-    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[0], negative_pert=False, pred_threshold=0.4, remove_pad=True)
+    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[1], negative_pert=False, pred_threshold=0.4, remove_pad=True)
 
 
 def evaluate(Model, ExplGen, expl_type, negative_pert=False, pred_threshold=0.1, remove_pad=True):
@@ -45,7 +45,7 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False, pred_threshold=0.1,
     with open(file_path, "a") as file:
         file.write(f"{info}\n")
 
-    pert_steps = [0]
+    pert_steps = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15]
 
     print(info)
     start_time = time.time()
@@ -127,18 +127,20 @@ def evaluate_step(Model, ExplGen, expl_type, step, eval_file, negative_pert=True
 
             # Get the attention for the camera and negate it if doing negative perturbation
             xai_cam = xai_maps[cam]
-            filter_mask = xai_cam > 0.2
-            filtered_xai = xai_cam[filter_mask].flatten()
-            original_indices = torch.arange(xai_cam.numel()).reshape(xai_cam.shape)[filter_mask].flatten()
+            # filter_mask = xai_cam > 0.2
+            # filtered_xai = xai_cam[filter_mask].flatten()
+            # original_indices = torch.arange(xai_cam.numel()).reshape(xai_cam.shape)[filter_mask].flatten()
             if negative_pert:
                 xai_cam = -xai_cam
-                filtered_xai = - filtered_xai
+                # filtered_xai = - filtered_xai
 
-            top_k = int(step * filtered_xai.numel())
-            _, indices = torch.topk(filtered_xai, top_k)
-            original_indices = original_indices[indices]
-            row_indices, col_indices = original_indices // xai_cam.size(1), original_indices % xai_cam.size(1)
-            img_pert[row_indices, col_indices] = mask
+            num_pixels_removed = int(step * xai_cam.numel())
+            if dataidx == 0:
+                print("Number of Pixel Removed for Cam {1}: {0}".format(num_pixels_removed, cam))
+            _, indices = torch.topk(xai_cam.flatten(), num_pixels_removed)
+            #original_indices = original_indices[indices]
+            row_indices, col_indices = indices // xai_cam.size(1), indices % xai_cam.size(1)
+            img_pert[row_indices, col_indices] = np.mean(img_pert, axis=(0, 1))
 
             img_pert_list.append(img_pert)
         
@@ -158,8 +160,8 @@ def evaluate_step(Model, ExplGen, expl_type, step, eval_file, negative_pert=True
         #del output_og
         del output_pert
         # del xai_maps
-        gc.collect()
-        torch.cuda.empty_cache()
+        # gc.collect()
+        # torch.cuda.empty_cache()
         prog_bar.update()
     
     kwargs = {}

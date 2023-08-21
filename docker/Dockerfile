@@ -4,8 +4,8 @@ ARG CUDNN="8"
 
 FROM pytorch/pytorch:${PYTORCH}-cuda${CUDA}-cudnn${CUDNN}-devel
 
-RUN groupadd -g 12389 fb-5
-RUN useradd -u 16567 -g fb-5 zahr
+RUN groupadd -g 12294 fb-5
+RUN useradd -u 15458 -g fb-5 beemelmanns
 
 ENV TORCH_CUDA_ARCH_LIST="6.0 6.1 7.0+PTX"
 ENV TORCH_NVCC_FLAGS="-Xfatbin -compress-all"
@@ -38,9 +38,7 @@ RUN git clone https://github.com/open-mmlab/mmdetection.git mmdetection \
     && git checkout tags/v2.23.0 -b v2.23.0 \
     && pip install -e .
 
-RUN pip install mmsegmentation==0.20.0 \
-    && pip uninstall -y pycocotools \
-    && pip install mmpycocotools
+RUN pip install mmsegmentation==0.20.0
 
 
 RUN pip install mlflow open3d tkinterhtml
