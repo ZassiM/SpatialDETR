@@ -21,7 +21,12 @@ class CustomMultiheadAttention(nn.MultiheadAttention):
     This allows to use a custom attn_func
     All credits for the original code belong to the authors / contributors of pytorch.
     """
+    def __init__(self, embed_dim, num_heads, dropout=0, bias=True, add_bias_kv=False, add_zero_attn=False, kdim=None, vdim=None, batch_first=False, device=None, dtype=None) -> None:
+        super().__init__(embed_dim, num_heads, dropout, bias, add_bias_kv, add_zero_attn, kdim, vdim, batch_first, device, dtype)
+        self.attn_gradients = None
+
     def save_attn_gradients(self, attn_gradients):
+        print("CROSS ATT GRADS", attn_gradients.sum())
         self.attn_gradients = attn_gradients
         
     def get_attn_gradients(self):
@@ -31,7 +36,7 @@ class CustomMultiheadAttention(nn.MultiheadAttention):
                 need_weights: bool = True, attn_mask: Optional[Tensor] = None, attn_func=F_custom._scaled_dot_product_attention, **kwargs) -> Tuple[Tensor, Optional[Tensor]]:
         """@see nn.MultiheadAttention for details
         """
-        self.attn_gradients = None
+        
         # TODO refactor currently only batch_last is supported
         assert not self.batch_first
 
