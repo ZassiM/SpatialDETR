@@ -1,9 +1,9 @@
 import torch
-import cv2
 import numpy as np
 
 
-def handle_residual(orig_self_attention):
+# normalization- eq. 8+9
+def normalize_residual(orig_self_attention):
     self_attention = orig_self_attention.clone()
     diag_idx = range(self_attention.shape[-1])
     self_attention -= torch.eye(self_attention.shape[-1]).to(self_attention.device)
@@ -12,7 +12,7 @@ def handle_residual(orig_self_attention):
     self_attention += torch.eye(self_attention.shape[-1]).to(self_attention.device)
     return self_attention
 
-    
+
 def compute_rollout_attention(all_layer_matrices, start_layer=0):
     num_tokens = all_layer_matrices[0].shape[1]
     eye = torch.eye(num_tokens).to(all_layer_matrices[0].device)
@@ -25,32 +25,6 @@ def compute_rollout_attention(all_layer_matrices, start_layer=0):
         joint_attention = matrices_aug[i].matmul(joint_attention)
     return joint_attention
 
-def avg_heads(attn, head_fusion="max"):
-    if head_fusion == "mean":
-        attn = attn.mean(dim=0)
-    elif head_fusion == "max":
-        attn = attn.max(dim=0)[0]
-    elif head_fusion == "min":
-        attn = attn.min(dim=0)[0]
-    else:
-        attn = attn[int(head_fusion)]
-
-    return attn
-
-def avg_heads_og(cam, grad):
-    cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
-    grad = grad.reshape(-1, grad.shape[-2], grad.shape[-1])
-    cam = grad * cam
-    cam = cam.clamp(min=0).mean(dim=0)
-    return cam
-
-def gradcam(cam, grad):
-    cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
-    grad = grad.reshape(-1, grad.shape[-2], grad.shape[-1])
-    # grad = grad.mean(dim=0, keepdim=True)
-    # cam = (cam * grad).mean(0).clamp(min=0)
-    cam = (cam * grad).clamp(min=0).mean(dim=0)
-    return cam
 
 
 class ExplainableTransformer:
@@ -63,31 +37,11 @@ class ExplainableTransformer:
         self.ori_shape = Model.ori_shape
         self.Model.model.eval()
         self.height_feats, self.width_feats = None, None
-            
-    def handle_co_attn_self_query(self, layer):
-        cam = self.dec_self_attn_weights[layer]
-        # grad = self.dec_self_attn_grads[layer]
-        # cam = avg_heads_og(cam, grad)
-        #self.R_q_i += torch.matmul(cam, self.R_q_i)
-        self.R_q_q += torch.matmul(cam, self.R_q_q)
 
-    def handle_co_attn_query(self, layer, camidx, handle_residual_bool, apply_rule):
-        cam_q_i = self.dec_cross_attn_weights[layer][camidx]
-        grad_q_i = self.dec_cross_attn_grads[layer][camidx]
-        cam_q_i = avg_heads_og(cam_q_i, grad_q_i)
-        R_qq_normalized = self.R_q_q
-        if handle_residual_bool:
-            R_qq_normalized = handle_residual(self.R_q_q)
-        R_qi_addition = torch.matmul(R_qq_normalized.t(), cam_q_i)
-        if not apply_rule:
-            R_qi_addition = cam_q_i
-        R_qi_addition[torch.isnan(R_qi_addition)] = 0
-        self.R_q_i += R_qi_addition
 
     def extract_attentions(self, data, target_index=None):
-
         hooks = []
-        
+
         if self.height_feats is None:
             conv_feats = []
             hooks.append(
@@ -100,7 +54,7 @@ class ExplainableTransformer:
             for layer in self.Model.model.module.pts_bbox_head.transformer.decoder.layers:
                 hooks.append(
                     layer.attentions[0].attn.register_forward_hook(
-                        lambda _, input, output: self.dec_self_attn_weights.append(output[1][0].cpu())
+                        lambda _, input, output: self.dec_self_attn_weights.append(output[1].cpu())
                     ))
                 hooks.append(
                     layer.attentions[1].attn.register_forward_hook(
@@ -112,12 +66,6 @@ class ExplainableTransformer:
         else:
             self.dec_cross_attn_grads, self.dec_self_attn_grads = [], []
 
-            for layer in self.Model.model.module.pts_bbox_head.transformer.decoder.layers:
-                hooks.append(
-                    layer.attentions[0].attn.register_backward_hook(
-                        lambda _, grad_input, grad_output: self.dec_self_attn_grads.append(grad_input[0].permute(1, 0, 2)[0].cpu())
-                    ))
-     
             outputs = self.Model.model(return_loss=False, rescale=True, **data)
 
             output_scores = outputs[0]["pts_bbox"]["scores_3d"]
@@ -128,26 +76,31 @@ class ExplainableTransformer:
 
             self.Model.model.zero_grad()
             one_hot.backward()
+
+            # retrieve gradients
             for layer in self.Model.model.module.pts_bbox_head.transformer.decoder.layers:
                 self.dec_cross_attn_grads.append(layer.attentions[1].attn.get_attn_gradients().cpu())
 
+            for layer in self.Model.model.module.pts_bbox_head.transformer.decoder.layers:
+                self.dec_self_attn_grads.append(layer.attentions[0].attn.get_attn_gradients().cpu())
+
         if self.height_feats is None:
             if isinstance(conv_feats[0], dict):
-                self.height_feats, self.width_feats = conv_feats[0]["stage5"].shape[-2:]   
+                self.height_feats, self.width_feats = conv_feats[0]["stage5"].shape[-2:]
             else:
                 self.height_feats, self.width_feats = conv_feats[0][0].shape[-2:]
-                                                                     
+
         for hook in hooks:
             hook.remove()
-            
+
         return outputs
-    
+
     def get_camera_scores(self):
         scores = []
-        scores_perc = [] 
+        scores_perc = []
 
-        for camidx in range(len(self.xai_maps[-1])):
-            cam_map = self.xai_maps[-1][camidx]
+        for camidx in range(len(self.xai_layer_maps[-1])):
+            cam_map = self.xai_layer_maps[-1][camidx]
             score = round(cam_map.sum().item(), 2)
             scores.append(score)
 
@@ -158,36 +111,66 @@ class ExplainableTransformer:
                 scores_perc.append(score_perc)
 
         return scores_perc
-        
-    def generate_raw_att(self, layer, camidx, head_fusion="min"):  
-        ''' Generates Raw Attention for XAI. '''      
 
-        # initialize relevancy matrices
-        queries_num = self.dec_self_attn_weights[0].shape[-1]
-        device = self.dec_cross_attn_weights[0].device
-
-        # queries self attention matrix
-        self.R_q_q = torch.eye(queries_num, queries_num).to(device)
-
+    def generate_raw_att(self, layer, camidx, head_fusion_method="max"):
         cam_q_i = self.dec_cross_attn_weights[layer][camidx]
-        cam_q_i = avg_heads(cam_q_i, head_fusion)
-        
-        self.R_q_i = cam_q_i  
+
+        if head_fusion_method == "mean":
+            cam_q_i = cam_q_i.mean(dim=0)
+        elif head_fusion_method == "max":
+            cam_q_i = cam_q_i.max(dim=0)[0]
+        elif head_fusion_method == "min":
+            cam_q_i = cam_q_i.min(dim=0)[0]
+        elif head_fusion_method.isdigit():
+            cam_q_i = cam_q_i[int(head_fusion_method)]
+        else:
+            raise NotImplementedError
+
+        self.R_q_i = cam_q_i
 
     def generate_gradcam(self, layer, camidx):
-        ''' Generates Grad-CAM for XAI. '''      
-
         cam_q_i = self.dec_cross_attn_weights[layer][camidx]
         grad_q_i = self.dec_cross_attn_grads[layer][camidx]
-        cam_q_i = gradcam(cam_q_i, grad_q_i)
+        cam_q_i = (cam_q_i * grad_q_i).mean(dim=0).clamp(min=0)
         self.R_q_i = cam_q_i
-    
-    def generate_gradroll(self, camidx, rollout=True, handle_residual=True, apply_rule=True):
+
+    # rule 5 from paper
+    def zero_clamp_avg_grad_heads(self, cam, grad):
+        cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
+        grad = grad.reshape(-1, grad.shape[-2], grad.shape[-1])
+        cam = grad * cam
+        cam = cam.clamp(min=0).mean(dim=0)
+        return cam
+
+    def handle_co_attn_self_query(self, layer):
+        cam_qq = self.dec_self_attn_weights[layer]
+        grad = self.dec_self_attn_grads[layer]
+        cam_qq = self.zero_clamp_avg_grad_heads(cam_qq, grad)
+        self.R_q_q += torch.matmul(cam_qq, self.R_q_q)
+
+    def handle_co_attn_query(self, layer, camidx, apply_normalization, apply_rule):
+        cam_q_i = self.dec_cross_attn_weights[layer][camidx]
+        grad_q_i = self.dec_cross_attn_grads[layer][camidx]
+        cam_q_i = self.zero_clamp_avg_grad_heads(cam_q_i, grad_q_i)
+
+        if apply_normalization:
+            R_qq_normalized = normalize_residual(self.R_q_q)
+        else:
+            R_qq_normalized = self.R_q_q
+
+        R_qi_addition = torch.matmul(R_qq_normalized.t(), cam_q_i)
+
+        if not apply_rule:
+            R_qi_addition = cam_q_i
+        R_qi_addition[torch.isnan(R_qi_addition)] = 0
+        self.R_q_i += R_qi_addition
+
+    def generate_gradroll(self, camidx, rollout=True, apply_normalization=True, apply_rule=True):
         # initialize relevancy matrices
 
         queries_num = self.dec_self_attn_weights[0].shape[-1]
         image_bboxes = self.dec_cross_attn_weights[0].shape[-1]
-        
+
         device = self.dec_cross_attn_weights[0].device
 
         # queries self attention matrix
@@ -197,20 +180,20 @@ class ExplainableTransformer:
 
         # decoder self attention of queries followd by multi-modal attention
         if rollout:
-            self.handle_co_attn_self_query(-1)
+            #self.handle_co_attn_self_query(-1)
             for layer in range(self.num_layers):
-                # self.handle_co_attn_self_query(layer)
-                self.handle_co_attn_query(layer, camidx, handle_residual, apply_rule)
+                self.handle_co_attn_self_query(layer)
+                self.handle_co_attn_query(layer, camidx, apply_normalization, apply_rule)
         else:
-            self.handle_co_attn_self_query(self.num_layers-1)
-            self.handle_co_attn_query(self.num_layers-1, camidx, handle_residual, apply_rule)
+            self.handle_co_attn_self_query(-1)
+            self.handle_co_attn_query(-1, camidx, apply_normalization, apply_rule)
 
     def generate_explainability(self, expl_type, head_fusion="max", handle_residual=True, apply_rule=True):
         xai_maps, self.self_xai_maps_full, xai_maps_camera = [], [], []
 
         if expl_type == "Gradient Rollout":
             for camidx in range(6):
-                self.generate_gradroll(camidx, handle_residual, apply_rule)
+                self.generate_gradroll(camidx, apply_normalization=handle_residual, apply_rule=apply_rule)
                 xai_maps_camera.append(self.R_q_i.detach().cpu())
             xai_maps.append(xai_maps_camera)
 
@@ -225,19 +208,21 @@ class ExplainableTransformer:
                     xai_maps_camera.append(self.R_q_i.detach().cpu())
                 xai_maps.append(xai_maps_camera)
 
-        #self_attn_rollout = compute_rollout_attention(self.dec_self_attn_weights)
         if expl_type in ["Self Attention", "Gradient Rollout"]:
             for layer in range(self.num_layers):
-                self.self_xai_maps_full.append(self.dec_self_attn_weights[layer])
+                # 1 x num_heads x num_queries x num_queries
+                self.self_xai_maps_full.append(self.dec_self_attn_weights[layer].squeeze().clamp(min=0).mean(dim=0))
 
-        # num_layers x num_cams x num_objects x 1450
+        # num_layers x num_cams x num_queries x 1450
         xai_maps = torch.stack([torch.stack(layer) for layer in xai_maps])
-        xai_maps = xai_maps.permute(0, 2, 1, 3)  # num layers x num_objects x num_cams x 1450 # take only the selected objects
+        # num layers x num_queries x num_cams x 1450
+        xai_maps = xai_maps.permute(0, 2, 1, 3)
 
         # normalize across cameras
         for layer in range(len(xai_maps)):
-            for object in range(len(xai_maps[layer])):
-                xai_maps[layer][object] = (xai_maps[layer][object] - xai_maps[layer][object].min()) / (xai_maps[layer][object].max() - xai_maps[layer][object].min())
+            for query in range(len(xai_maps[layer])):
+                xai_maps[layer][query] = (xai_maps[layer][query] - xai_maps[layer][query].min()) / (xai_maps[layer][query].max() - xai_maps[layer][query].min())
+
         self.xai_maps_full = xai_maps
 
     def select_explainability(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True, pert_step=0):
@@ -250,8 +235,14 @@ class ExplainableTransformer:
         if self.xai_maps.shape[1] > 0:
             self.xai_maps = self.xai_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
             mask = self.xai_maps < discard_threshold - (discard_threshold * 10) * (self.xai_maps.mean() + self.xai_maps.std())
-            self.xai_maps[mask] = 0 
+            self.xai_maps[mask] = 0
             self.xai_maps = self.interpolate_expl(self.xai_maps, maps_quality, remove_pad)
+
+        self.xai_layer_maps = self.xai_maps
+
+        # layer fusion
+        self.xai_maps = self.xai_maps.max(dim=0, keepdim=True)[0]
+        self.xai_maps = self.xai_maps.squeeze()
 
         if len(bbox_idx) == 1:
             self.scores = self.get_camera_scores()
@@ -259,7 +250,7 @@ class ExplainableTransformer:
         if not pert_step or pert_step == -1:
             self.xai_maps_og = self.xai_maps
 
-    def interpolate_expl(self, xai_maps, maps_quality,remove_pad):
+    def interpolate_expl(self, xai_maps, maps_quality, remove_pad):
         xai_maps_inter = []
         if xai_maps.dim() == 1:
             xai_maps.unsqueeze_(0)
@@ -284,5 +275,3 @@ class ExplainableTransformer:
         xai_maps_inter = torch.stack([torch.stack(layer) for layer in xai_maps_inter])
 
         return xai_maps_inter
-
-

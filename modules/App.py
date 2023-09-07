@@ -112,12 +112,12 @@ class App(BaseApp):
 
             if self.selected_expl_type.get() != "Self Attention" and self.single_bbox.get() and camidx == self.selected_camera:
                 og_img = self.imgs[camidx].astype(np.uint8)
-                for layer in range(len(self.ExplainableModel.xai_maps)):
-                    xai_map = self.ExplainableModel.xai_maps[layer][camidx]
+                for layer in range(len(self.ExplainableModel.xai_layer_maps)):
+                    xai_map = self.ExplainableModel.xai_layer_maps[layer][camidx]
                     saliency_map = self.generate_saliency_map(og_img, xai_map)      
                     saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                     self.saliency_maps_objects.append(saliency_map)
-                xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
+                xai_map = self.ExplainableModel.xai_maps[camidx]
                 if self.gen_segmentation.get():
                     xai_map = xai_map.numpy() * 255
                     xai_map = xai_map.astype(np.uint8)
@@ -140,7 +140,7 @@ class App(BaseApp):
                         mode_2d=self.bbox_2d.get())
                 
             if self.selected_expl_type.get() != "Self Attention" and self.overlay_bool.get() and not self.no_object:
-                xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
+                xai_map = self.ExplainableModel.xai_maps[camidx]
                 saliency_map = self.generate_saliency_map(img, xai_map)        
                 saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                 self.cam_imgs.append(saliency_map)
@@ -533,7 +533,7 @@ class App(BaseApp):
             cam_layers = []
             if not self.no_object and self.overlay_bool.get():
                 if self.aggregate_layers.get():
-                    xai_map = self.ExplainableModel.xai_maps.max(dim=0)[0][camidx]
+                    xai_map = self.ExplainableModel.xai_maps[camidx]
                     saliency_map = self.generate_saliency_map(img, xai_map)        
                     if self.selected_expl_type.get() != "Self Attention" and self.single_bbox.get():
                         h, w, _ = saliency_map.shape

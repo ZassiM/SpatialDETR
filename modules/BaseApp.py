@@ -364,7 +364,7 @@ class BaseApp(tk.Tk):
 
         if self.selected_pert_step.get() > 0:
             print("Perturbating images...")
-            xai_maps = self.ExplainableModel.xai_maps_og.max(dim=0)[0]
+            xai_maps = self.ExplainableModel.xai_maps_og
             img = img[0][0]
             img = img[:, :, :self.ObjectDetector.ori_shape[0], :self.ObjectDetector.ori_shape[1]]  # [num_cams x height x width x channels]
 
@@ -576,7 +576,7 @@ class BaseApp(tk.Tk):
         scores = self.ExplainableModel.scores
         if not scores:
             return -1
-        cam_obj = scores.index(max(scores))
+        cam_obj = np.argmax(scores)
         return cam_obj
 
     def capture(self, event=None):
