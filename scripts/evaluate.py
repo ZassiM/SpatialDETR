@@ -89,7 +89,7 @@ def evaluate_step(model, xai_generator, step, eval_file, config):
     remove_pad = config["remove_pad"]
 
     # transformer fusion
-    layer_fusion = config["layer_fusion_method"]
+    layer_fusion_method = config["layer_fusion_method"]
     head_fusion_method = config["head_fusion_method"]
 
     # for gradient rollout
@@ -140,7 +140,7 @@ def evaluate_step(model, xai_generator, step, eval_file, config):
                     discard_threshold=discard_threshold,
                     maps_quality=maps_quality,
                     remove_pad=remove_pad,
-                    layer_fusion=layer_fusion)
+                    layer_fusion=layer_fusion_method)
                 xai_maps = xai_generator.xai_maps
             else:
                 print("\nNO DETECTION - GENERATING RANDOM XAI MAP")
@@ -167,6 +167,10 @@ def evaluate_step(model, xai_generator, step, eval_file, config):
 
             if perturbation_type == "negative":
                 xai_cam = -xai_cam
+            elif perturbation_type == "positive":
+                xai_cam = xai_cam
+            else:
+                raise NotImplementedError
 
             num_pixels_removed = int(step * xai_cam.numel())
             if dataidx == 0:
@@ -194,10 +198,7 @@ def evaluate_step(model, xai_generator, step, eval_file, config):
     kwargs = {}
     eval_kwargs = model.cfg.get('evaluation', {}).copy()
     # hard-code way to remove EvalHook args
-    for key in [
-            'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
-            'rule'
-    ]:
+    for key in ['interval', 'tmpdir', 'start', 'gpu_collect', 'save_best', 'rule']:
         eval_kwargs.pop(key, None)
     eval_kwargs.update(dict(metric="bbox", **kwargs))
     eval_results = dataset.evaluate(outputs_pert, **eval_kwargs)
