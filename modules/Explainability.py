@@ -225,7 +225,7 @@ class ExplainableTransformer:
 
         self.xai_maps_full = xai_maps
 
-    def select_explainability(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True, pert_step=0):
+    def select_explainability(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True, layer_fusion="max"):
         self.self_xai_maps = []
         for layer in range(len(self.self_xai_maps_full)):
             self.self_xai_maps.append(self.self_xai_maps_full[layer][nms_idxs[bbox_idx]][:, nms_idxs][0])
@@ -242,13 +242,20 @@ class ExplainableTransformer:
         self.xai_layer_maps = self.xai_maps
 
         # fuse layers with fusion algorithms
-        self.xai_maps = self.xai_maps.max(dim=0, keepdim=True)[0]
+        if layer_fusion == "max":
+            self.xai_maps = self.xai_maps.max(dim=0, keepdim=True)[0]
+        elif layer_fusion == "mean":
+            self.xai_maps = self.xai_maps.mean(dim=0, keepdim=True)
+        elif layer_fusion == "min":
+            self.xai_maps = self.xai_maps.mean(dim=0, keepdim=True)[0]
+        else:
+            raise NotImplementedError
+
         self.xai_maps = self.xai_maps.squeeze()
 
         if len(bbox_idx) == 1:
             self.scores = self.get_camera_scores()
 
-        self.xai_maps_og = self.xai_maps
 
     def interpolate(self, xai_maps, maps_quality, remove_pad):
         xai_maps_inter = []
