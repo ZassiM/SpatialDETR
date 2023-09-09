@@ -68,7 +68,7 @@ class App(BaseApp):
                 self.update_data(gradients=True, initialize_bboxes=False)
 
             self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get(), self.outputs]  
-            self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get(), True, self.selected_pert_step.get())
+            self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get(), True)
 
             if self.single_bbox.get():
                 # Extract camera with highest attention

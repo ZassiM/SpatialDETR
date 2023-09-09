@@ -222,7 +222,7 @@ class BaseApp(tk.Tk):
 
         # Perturbation Menu
         pert_opt, pert_step_opt, pert_type_opt, pert_pos_neg_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
-        
+
         self.selected_pert_step = tk.DoubleVar()
         self.selected_pert_step.set(-1)
         self.selected_pert_type = tk.StringVar()
@@ -235,9 +235,10 @@ class BaseApp(tk.Tk):
         for mask_type in pert_mask_types:
             pert_type_opt.add_radiobutton(label=mask_type,
                 variable=self.selected_pert_type, value=mask_type)
-        
+
         # Positive Negative Perturbation
         self.selected_pert_pos_neg = tk.StringVar()
+        self.selected_pert_pos_neg.set("Positive")
         pert_pos_neg_opt.add_radiobutton(label="Positive",
             variable=self.selected_pert_pos_neg, value="Positive")
         pert_pos_neg_opt.add_radiobutton(label="Negative",
@@ -373,7 +374,7 @@ class BaseApp(tk.Tk):
 
         if self.selected_pert_step.get() > 0:
             print("Perturbating images...")
-            xai_maps = self.ExplainableModel.xai_maps_og
+            xai_maps = self.ExplainableModel.xai_maps
             img = img[0][0]
             img = img[:, :, :self.ObjectDetector.ori_shape[0], :self.ObjectDetector.ori_shape[1]]  # [num_cams x height x width x channels]
 
@@ -383,7 +384,10 @@ class BaseApp(tk.Tk):
                 xai_cam = xai_maps[camidx]
                 
                 if self.selected_pert_pos_neg.get() == "Negative":
+                    print("Using Negative Perturbation")
                     xai_cam = -xai_cam
+                else:
+                    print("Using Positive Perturbation")
 
                 num_pixels_removed = int(self.selected_pert_step.get() * xai_cam.numel())
                 print("Number of Pixel Removed for Cam {1}: {0}".format(num_pixels_removed, camidx))
