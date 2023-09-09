@@ -16,12 +16,10 @@ from tkinter.messagebox import showinfo
 from tkinter import scrolledtext
 import matplotlib.pyplot as plt
 from PIL import Image, ImageTk
-from mmcv.cnn import xavier_init
 
 from modules.Configs import Configs
 from modules.Explainability import ExplainableTransformer
 from modules.Model import Model
-from scripts.evaluate import evaluate
 from PIL import ImageGrab
 
 
