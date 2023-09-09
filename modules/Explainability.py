@@ -116,7 +116,7 @@ class ExplainableTransformer:
         cam_q_i = self.dec_cross_attn_weights[layer][camidx]
 
         if head_fusion_method == "mean":
-            cam_q_i = cam_q_i.mean(dim=0)
+            cam_q_i = cam_q_i.clamp(min=0).mean(dim=0)
         elif head_fusion_method == "max":
             cam_q_i = cam_q_i.max(dim=0)[0]
         elif head_fusion_method == "min":
@@ -245,7 +245,7 @@ class ExplainableTransformer:
         if layer_fusion == "max":
             self.xai_maps = self.xai_maps.max(dim=0, keepdim=True)[0]
         elif layer_fusion == "mean":
-            self.xai_maps = self.xai_maps.mean(dim=0, keepdim=True)
+            self.xai_maps = self.xai_maps.clamp(min=0).mean(dim=0, keepdim=True)
         elif layer_fusion == "min":
             self.xai_maps = self.xai_maps.min(dim=0, keepdim=True)[0]
         elif layer_fusion == "last":
