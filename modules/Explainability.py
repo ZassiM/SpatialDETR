@@ -255,6 +255,7 @@ class ExplainableTransformer:
 
         self.xai_maps = self.xai_maps.squeeze()
 
+        # if only one box selected
         if len(bbox_idx) == 1:
             self.scores = self.get_camera_scores()
 
