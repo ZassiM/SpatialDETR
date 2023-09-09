@@ -8,32 +8,44 @@ import warnings
 import time
 import os
 import gc
- 
+
 
 def main():
     warnings.filterwarnings("ignore")
-    expl_types = ['Raw Attention', 'Grad-CAM', 'Gradient Rollout', 'Random']
 
-    ObjectDetector = Model()
-    ObjectDetector.load_from_config(gpu_id=3)
-    ExplainabiliyGenerator = ExplainableTransformer(ObjectDetector)
+    config = {
+        "mechanism": "Raw Attention",     #  'Raw Attention', 'Grad-CAM', 'Gradient Rollout', 'Random'
+        "perturbation_type": "negative",  #  'positive', 'negative'
+        "pred_threshold": 0.4,
+        "discard_threshold": 0.3,
+        "head_fusion_method": "max",      #  'max', 'min', 'mean'
+        "layer_fusion_method": "max",     #  'max', 'min', 'mean', 'last'
+        "maps_quality": "High",
+        "remove_pad": True,
+        "grad_rollout_handle_residual": True,
+        "grad_rollout_apply_rule": True,
+    }
 
-    evaluate(ObjectDetector, ExplainabiliyGenerator, expl_types[1], negative_pert=False, pred_threshold=0.4, remove_pad=True)
+    perturbation_steps = [0.92, 0.94, 0.96]
 
+    model = Model()
+    model.load_from_config(gpu_id=0)
 
-def evaluate(Model, ExplGen, expl_type, negative_pert=False, pred_threshold=0.1, remove_pad=True):
-    txt_del = "*" * (38 + len(expl_type))
-    info = txt_del
-    if not negative_pert:
-        info += (f"\nEvaluating {expl_type} with positive perturbation\n")
-    else:
-        info += (f"\nEvaluating {expl_type} with negative perturbation\n")
-    info += txt_del
+    xai_generator = ExplainableTransformer(model)
 
-    eval_folder = f"eval_results/{expl_type}"
+    # Info Text
+    info = "*" * (38 + len(config['mechanism']))
+    info += (f"\nEvaluating {config['mechanism']} with {config['perturbation_type']} perturbation\n")
+    info += "*" * (38 + len(config['mechanism']))
+    info + = "\n"
+    for k, v in config.items():
+        info += f"{k}: {v}\n"
+    info += "*" * (38 + len(config['mechanism']))
+
+    eval_folder = f"eval_results/{config['mechanism']}"
     if not os.path.exists(eval_folder):
         os.makedirs(eval_folder)
-    file_name = f"{Model.model_name}_{Model.dataloader_name}"
+    file_name = f"{model.model_name}_{model.dataloader_name}"
     file_path = os.path.join(eval_folder, file_name)
     counter = 1
     while os.path.exists(file_path+".txt"):
@@ -45,14 +57,16 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False, pred_threshold=0.1,
     with open(file_path, "a") as file:
         file.write(f"{info}\n")
 
-    pert_steps = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15]
-
     print(info)
     start_time = time.time()
-    for step in range(len(pert_steps)):
-        perc = pert_steps[step] * 100
-        print(f"\nNumber of tokens removed: {perc} %")
-        evaluate_step(Model, ExplGen, expl_type, step=pert_steps[step], negative_pert=negative_pert, eval_file=file_path, remove_pad=remove_pad, pred_threshold=pred_threshold)
+    for i in range(len(perturbation_steps)):
+        print(f"\nNumber of tokens removed: {perturbation_steps[i] * 100} %")
+        evaluate_step(
+            model=model,
+            xai_generator=xai_generator,
+            step=perturbation_steps[i],
+            eval_file=file_path,
+            config=config)
         gc.collect()
         torch.cuda.empty_cache()
     end_time = time.time()
@@ -64,16 +78,29 @@ def evaluate(Model, ExplGen, expl_type, negative_pert=False, pred_threshold=0.1,
         file.write("--------------------------\n")
         file.write(f"Elapsed time: {total_time}\n")
 
-def evaluate_step(Model, ExplGen, expl_type, step, eval_file, negative_pert=True, pred_threshold=0.1, remove_pad=False):
 
-    head_fusion, discard_threshold, handle_residual, apply_rule = \
-        "max", 0.3, True, True
+def evaluate_step(model, xai_generator, step, eval_file, config):
+    # general setting
+    expl_type = config["mechanism"]
+    discard_threshold = config["discard_threshold"]
+    pred_threshold = config["pred_threshold"]
+    perturbation_type = config["perturbation_type"]
+    maps_quality = config["maps_quality"]
+    remove_pad = config["remove_pad"]
+
+    # transformer fusion
+    layer_fusion = config["layer_fusion_method"]
+    head_fusion_method = config["head_fusion_method"]
+
+    # for gradient rollout
+    handle_residual = config["grad_rollout_handle_residual"]
+    apply_rule = config["grad_rollout_apply_rule"]
     
-    dataset = Model.dataset
+    dataset = model.dataset
     evaluation_lenght = len(dataset)
     outputs_pert = []
 
-    Model.model.eval()
+    model.model.eval()
 
     prog_bar = mmcv.ProgressBar(evaluation_lenght)
 
@@ -89,83 +116,83 @@ def evaluate_step(Model, ExplGen, expl_type, step, eval_file, negative_pert=True
 
         if expl_type != "Random":
             # Attention scores are extracted, together with gradients if grad-CAM is selected
-            output_og = ExplGen.extract_attentions(data)
+            output_og = xai_generator.extract_attentions(data)
 
             # Extract predicted bboxes and their labels
             outputs = output_og[0]["pts_bbox"]
-            nms_idxs = Model.model.module.pts_bbox_head.bbox_coder.get_indexes().cpu()
+            nms_idxs = model.model.module.pts_bbox_head.bbox_coder.get_indexes().cpu()
             thr_idxs = outputs['scores_3d'] > pred_threshold
             labels = outputs['labels_3d'][thr_idxs]
             
             bbox_idx = list(range(len(labels)))
             if expl_type in ["Grad-CAM", "Gradient Rollout"]:
-                ExplGen.extract_attentions(data, bbox_idx)
-            ExplGen.generate_explainability(expl_type, head_fusion, handle_residual, apply_rule)
-            ExplGen.select_explainability(nms_idxs, bbox_idx, discard_threshold, maps_quality="High", remove_pad=True)
-            xai_maps = ExplGen.xai_maps.max(dim=0)[0]
+                xai_generator.extract_attentions(data, bbox_idx)
+
+            if len(bbox_idx) > 0:
+                xai_generator.generate_explainability(
+                    expl_type=expl_type,
+                    head_fusion=head_fusion_method,
+                    handle_residual=handle_residual,
+                    apply_rule=apply_rule)
+                xai_generator.select_explainability(
+                    nms_idxs=nms_idxs,
+                    bbox_idx=bbox_idx,
+                    discard_threshold=discard_threshold,
+                    maps_quality=maps_quality,
+                    remove_pad=remove_pad,
+                    layer_fusion=layer_fusion)
+                xai_maps = xai_generator.xai_maps
+            else:
+                print("\nNO DETECTION - GENERATING RANDOM XAI MAP")
+                xai_maps = torch.rand(6, model.ori_shape[0], model.ori_shape[1])
         
         else:
             # TO FIX!!!
             if remove_pad:
-                xai_maps = torch.rand(6, Model.ori_shape[0], Model.ori_shape[1])
+                xai_maps = torch.rand(6, model.ori_shape[0], model.ori_shape[1])
             else:
-                xai_maps = torch.rand(6, Model.pad_shape[0], Model.pad_shape[1])
+                xai_maps = torch.rand(6, model.pad_shape[0], model.pad_shape[1])
 
         # Perturbate the input image with the XAI maps
         img = img[0][0]
         if remove_pad:
-            img = img[:, :, :Model.ori_shape[0], :Model.ori_shape[1]]  # [num_cams x height x width x channels]
-
-        img_norm_cfg = Model.cfg.get('img_norm_cfg')
-        mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
-        mask = torch.Tensor(-mean)
+            img = img[:, :, :model.ori_shape[0], :model.ori_shape[1]]  # [num_cams x height x width x channels]
 
         # defect data: 475
         img_pert_list = []  # list of perturbed images
         for cam in range(len(xai_maps)):
             img_pert = img[cam].permute(1, 2, 0).numpy()
 
-            # Get the attention for the camera and negate it if doing negative perturbation
             xai_cam = xai_maps[cam]
-            # filter_mask = xai_cam > 0.2
-            # filtered_xai = xai_cam[filter_mask].flatten()
-            # original_indices = torch.arange(xai_cam.numel()).reshape(xai_cam.shape)[filter_mask].flatten()
-            if negative_pert:
+
+            if perturbation_type == "negative":
                 xai_cam = -xai_cam
-                # filtered_xai = - filtered_xai
 
             num_pixels_removed = int(step * xai_cam.numel())
             if dataidx == 0:
                 print("Number of Pixel Removed for Cam {1}: {0}".format(num_pixels_removed, cam))
             _, indices = torch.topk(xai_cam.flatten(), num_pixels_removed)
-            #original_indices = original_indices[indices]
+
             row_indices, col_indices = indices // xai_cam.size(1), indices % xai_cam.size(1)
             img_pert[row_indices, col_indices] = np.mean(img_pert, axis=(0, 1))
-
             img_pert_list.append(img_pert)
         
         # if there are detected objects, apply the perturbated images to the data input
         if len(img_pert_list) > 0:
             # save_img the perturbed 6 camera images into the data input
             img_pert_list = torch.from_numpy(np.stack(img_pert_list))
-            img = [img_pert_list.permute(0, 3, 1, 2).unsqueeze(0)] # img = [torch.Size([1, 6, 3, 928, 1600])
+            img = [img_pert_list.permute(0, 3, 1, 2).unsqueeze(0)]
             data['img'][0] = DC(img)
 
         # Apply perturbated images to the model
         with torch.no_grad():
-            output_pert = Model.model(return_loss=False, rescale=True, **data)
+            output_pert = model.model(return_loss=False, rescale=True, **data)
 
         outputs_pert.extend(output_pert)
-
-        #del output_og
-        del output_pert
-        # del xai_maps
-        # gc.collect()
-        # torch.cuda.empty_cache()
         prog_bar.update()
     
     kwargs = {}
-    eval_kwargs = Model.cfg.get('evaluation', {}).copy()
+    eval_kwargs = model.cfg.get('evaluation', {}).copy()
     # hard-code way to remove EvalHook args
     for key in [
             'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
@@ -196,7 +223,7 @@ def evaluate_step(Model, ExplGen, expl_type, step, eval_file, negative_pert=True
     print(f"File {eval_file} updated.\n")
     gc.collect()
     del outputs_pert
-    
+
 
 if __name__ == '__main__':
     main()
