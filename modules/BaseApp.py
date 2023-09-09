@@ -219,21 +219,34 @@ class BaseApp(tk.Tk):
         for i in range(len(self.expl_options)):
             expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i], command=self.update_info_label)
 
-        pert_opt, pert_step_opt, pert_type_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
+
+        # Perturbation Menu
+        pert_opt, pert_step_opt, pert_type_opt, pert_pos_neg_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         
         self.selected_pert_step = tk.DoubleVar()
         self.selected_pert_step.set(-1)
         self.selected_pert_type = tk.StringVar()
-        pert_types = ["Mask", "Blur"]
-        self.selected_pert_type .set(pert_types[0])
+        pert_mask_types = ["Mask", "Blur"]
+        self.selected_pert_type.set(pert_mask_types[0])
         pert_steps = np.arange(0, 1.1, 0.1)
         for step in pert_steps:
-            pert_step_opt.add_radiobutton(label=f"{int(step*100)} %", variable=self.selected_pert_step, value=step)
-        for type in pert_types:
-            pert_type_opt.add_radiobutton(label=type, variable=self.selected_pert_type, value=type)
+            pert_step_opt.add_radiobutton(label=f"{int(step*100)} %",
+                variable=self.selected_pert_step, value=step)
+        for mask_type in pert_mask_types:
+            pert_type_opt.add_radiobutton(label=mask_type,
+                variable=self.selected_pert_type, value=mask_type)
+        
+        # Positive Negative Perturbation
+        self.selected_pert_pos_neg = tk.StringVar()
+        pert_pos_neg_opt.add_radiobutton(label="Positive",
+            variable=self.selected_pert_pos_neg, value="Positive")
+        pert_pos_neg_opt.add_radiobutton(label="Negative",
+            variable=self.selected_pert_pos_neg, value="Negative")
 
+        # Perturbation Menu
         pert_opt.add_cascade(label="Step", menu=pert_step_opt)
         pert_opt.add_cascade(label="Type", menu=pert_type_opt)
+        pert_opt.add_cascade(label="PosNeg", menu=pert_pos_neg_opt)
         expl_opt.add_cascade(label="Perturbation", menu=pert_opt)
 
 
@@ -355,10 +368,6 @@ class BaseApp(tk.Tk):
         data['img'][0] = DC(img)
         self.data = data
 
-        img_norm_cfg = self.ObjectDetector.cfg.get('img_norm_cfg')
-        mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
-        std = np.array(img_norm_cfg["std"], dtype=np.float32)
-
         if "points" in self.data.keys():
             self.data.pop("points")
 
@@ -368,21 +377,21 @@ class BaseApp(tk.Tk):
             img = img[0][0]
             img = img[:, :, :self.ObjectDetector.ori_shape[0], :self.ObjectDetector.ori_shape[1]]  # [num_cams x height x width x channels]
 
-            mask = torch.Tensor(-mean)
             img_pert_list = []
             for camidx in range(len(xai_maps)):
                 img_pert = img[camidx].permute(1, 2, 0).numpy()
-                xai = xai_maps[camidx]
-                filter_mask = xai > 0.2
-                filtered_xai = xai[filter_mask].flatten()
-                original_indices = torch.arange(xai.numel()).reshape(xai.shape)[filter_mask].flatten()
-                top_k = int(self.selected_pert_step.get() * filtered_xai.numel())
-                _, indices = torch.topk(filtered_xai, top_k)
-                original_indices = original_indices[indices]
-                row_indices, col_indices = original_indices // xai.size(1), original_indices % xai.size(1)
+                xai_cam = xai_maps[camidx]
+                
+                if self.selected_pert_pos_neg.get() == "Negative":
+                    xai_cam = -xai_cam
+
+                num_pixels_removed = int(self.selected_pert_step.get() * xai_cam.numel())
+                print("Number of Pixel Removed for Cam {1}: {0}".format(num_pixels_removed, camidx))
+                _, indices = torch.topk(xai_cam.flatten(), num_pixels_removed)
+                row_indices, col_indices = indices // xai_cam.size(1), indices % xai_cam.size(1)
 
                 if self.selected_pert_type.get() == "Mask":
-                    img_pert[row_indices, col_indices] = mask
+                    img_pert[row_indices, col_indices] = np.mean(img_pert, axis=(0, 1))
                 elif self.selected_pert_type.get() == "Blur":
                     blur_section  = img_pert[row_indices, col_indices]
                     blurred_section = cv2.GaussianBlur(blur_section, (9, 9), 0)
@@ -395,12 +404,7 @@ class BaseApp(tk.Tk):
                 img_pert_list = torch.from_numpy(np.stack(img_pert_list))
                 img = [img_pert_list.permute(0, 3, 1, 2).unsqueeze(0)] # img = [torch.Size([1, 6, 3, 928, 1600])
                 self.data['img'][0] = DC(img)
-        
 
-        # if len(self.selected_layers) > 0:
-        #     for layer in self.selected_layers:
-        #         xavier_init(self.ExplainableModel.Model.model.module.pts_bbox_head.transformer.decoder.layers[layer].attentions[0].attn.out_proj, distribution="uniform", bias=0.0)
-        #         xavier_init(self.ExplainableModel.Model.model.module.pts_bbox_head.transformer.decoder.layers[layer].attentions[1].attn.out_proj, distribution="uniform", bias=0.0)
 
         # Attention scores are extracted, together with gradients if grad-CAM is selected
         if not gradients:
@@ -432,11 +436,15 @@ class BaseApp(tk.Tk):
 
         # Extract the 6 camera images from the data and remove the padded pixels
         imgs = self.data["img"][0]._data[0].numpy()[0]
-        # imgs = imgs.transpose(0, 2, 3, 1)
         imgs = imgs.transpose(0, 2, 3, 1)
         if self.remove_pad.get():
             imgs = imgs[:, :self.ObjectDetector.ori_shape[0], :self.ObjectDetector.ori_shape[1], :]  # [num_cams x height x width x channels]
         
+        # Get mean std
+        img_norm_cfg = self.ObjectDetector.cfg.get('img_norm_cfg')
+        mean = np.array(img_norm_cfg["mean"], dtype=np.float32)
+        std = np.array(img_norm_cfg["std"], dtype=np.float32)
+
         # Denormalize the images
         for i in range(len(imgs)):
             imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)

@@ -230,27 +230,27 @@ class ExplainableTransformer:
         for layer in range(len(self.self_xai_maps_full)):
             self.self_xai_maps.append(self.self_xai_maps_full[layer][nms_idxs[bbox_idx]][:, nms_idxs][0])
 
-        # now attention maps can be overlayed
+        # apply discrod threshold and interpolate xai_maps
         self.xai_maps = self.xai_maps_full[:, nms_idxs[bbox_idx], :, :]
         if self.xai_maps.shape[1] > 0:
             self.xai_maps = self.xai_maps.max(dim=1)[0]  # num_layers x num_cams x [1450]
             mask = self.xai_maps < discard_threshold - (discard_threshold * 10) * (self.xai_maps.mean() + self.xai_maps.std())
             self.xai_maps[mask] = 0
-            self.xai_maps = self.interpolate_expl(self.xai_maps, maps_quality, remove_pad)
+            self.xai_maps = self.interpolate(self.xai_maps, maps_quality, remove_pad)
 
+        # store original per layer maps
         self.xai_layer_maps = self.xai_maps
 
-        # layer fusion
+        # fuse layers with fusion algorithms
         self.xai_maps = self.xai_maps.max(dim=0, keepdim=True)[0]
         self.xai_maps = self.xai_maps.squeeze()
 
         if len(bbox_idx) == 1:
             self.scores = self.get_camera_scores()
 
-        if not pert_step or pert_step == -1:
-            self.xai_maps_og = self.xai_maps
+        self.xai_maps_og = self.xai_maps
 
-    def interpolate_expl(self, xai_maps, maps_quality, remove_pad):
+    def interpolate(self, xai_maps, maps_quality, remove_pad):
         xai_maps_inter = []
         if xai_maps.dim() == 1:
             xai_maps.unsqueeze_(0)
