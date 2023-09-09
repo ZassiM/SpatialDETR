@@ -247,7 +247,9 @@ class ExplainableTransformer:
         elif layer_fusion == "mean":
             self.xai_maps = self.xai_maps.mean(dim=0, keepdim=True)
         elif layer_fusion == "min":
-            self.xai_maps = self.xai_maps.mean(dim=0, keepdim=True)[0]
+            self.xai_maps = self.xai_maps.min(dim=0, keepdim=True)[0]
+        elif layer_fusion == "last":
+            self.xai_maps = self.xai_maps[-1, ...]
         else:
             raise NotImplementedError
 

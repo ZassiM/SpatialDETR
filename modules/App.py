@@ -68,7 +68,12 @@ class App(BaseApp):
                 self.update_data(gradients=True, initialize_bboxes=False)
 
             self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get(), self.outputs]  
-            self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get(), True)
+            self.ExplainableModel.select_explainability(
+                self.nms_idxs, self.bbox_idx,
+                self.selected_discard_threshold.get(),
+                self.selected_map_quality.get(),
+                remove_pad=True,
+                layer_fusion=self.selected_layer_fusion_type.get())
 
             if self.single_bbox.get():
                 # Extract camera with highest attention
@@ -501,8 +506,17 @@ class App(BaseApp):
                 self.update_data(gradients=True, initialize_bboxes=False)
 
             if not self.no_object:
-                self.ExplainableModel.generate_explainability(self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get())
-                self.ExplainableModel.select_explainability(self.nms_idxs, self.bbox_idx, self.selected_discard_threshold.get(), self.selected_map_quality.get(), remove_pad=self.remove_pad.get())
+                self.ExplainableModel.generate_explainability(
+                    self.selected_expl_type.get(),
+                    self.selected_head_fusion.get(),
+                    self.handle_residual.get(),
+                    self.apply_rule.get())
+                self.ExplainableModel.select_explainability(
+                    self.nms_idxs, self.bbox_idx,
+                    self.selected_discard_threshold.get(),
+                    self.selected_map_quality.get(),
+                    remove_pad=self.remove_pad.get(),
+                    layer_fusion=self.selected_layer_fusion_type.get())
 
                 if self.single_bbox.get():
                     # Extract camera with highest attention

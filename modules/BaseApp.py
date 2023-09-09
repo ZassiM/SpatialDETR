@@ -182,15 +182,23 @@ class BaseApp(tk.Tk):
 
         # Raw Attention
         expl_opt.add_cascade(label=self.expl_options[0], menu=raw_attention)
-        self.head_fusion_types = ["max", "min", "mean"]
+        self.head_fusion_type = ["max", "min", "mean"]
         self.selected_head_fusion = tk.StringVar()
-        self.selected_head_fusion.set(self.head_fusion_types[0])
+        self.selected_head_fusion.set(self.head_fusion_type[0])
 
         hf_opt = tk.Menu(self.menubar)
-        for i in range(len(self.head_fusion_types)):
-            hf_opt.add_radiobutton(label=self.head_fusion_types[i].capitalize(), variable=self.selected_head_fusion, value=self.head_fusion_types[i])
+        for opt in self.head_fusion_type:
+            hf_opt.add_radiobutton(
+                label=opt.capitalize(),
+                variable=self.selected_head_fusion,
+                value=opt
+            )
         for head in range(self.ObjectDetector.num_heads):
-            hf_opt.add_radiobutton(label=str(head), variable=self.selected_head_fusion, value = str(head))
+            hf_opt.add_radiobutton(
+                label=str(head),
+                variable=self.selected_head_fusion,
+                value=str(head)
+            )
         raw_attention.add_cascade(label=" Head", menu=hf_opt)
 
         # Grad-CAM
@@ -216,9 +224,27 @@ class BaseApp(tk.Tk):
         expl_opt.add_cascade(label="Mechanism", menu=expl_type_opt)
         self.selected_expl_type = tk.StringVar()
         self.selected_expl_type.set(self.expl_options[0])
-        for i in range(len(self.expl_options)):
-            expl_type_opt.add_radiobutton(label=self.expl_options[i], variable=self.selected_expl_type, value=self.expl_options[i], command=self.update_info_label)
+        for opt in self.expl_options:
+            expl_type_opt.add_radiobutton(
+                label=opt,
+                variable=self.selected_expl_type,
+                value=opt,
+                command=self.update_info_label
+            )
 
+        # Layer Fusion Selection
+        self.layer_fusion_options = ["max", "min", "mean", "last"]
+        layer_fusion_type_opt = tk.Menu(self.menubar)
+        expl_opt.add_cascade(label="Layer Fusion", menu=layer_fusion_type_opt)
+        self.selected_layer_fusion_type = tk.StringVar()
+        self.selected_layer_fusion_type.set(self.layer_fusion_options[0])
+        for opt in self.layer_fusion_options:
+            layer_fusion_type_opt.add_radiobutton(
+                label=opt,
+                variable=self.selected_layer_fusion_type,
+                value=opt,
+                command=self.update_info_label
+            )
 
         # Perturbation Menu
         pert_opt, pert_step_opt, pert_type_opt, pert_pos_neg_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
@@ -250,14 +276,13 @@ class BaseApp(tk.Tk):
         pert_opt.add_cascade(label="PosNeg", menu=pert_pos_neg_opt)
         expl_opt.add_cascade(label="Perturbation", menu=pert_opt)
 
-
+        # Sanity Check
         sancheck_opt = tk.Menu(self.menubar)
         self.selected_sancheck_layer = []
         for layer in range(self.ObjectDetector.num_layers):
             var = tk.IntVar()
             self.selected_sancheck_layer.append(var)
             sancheck_opt.add_checkbutton(label=layer,  onvalue=1, offvalue=0, variable=var)
-
         expl_opt.add_cascade(label="Sanity check", menu=sancheck_opt)
 
 
@@ -527,7 +552,7 @@ class BaseApp(tk.Tk):
         
     def random_data_idx(self):
         idx = random.randint(0, len(self.ObjectDetector.dataset)-1)
-        self.data_idx = idx 
+        self.data_idx = idx
         self.selected_pert_step.set(-1)
         self.update_info_label()
 
@@ -535,7 +560,12 @@ class BaseApp(tk.Tk):
         if idx is None:
             idx = self.data_idx
         if info is None:
-            info = f"Model: {self.ObjectDetector.model_name} | Dataloader: {self.ObjectDetector.dataloader_name} | Sample index: {idx} | Mechanism: {self.selected_expl_type.get()}"
+            info = f'Model: {self.ObjectDetector.model_name} | '\
+                   f'Dataloader: {self.ObjectDetector.dataloader_name} | '\
+                   f'Sample index: {idx} | '\
+                   f'Mechanism: {self.selected_expl_type.get()} | '\
+                   f'Head Fusion: {self.selected_head_fusion.get()} | '\
+                   f'Layer Fusion: {self.selected_layer_fusion_type.get()}'
             if self.video_gen_bool:
                 if self.layers_video > 1:
                     info += f" | Layer {self.layer_idx}"
