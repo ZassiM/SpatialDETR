@@ -95,98 +95,6 @@ class ExplainableTransformer:
 
         return outputs
 
-    def get_camera_scores(self):
-        scores = []
-        scores_perc = []
-
-        for camidx in range(len(self.xai_layer_maps[-1])):
-            cam_map = self.xai_layer_maps[-1][camidx]
-            score = round(cam_map.sum().item(), 2)
-            scores.append(score)
-
-        sum_scores = sum(scores)
-        if sum_scores > 0 and not np.isnan(sum_scores):
-            for camidx in range(len(scores)):
-                score_perc = round(((scores[camidx]/sum_scores)*100))
-                scores_perc.append(score_perc)
-
-        return scores_perc
-
-    def generate_raw_att(self, layer, camidx, head_fusion_method="max"):
-        cam_q_i = self.dec_cross_attn_weights[layer][camidx]
-
-        if head_fusion_method == "mean":
-            cam_q_i = cam_q_i.clamp(min=0).mean(dim=0)
-        elif head_fusion_method == "max":
-            cam_q_i = cam_q_i.max(dim=0)[0]
-        elif head_fusion_method == "min":
-            cam_q_i = cam_q_i.min(dim=0)[0]
-        elif head_fusion_method.isdigit():
-            cam_q_i = cam_q_i[int(head_fusion_method)]
-        else:
-            raise NotImplementedError
-
-        self.R_q_i = cam_q_i
-
-    def generate_gradcam(self, layer, camidx):
-        cam_q_i = self.dec_cross_attn_weights[layer][camidx]
-        grad_q_i = self.dec_cross_attn_grads[layer][camidx]
-        cam_q_i = (cam_q_i * grad_q_i).mean(dim=0).clamp(min=0)
-        self.R_q_i = cam_q_i
-
-    # rule 5 from paper
-    def zero_clamp_avg_grad_heads(self, cam, grad):
-        cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
-        grad = grad.reshape(-1, grad.shape[-2], grad.shape[-1])
-        cam = grad * cam
-        cam = cam.clamp(min=0).mean(dim=0)
-        return cam
-
-    def handle_co_attn_self_query(self, layer):
-        cam_qq = self.dec_self_attn_weights[layer]
-        grad = self.dec_self_attn_grads[layer]
-        cam_qq = self.zero_clamp_avg_grad_heads(cam_qq, grad)
-        self.R_q_q += torch.matmul(cam_qq, self.R_q_q)
-
-    def handle_co_attn_query(self, layer, camidx, apply_normalization, apply_rule):
-        cam_q_i = self.dec_cross_attn_weights[layer][camidx]
-        grad_q_i = self.dec_cross_attn_grads[layer][camidx]
-        cam_q_i = self.zero_clamp_avg_grad_heads(cam_q_i, grad_q_i)
-
-        if apply_normalization:
-            R_qq_normalized = normalize_residual(self.R_q_q)
-        else:
-            R_qq_normalized = self.R_q_q
-
-        R_qi_addition = torch.matmul(R_qq_normalized.t(), cam_q_i)
-
-        if not apply_rule:
-            R_qi_addition = cam_q_i
-        R_qi_addition[torch.isnan(R_qi_addition)] = 0
-        self.R_q_i += R_qi_addition
-
-    def generate_gradroll(self, camidx, rollout=True, apply_normalization=True, apply_rule=True):
-        # initialize relevancy matrices
-
-        queries_num = self.dec_self_attn_weights[0].shape[-1]
-        image_bboxes = self.dec_cross_attn_weights[0].shape[-1]
-
-        device = self.dec_cross_attn_weights[0].device
-
-        # queries self attention matrix
-        self.R_q_q = torch.eye(queries_num, queries_num).to(device)
-        # impact of image boxes on queries
-        self.R_q_i = torch.zeros(queries_num, image_bboxes).to(device)
-
-        # decoder self attention of queries followd by multi-modal attention
-        if rollout:
-            #self.handle_co_attn_self_query(-1)
-            for layer in range(self.num_layers):
-                self.handle_co_attn_self_query(layer)
-                self.handle_co_attn_query(layer, camidx, apply_normalization, apply_rule)
-        else:
-            self.handle_co_attn_self_query(-1)
-            self.handle_co_attn_query(-1, camidx, apply_normalization, apply_rule)
 
     def generate_explainability(self, expl_type, head_fusion="max", handle_residual=True, apply_rule=True):
         xai_maps, self.self_xai_maps_full, xai_maps_camera = [], [], []
@@ -285,3 +193,98 @@ class ExplainableTransformer:
         xai_maps_inter = torch.stack([torch.stack(layer) for layer in xai_maps_inter])
 
         return xai_maps_inter
+
+
+    def get_camera_scores(self):
+        scores = []
+        scores_perc = []
+
+        for camidx in range(len(self.xai_layer_maps[-1])):
+            cam_map = self.xai_layer_maps[-1][camidx]
+            score = round(cam_map.sum().item(), 2)
+            scores.append(score)
+
+        sum_scores = sum(scores)
+        if sum_scores > 0 and not np.isnan(sum_scores):
+            for camidx in range(len(scores)):
+                score_perc = round(((scores[camidx]/sum_scores)*100))
+                scores_perc.append(score_perc)
+
+        return scores_perc
+
+    def generate_raw_att(self, layer, camidx, head_fusion_method="max"):
+        cam_q_i = self.dec_cross_attn_weights[layer][camidx]
+
+        if head_fusion_method == "mean":
+            cam_q_i = cam_q_i.clamp(min=0).mean(dim=0)
+        elif head_fusion_method == "max":
+            cam_q_i = cam_q_i.max(dim=0)[0]
+        elif head_fusion_method == "min":
+            cam_q_i = cam_q_i.min(dim=0)[0]
+        elif head_fusion_method.isdigit():
+            cam_q_i = cam_q_i[int(head_fusion_method)]
+        else:
+            raise NotImplementedError
+
+        self.R_q_i = cam_q_i
+
+    def generate_gradcam(self, layer, camidx):
+        cam_q_i = self.dec_cross_attn_weights[layer][camidx]
+        grad_q_i = self.dec_cross_attn_grads[layer][camidx]
+        cam_q_i = (cam_q_i * grad_q_i).mean(dim=0).clamp(min=0)
+        self.R_q_i = cam_q_i
+
+    # rule 5 from paper
+    def zero_clamp_avg_grad_heads(self, cam, grad):
+        cam = cam.reshape(-1, cam.shape[-2], cam.shape[-1])
+        grad = grad.reshape(-1, grad.shape[-2], grad.shape[-1])
+        cam = grad * cam
+        cam = cam.clamp(min=0).mean(dim=0)
+        return cam
+
+    def handle_co_attn_self_query(self, layer):
+        cam_qq = self.dec_self_attn_weights[layer]
+        grad = self.dec_self_attn_grads[layer]
+        cam_qq = self.zero_clamp_avg_grad_heads(cam_qq, grad)
+        self.R_q_q += torch.matmul(cam_qq, self.R_q_q)
+
+    def handle_co_attn_query(self, layer, camidx, apply_normalization, apply_rule):
+        cam_q_i = self.dec_cross_attn_weights[layer][camidx]
+        grad_q_i = self.dec_cross_attn_grads[layer][camidx]
+        cam_q_i = self.zero_clamp_avg_grad_heads(cam_q_i, grad_q_i)
+
+        if apply_normalization:
+            R_qq_normalized = normalize_residual(self.R_q_q)
+        else:
+            R_qq_normalized = self.R_q_q
+
+        R_qi_addition = torch.matmul(R_qq_normalized.t(), cam_q_i)
+
+        if not apply_rule:
+            R_qi_addition = cam_q_i
+        R_qi_addition[torch.isnan(R_qi_addition)] = 0
+        self.R_q_i += R_qi_addition
+
+    def generate_gradroll(self, camidx, rollout=True, apply_normalization=True, apply_rule=True):
+        # initialize relevancy matrices
+
+        queries_num = self.dec_self_attn_weights[0].shape[-1]
+        image_bboxes = self.dec_cross_attn_weights[0].shape[-1]
+
+        device = self.dec_cross_attn_weights[0].device
+
+        # queries self attention matrix
+        self.R_q_q = torch.eye(queries_num, queries_num).to(device)
+        # impact of image boxes on queries
+        self.R_q_i = torch.zeros(queries_num, image_bboxes).to(device)
+
+        # decoder self attention of queries followd by multi-modal attention
+        if rollout:
+            #self.handle_co_attn_self_query(-1)
+            for layer in range(self.num_layers):
+                self.handle_co_attn_self_query(layer)
+                self.handle_co_attn_query(layer, camidx, apply_normalization, apply_rule)
+        else:
+            self.handle_co_attn_self_query(-1)
+            self.handle_co_attn_query(-1, camidx, apply_normalization, apply_rule)
+
