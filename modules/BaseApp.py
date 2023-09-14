@@ -180,12 +180,12 @@ class BaseApp(tk.Tk):
 
         # Raw Attention
         expl_opt.add_cascade(label=self.expl_options[0], menu=raw_attention)
-        self.head_fusion_type = ["max", "min", "mean"]
+        self.head_fusion_options = ["max", "min", "mean"]
         self.selected_head_fusion = tk.StringVar()
-        self.selected_head_fusion.set(self.head_fusion_type[0])
+        self.selected_head_fusion.set(self.head_fusion_options[0])
 
         hf_opt = tk.Menu(self.menubar)
-        for opt in self.head_fusion_type:
+        for opt in self.head_fusion_options:
             hf_opt.add_radiobutton(
                 label=opt.capitalize(),
                 variable=self.selected_head_fusion,
@@ -245,14 +245,13 @@ class BaseApp(tk.Tk):
             )
 
         # Perturbation Menu
-        pert_opt, pert_step_opt, pert_type_opt, pert_pos_neg_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
-
+        pert_step_opt, pert_type_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.selected_pert_step = tk.DoubleVar()
         self.selected_pert_step.set(-1)
         self.selected_pert_type = tk.StringVar()
         pert_mask_types = ["Mask", "Blur"]
         self.selected_pert_type.set(pert_mask_types[0])
-        pert_steps = np.arange(0, 1.1, 0.1)
+        pert_steps = np.arange(0, 1.05, 0.05)
         for step in pert_steps:
             pert_step_opt.add_radiobutton(label=f"{int(step*100)} %",
                 variable=self.selected_pert_step, value=step)
@@ -261,6 +260,7 @@ class BaseApp(tk.Tk):
                 variable=self.selected_pert_type, value=mask_type)
 
         # Positive Negative Perturbation
+        pert_pos_neg_opt = tk.Menu(self.menubar)
         self.selected_pert_pos_neg = tk.StringVar()
         self.selected_pert_pos_neg.set("Positive")
         pert_pos_neg_opt.add_radiobutton(label="Positive",
@@ -268,10 +268,22 @@ class BaseApp(tk.Tk):
         pert_pos_neg_opt.add_radiobutton(label="Negative",
             variable=self.selected_pert_pos_neg, value="Negative")
 
+        # Visualization Colour of Perturbation
+        pert_colour_opt = tk.Menu(self.menubar)
+        self.selected_pert_colour = tk.StringVar()
+        self.selected_pert_colour.set("mean")
+        pert_colour_opt.add_radiobutton(label="Mean",
+            variable=self.selected_pert_colour, value="mean")
+        pert_colour_opt.add_radiobutton(label="Red",
+            variable=self.selected_pert_colour, value="red")
+
+
         # Perturbation Menu
+        pert_opt = tk.Menu(self.menubar)
         pert_opt.add_cascade(label="Step", menu=pert_step_opt)
         pert_opt.add_cascade(label="Type", menu=pert_type_opt)
         pert_opt.add_cascade(label="PosNeg", menu=pert_pos_neg_opt)
+        pert_opt.add_cascade(label="Colour", menu=pert_colour_opt)
         expl_opt.add_cascade(label="Perturbation", menu=pert_opt)
 
         # Sanity Check
@@ -395,6 +407,34 @@ class BaseApp(tk.Tk):
         if "points" in self.data.keys():
             self.data.pop("points")
 
+        # Attention scores are extracted, together with gradients if grad-CAM is selected
+        if gradients:
+            outputs = self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
+        else:
+            outputs = self.ExplainableModel.extract_attentions(self.data)
+
+
+        # Those are needed to index the bboxes decoded by the NMS-Free decoder
+        self.nms_idxs = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()
+        self.bbox_scores = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_scores()
+        self.outputs = outputs[0]["pts_bbox"]
+        self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
+        self.labels = self.outputs['labels_3d'][self.thr_idxs]
+        self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
+        
+        self.no_object = False
+        if len(self.labels) == 0:
+            self.no_object = True
+            if not self.video_gen_bool:
+                print("No object detected.")
+                self.show_message("No object detected")
+
+        # Extract image metas which contain, for example, the lidar to camera projection matrices
+        self.img_metas = self.data["img_metas"][0]._data[0][0]
+        self.data_description = None
+        self.object_description = None
+        self.color_dict = None
+
         if self.selected_pert_step.get() > 0:
             print("Perturbating images...")
             xai_maps = self.ExplainableModel.xai_maps
@@ -418,7 +458,7 @@ class BaseApp(tk.Tk):
                 row_indices, col_indices = indices // xai_cam.size(1), indices % xai_cam.size(1)
 
                 if self.selected_pert_type.get() == "Mask":
-                    img_pert[row_indices, col_indices] = np.mean(img_pert, axis=(0, 1))
+                    img_pert[row_indices, col_indices] = np.mean(img_pert, axis=(0, 1)) if self.selected_pert_colour.get() == "mean" else (-97.53, -114, 131.325)
                 elif self.selected_pert_type.get() == "Blur":
                     blur_section  = img_pert[row_indices, col_indices]
                     blurred_section = cv2.GaussianBlur(blur_section, (9, 9), 0)
@@ -431,35 +471,6 @@ class BaseApp(tk.Tk):
                 img_pert_list = torch.from_numpy(np.stack(img_pert_list))
                 img = [img_pert_list.permute(0, 3, 1, 2).unsqueeze(0)] # img = [torch.Size([1, 6, 3, 928, 1600])
                 self.data['img'][0] = DC(img)
-
-
-        # Attention scores are extracted, together with gradients if grad-CAM is selected
-        if not gradients:
-            outputs = self.ExplainableModel.extract_attentions(self.data)
-        else:
-            outputs = self.ExplainableModel.extract_attentions(self.data, self.bbox_idx)
-
-
-        # Those are needed to index the bboxes decoded by the NMS-Free decoder
-        self.nms_idxs = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()
-        self.bbox_scores = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_scores()
-        self.outputs = outputs[0]["pts_bbox"]
-        self.thr_idxs = self.outputs['scores_3d'] > self.selected_threshold.get()
-        self.labels = self.outputs['labels_3d'][self.thr_idxs]
-        self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
-        
-        self.no_object = False
-        if len(self.labels) == 0:
-            self.no_object = True
-            if not self.video_gen_bool:
-                print("No object detected.")
-                self.show_message("No object detected")
-
-        # Extract image metas which contain, for example, the lidar to camera projection matrices
-        self.img_metas = self.data["img_metas"][0]._data[0][0]
-        self.data_description = None
-        self.object_description = None
-        self.color_dict = None
 
         # Extract the 6 camera images from the data and remove the padded pixels
         imgs = self.data["img"][0]._data[0].numpy()[0]
