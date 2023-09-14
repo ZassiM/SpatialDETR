@@ -170,6 +170,9 @@ class App(BaseApp):
             if i == pert_ax:
                 self.pert_ax = ax
 
+            if True:
+                plt.imsave(f"maps/output/{i}.png", self.cam_imgs[self.cam_idx[i]])
+
             if self.selected_expl_type.get() != "Self Attention" and self.single_bbox.get():
                 score = self.ExplainableModel.scores[self.cam_idx[i]]
                 ax.axhline(y=0, color=self.bg_color, linewidth=10)
@@ -291,7 +294,7 @@ class App(BaseApp):
 
         if self.capture_object.get():
             class_name = self.ObjectDetector.class_names[self.labels[self.bbox_idx[0]].item()]
-            folder_path = f"maps/{self.ObjectDetector.model_name}/{self.data_idx}_{self.selected_expl_type.get()}_{class_name}"
+            folder_path = f"maps/{self.ObjectDetector.model_name}/{self.data_idx}_{self.selected_expl_type.get().replace(' ', '_')}_{self.selected_layer_fusion_type.get()}_{class_name}"
             if self.object_description:
                 folder_path += f"_{self.object_description}"
             if len(self.selected_layers) > 0:
