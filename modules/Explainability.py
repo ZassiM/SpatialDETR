@@ -247,6 +247,7 @@ class ExplainableTransformer:
         grad = self.dec_self_attn_grads[layer]
         cam_qq = self.zero_clamp_avg_grad_heads(cam_qq, grad)
         self.R_q_q += torch.matmul(cam_qq, self.R_q_q)
+        self.R_q_i += torch.matmul(cam_qq, self.R_q_i)
 
     def handle_co_attn_query(self, layer, camidx, apply_normalization, apply_rule):
         cam_q_i = self.dec_cross_attn_weights[layer][camidx]
@@ -254,33 +255,31 @@ class ExplainableTransformer:
         cam_q_i = self.zero_clamp_avg_grad_heads(cam_q_i, grad_q_i)
 
         if apply_normalization:
-            R_qq_normalized = normalize_residual(self.R_q_q)
+            R_q_q_norm = normalize_residual(self.R_q_q)
+            R_q_i_addition = torch.matmul(R_q_q_norm.t(), cam_q_i)
         else:
-            R_qq_normalized = self.R_q_q
-
-        R_qi_addition = torch.matmul(R_qq_normalized.t(), cam_q_i)
+            R_q_i_addition = self.R_q_q
 
         if not apply_rule:
             R_qi_addition = cam_q_i
         R_qi_addition[torch.isnan(R_qi_addition)] = 0
-        self.R_q_i += R_qi_addition
+        self.R_q_i += R_q_i_addition
 
     def generate_gradroll(self, camidx, rollout=True, apply_normalization=True, apply_rule=True):
         # initialize relevancy matrices
 
         queries_num = self.dec_self_attn_weights[0].shape[-1]
-        image_bboxes = self.dec_cross_attn_weights[0].shape[-1]
+        image_tokens = self.dec_cross_attn_weights[0].shape[-1]
 
         device = self.dec_cross_attn_weights[0].device
 
         # queries self attention matrix
         self.R_q_q = torch.eye(queries_num, queries_num).to(device)
         # impact of image boxes on queries
-        self.R_q_i = torch.zeros(queries_num, image_bboxes).to(device)
+        self.R_q_i = torch.zeros(queries_num, image_tokens).to(device)
 
         # decoder self attention of queries followd by multi-modal attention
         if rollout:
-            #self.handle_co_attn_self_query(-1)
             for layer in range(self.num_layers):
                 self.handle_co_attn_self_query(layer)
                 self.handle_co_attn_query(layer, camidx, apply_normalization, apply_rule)
