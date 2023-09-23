@@ -14,19 +14,20 @@ def main():
     warnings.filterwarnings("ignore")
 
     config = {
-        "mechanism": "Raw Attention",     #  'Raw Attention', 'Grad-CAM', 'Gradient Rollout', 'Random'
+        "mechanism": "Gradient Rollout",     #  'Raw Attention', 'Grad-CAM', 'Gradient Rollout', 'Random'
         "perturbation_type": "negative",  #  'positive', 'negative'
         "pred_threshold": 0.4,
         "discard_threshold": 0.3,
         "head_fusion_method": "max",      #  'max', 'min', 'mean'
-        "layer_fusion_method": "max",     #  'max', 'min', 'mean', 'last'
+        "layer_fusion_method": "max",    #  'max', 'min', 'mean', 'last'
         "maps_quality": "High",
         "remove_pad": True,
         "grad_rollout_handle_residual": True,
         "grad_rollout_apply_rule": True,
     }
 
-    perturbation_steps = [0.92, 0.94, 0.96]
+    # 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 
+    perturbation_steps = [0.90, 0.92, 0.94, 0.96, 0.98, 0.99]
 
     model = Model()
     model.load_from_config(gpu_id=0)
@@ -37,7 +38,7 @@ def main():
     info = "*" * (38 + len(config['mechanism']))
     info += (f"\nEvaluating {config['mechanism']} with {config['perturbation_type']} perturbation\n")
     info += "*" * (38 + len(config['mechanism']))
-    info + = "\n"
+    info += "\n"
     for k, v in config.items():
         info += f"{k}: {v}\n"
     info += "*" * (38 + len(config['mechanism']))
@@ -140,7 +141,7 @@ def evaluate_step(model, xai_generator, step, eval_file, config):
                     discard_threshold=discard_threshold,
                     maps_quality=maps_quality,
                     remove_pad=remove_pad,
-                    layer_fusion=layer_fusion_method)
+                    layer_fusion_method=layer_fusion_method)
                 xai_maps = xai_generator.xai_maps
             else:
                 print("\nNO DETECTION - GENERATING RANDOM XAI MAP")

@@ -73,7 +73,7 @@ class App(BaseApp):
                 self.selected_discard_threshold.get(),
                 self.selected_map_quality.get(),
                 remove_pad=True,
-                layer_fusion=self.selected_layer_fusion_type.get())
+                layer_fusion_method=self.selected_layer_fusion_type.get())
 
             if self.single_bbox.get():
                 # Extract camera with highest attention
@@ -519,7 +519,7 @@ class App(BaseApp):
                     self.selected_discard_threshold.get(),
                     self.selected_map_quality.get(),
                     remove_pad=self.remove_pad.get(),
-                    layer_fusion=self.selected_layer_fusion_type.get())
+                    layer_fusion_method=self.selected_layer_fusion_type.get())
 
                 if self.single_bbox.get():
                     # Extract camera with highest attention

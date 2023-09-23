@@ -178,9 +178,9 @@ class BaseApp(tk.Tk):
         raw_attention, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.expl_options = ["Raw Attention", "Grad-CAM", "Gradient Rollout", "Self Attention"]
 
-        # Raw Attention
+        # Head Fusion Method
         expl_opt.add_cascade(label=self.expl_options[0], menu=raw_attention)
-        self.head_fusion_options = ["max", "min", "mean"]
+        self.head_fusion_options = ["max", "min", "mean", "zero_clamp_mean"]
         self.selected_head_fusion = tk.StringVar()
         self.selected_head_fusion.set(self.head_fusion_options[0])
 
@@ -189,7 +189,8 @@ class BaseApp(tk.Tk):
             hf_opt.add_radiobutton(
                 label=opt.capitalize(),
                 variable=self.selected_head_fusion,
-                value=opt
+                value=opt,
+                command=self.update_info_label
             )
         for head in range(self.ObjectDetector.num_heads):
             hf_opt.add_radiobutton(
@@ -231,7 +232,7 @@ class BaseApp(tk.Tk):
             )
 
         # Layer Fusion Selection
-        self.layer_fusion_options = ["max", "min", "mean", "last"]
+        self.layer_fusion_options = ["max", "min", "mean", "last", "zero_clamp_mean"]
         layer_fusion_type_opt = tk.Menu(self.menubar)
         expl_opt.add_cascade(label="Layer Fusion", menu=layer_fusion_type_opt)
         self.selected_layer_fusion_type = tk.StringVar()

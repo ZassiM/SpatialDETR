@@ -133,7 +133,7 @@ class ExplainableTransformer:
 
         self.xai_maps_full = xai_maps
 
-    def select_explainability(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True, layer_fusion="max"):
+    def select_explainability(self, nms_idxs, bbox_idx, discard_threshold, maps_quality="Medium", remove_pad=True, layer_fusion_method="max"):
         self.self_xai_maps = []
         for layer in range(len(self.self_xai_maps_full)):
             self.self_xai_maps.append(self.self_xai_maps_full[layer][nms_idxs[bbox_idx]][:, nms_idxs][0])
@@ -150,13 +150,15 @@ class ExplainableTransformer:
         self.xai_layer_maps = self.xai_maps
 
         # fuse layers with fusion algorithms
-        if layer_fusion == "max":
+        if layer_fusion_method == "max":
             self.xai_maps = self.xai_maps.max(dim=0, keepdim=True)[0]
-        elif layer_fusion == "mean":
+        elif layer_fusion_method == "zero_clamp_mean":
             self.xai_maps = self.xai_maps.clamp(min=0).mean(dim=0, keepdim=True)
-        elif layer_fusion == "min":
+        elif layer_fusion_method == "mean":
+            self.xai_maps = self.xai_maps.mean(dim=0, keepdim=True)
+        elif layer_fusion_method == "min":
             self.xai_maps = self.xai_maps.min(dim=0, keepdim=True)[0]
-        elif layer_fusion == "last":
+        elif layer_fusion_method == "last":
             self.xai_maps = self.xai_maps[-1, ...]
         else:
             raise NotImplementedError
@@ -216,6 +218,8 @@ class ExplainableTransformer:
         cam_q_i = self.dec_cross_attn_weights[layer][camidx]
 
         if head_fusion_method == "mean":
+            cam_q_i = cam_q_i.mean(dim=0)
+        elif head_fusion_method == "zero_clamp_mean":
             cam_q_i = cam_q_i.clamp(min=0).mean(dim=0)
         elif head_fusion_method == "max":
             cam_q_i = cam_q_i.max(dim=0)[0]
@@ -255,10 +259,9 @@ class ExplainableTransformer:
         cam_q_i = self.zero_clamp_avg_grad_heads(cam_q_i, grad_q_i)
 
         if apply_normalization:
-            R_q_q_norm = normalize_residual(self.R_q_q)
-            R_q_i_addition = torch.matmul(R_q_q_norm.t(), cam_q_i)
+            R_q_i_addition = torch.matmul(normalize_residual(self.R_q_q).t(), cam_q_i)
         else:
-            R_q_i_addition = self.R_q_q
+            R_q_i_addition = torch.matmul(self.R_q_q.t(), cam_q_i)
 
         if not apply_rule:
             R_qi_addition = cam_q_i
