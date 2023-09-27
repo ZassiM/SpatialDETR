@@ -239,7 +239,7 @@ class BaseApp(tk.Tk):
         self.selected_layer_fusion_type.set(self.layer_fusion_options[0])
         for opt in self.layer_fusion_options:
             layer_fusion_type_opt.add_radiobutton(
-                label=opt,
+                label=opt.capitalize(),
                 variable=self.selected_layer_fusion_type,
                 value=opt,
                 command=self.update_info_label
@@ -574,8 +574,8 @@ class BaseApp(tk.Tk):
                    f'Dataloader: {self.ObjectDetector.dataloader_name} | '\
                    f'Sample index: {idx} | '\
                    f'Mechanism: {self.selected_expl_type.get()} | '\
-                   f'Head Fusion: {self.selected_head_fusion.get()} | '\
-                   f'Layer Fusion: {self.selected_layer_fusion_type.get()}'
+                   f'Head Fusion: {self.selected_head_fusion.get().capitalize()} | '\
+                   f'Layer Fusion: {self.selected_layer_fusion_type.get().capitalize()}'
             if self.video_gen_bool:
                 if self.layers_video > 1:
                     info += f" | Layer {self.layer_idx}"

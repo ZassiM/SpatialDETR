@@ -107,13 +107,6 @@ class App(BaseApp):
                         labels=self.labels)
             else:
                 img = self.imgs[camidx]
-            
-            if camidx == 0:
-                fig_new = plt.figure()
-                ax_new = fig_new.add_subplot(111)
-                ax_new.imshow(img)
-                ax_new.axis("off")
-                fig_new.savefig("img_bbox.png", dpi=300, transparent=True, bbox_inches='tight', pad_inches=0)
 
             if self.selected_expl_type.get() != "Self Attention" and self.single_bbox.get() and camidx == self.selected_camera:
                 og_img = self.imgs[camidx].astype(np.uint8)
@@ -169,9 +162,6 @@ class App(BaseApp):
             ax.axis('off')
             if i == pert_ax:
                 self.pert_ax = ax
-
-            if True:
-                plt.imsave(f"maps/output/{i}.png", self.cam_imgs[self.cam_idx[i]])
 
             if self.selected_expl_type.get() != "Self Attention" and self.single_bbox.get():
                 score = self.ExplainableModel.scores[self.cam_idx[i]]
@@ -290,7 +280,6 @@ class App(BaseApp):
                 if self.bbox_idx[0] == b[0]:
                     self.extr_bbox_coord = b[1]
                     break
-
 
         if self.capture_object.get():
             class_name = self.ObjectDetector.class_names[self.labels[self.bbox_idx[0]].item()]
@@ -461,9 +450,8 @@ class App(BaseApp):
         if self.video_length.get() > (len(self.ObjectDetector.dataset) - self.data_idx):
             self.show_message(f"Video lenght should be between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
             return False
-
-        self.video_length.set(13)
-        self.video_folder = f"videos/video_{self.data_idx}_{self.video_length.get()}_camcontr"
+        
+        self.video_folder = f"videos/video_{self.data_idx}_{self.video_length.get()}"
         if os.path.isdir(self.video_folder):
             shutil.rmtree(self.video_folder)
         os.makedirs(self.video_folder)

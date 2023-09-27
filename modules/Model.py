@@ -167,6 +167,7 @@ class Model():
             # segmentation dataset has `PALETTE` attribute
             model.PALETTE = dataset.PALETTE
 
+        # For Sanity Check
         # model.pts_bbox_head.transformer.init_layers()
         # model.pts_bbox_head.transformer.init_weights()
         # model.img_backbone.init_weights()
