@@ -4,8 +4,8 @@ ARG CUDNN="8"
 
 FROM pytorch/pytorch:${PYTORCH}-cuda${CUDA}-cudnn${CUDNN}-devel
 
-RUN groupadd -g 12294 fb-5
-RUN useradd -u 15458 -g fb-5 beemelmanns
+RUN groupadd -g 1001 fb-5
+RUN useradd -u 1001 -g fb-5 beemelmanns
 
 ENV TORCH_CUDA_ARCH_LIST="6.0 6.1 7.0+PTX"
 ENV TORCH_NVCC_FLAGS="-Xfatbin -compress-all"

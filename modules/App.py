@@ -410,7 +410,6 @@ class App(BaseApp):
                 labels = self.img_labels[self.target_class[self.idx_video.get()]]
                 self.update_objects_list(labels=labels, single_select=True)
 
-
     def pause_resume(self, event=None):
         if not self.paused:
             self.after_cancel(self.after_seq_id)

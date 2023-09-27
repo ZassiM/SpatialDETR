@@ -622,8 +622,6 @@ class BaseApp(tk.Tk):
                 if i != idx:
                     self.bboxes[i].set(False)
 
-
-
     def get_object_camera(self):
         scores = self.ExplainableModel.scores
         if not scores:
@@ -687,7 +685,6 @@ class BaseApp(tk.Tk):
         img = img * (1 - xai_map_mask[..., None]) + xai_map_colored * xai_map_mask[..., None]
         img = img / np.max(img)
         return img
-
 
     def load_video(self):
 
