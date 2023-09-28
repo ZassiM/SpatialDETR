@@ -1,5 +1,7 @@
+"""
+This script extracts the number of samples for each scene from the validation split of the v1.0-tranval dataset
+"""
 from nuscenes.nuscenes import NuScenes
-
 
 # From file nuscenes/utils/split.py, I get the following scene indices for the validation split of the full v1.0-trainval dataset:
 val = \
@@ -23,21 +25,27 @@ val = \
      'scene-1060', 'scene-1061', 'scene-1062', 'scene-1063', 'scene-1064', 'scene-1065', 'scene-1066', 'scene-1067',
      'scene-1068', 'scene-1069', 'scene-1070', 'scene-1071', 'scene-1072', 'scene-1073']
 
-# Remove non-numerical symbols and leading zeros
-val = [int(s.split('-')[-1].lstrip('0')) for s in val]
-
 
 # NuScenes object loads the full trainval dataset and can be used for analyzing each scene
 nusc = NuScenes(version='v1.0-trainval', dataroot='data/nuscenes/', verbose=True)
 
-idx_to_scene = []
-for scene in nusc.scene:
-    idx_to_scene.append(scene['name'])
-
-
+# Extract the number of samples for each scene in the validation set
 samples_scene = []
-for idx in val:
-    scene = nusc.scene[idx]
-    samples_scene.append(scene["nbr_samples"])
+for val_scene in val:
+    for scene in nusc.scene:
+        if val_scene == scene["name"]:
+            samples_scene.append(scene["nbr_samples"])
+            break
+
+# For testing, the sum of the samples of the whole validation split should be 6019
+sum = 0
+for samples in samples_scene:
+    sum += samples
+
+filename = "scene_samples.txt"
+
+with open(filename, "w") as file:
+    for samples in samples_scene:
+        file.write(str(samples) + "\n")
 
 debug = 0

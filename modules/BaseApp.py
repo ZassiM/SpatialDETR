@@ -148,7 +148,6 @@ class BaseApp(tk.Tk):
         video_lengths[0] = 10
         video_lengths[-1] = 6019
         self.video_length = tk.IntVar()
-        self.video_length.set(5)
         for i in range(len(video_lengths)):
             videolength_opt.add_radiobutton(label=video_lengths[i], variable=self.video_length , value=video_lengths[i])
 
@@ -393,6 +392,12 @@ class BaseApp(tk.Tk):
         frame.grid(sticky=tk.NSEW)
         frame.set_content(self.open_md_file())
 
+    def random_data_idx(self):
+        idx = random.randint(0, len(self.ObjectDetector.dataset)-1)
+        self.data_idx = idx
+        self.selected_pert_step.set(-1)
+        self.update_info_label()
+
     def update_data(self, gradients=False, initialize_bboxes=True):
         '''
         Predict bboxes and extracts attentions.
@@ -559,12 +564,6 @@ class BaseApp(tk.Tk):
             self.object_description = entry
         
         popup.destroy()
-        
-    def random_data_idx(self):
-        idx = random.randint(0, len(self.ObjectDetector.dataset)-1)
-        self.data_idx = idx
-        self.selected_pert_step.set(-1)
-        self.update_info_label()
 
     def update_info_label(self, info=None, idx=None):
         if idx is None:

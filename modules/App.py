@@ -406,7 +406,7 @@ class App(BaseApp):
             self.idx_video.set(self.idx_video.get() - 1)
             if hasattr(self, "img_labels"):
                 labels = self.img_labels[self.target_class[self.idx_video.get()]]
-                self.update_objects_list(labels=labels, single_select=True)
+                self.update_objects_list(labels=labels, single_select=False)
         else:
             self.paused = False
             self.show_sequence()
@@ -526,7 +526,7 @@ class App(BaseApp):
                         self.imgs[camidx],
                         self.img_metas['lidar2img'][camidx],
                         color=(0, 255, 0),
-                        with_bbox_id=False,
+                        with_bbox_id=True,
                         all_bbx=True,
                         bbx_idx=self.bbox_idx,
                         mode_2d=self.bbox_2d.get(),
