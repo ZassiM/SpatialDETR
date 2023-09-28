@@ -1,11 +1,10 @@
 from PIL import Image, ImageTk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 import matplotlib.transforms as mtransforms
 import matplotlib
 
 
-from modules.BaseApp import BaseApp, tk, np, cv2, plt, mmcv, torch, DC, pickle
+from modules.BaseApp import BaseApp, tk, np, cv2, plt, mmcv, torch, DC, pickle, draw_lidar_bbox3d_on_img
 import shutil
 import os
 from mmcv.cnn import xavier_init

@@ -16,12 +16,12 @@ from tkinter.messagebox import showinfo
 from tkinter import scrolledtext
 import matplotlib.pyplot as plt
 from PIL import Image, ImageTk
+from mmdet3d.core.visualizer.image_vis import draw_lidar_bbox3d_on_img
 
 from modules.Configs import Configs
 from modules.Explainability import ExplainableTransformer
 from modules.Model import Model
 from PIL import ImageGrab
-
 
 class BaseApp(tk.Tk):
     '''
@@ -53,6 +53,8 @@ class BaseApp(tk.Tk):
         self.img_labels = None
         self.video_loaded = False
         self.layers_video = 0
+        with open('scene_samples.txt', 'r') as file:
+            self.scene_samples = [int(line.strip()) for line in file]
         
         self.bbox_coords, self.saliency_maps_objects = [], []
         
@@ -168,6 +170,7 @@ class BaseApp(tk.Tk):
         video_opt.add_command(label=" Generate", command=self.generate_video)
         video_opt.add_command(label=" Load", command=self.load_video)
         video_opt.add_cascade(label=" Video length", menu=videolength_opt)
+        video_opt.add_command(label=" Select scene", command=lambda: self.insert_entry(type=3))
         video_opt.add_cascade(label=" Video delay", menu=delay_opt)
         video_opt.add_cascade(label=" Filter object", menu=filter_opt)
         video_opt.add_checkbutton(label=" Aggregate layers", onvalue=1, offvalue=0, variable=self.aggregate_layers)
@@ -281,7 +284,6 @@ class BaseApp(tk.Tk):
         pert_colour_opt.add_radiobutton(label="Red",
             variable=self.selected_pert_colour, value="red")
 
-
         # Perturbation Menu
         pert_opt = tk.Menu(self.menubar)
         pert_opt.add_cascade(label="Step", menu=pert_step_opt)
@@ -298,7 +300,6 @@ class BaseApp(tk.Tk):
             self.selected_sancheck_layer.append(var)
             sancheck_opt.add_checkbutton(label=layer,  onvalue=1, offvalue=0, variable=var)
         expl_opt.add_cascade(label="Sanity check", menu=sancheck_opt)
-
 
         # Discard ratio for attention weights
         dr_opt, int_opt, beta_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
@@ -566,6 +567,17 @@ class BaseApp(tk.Tk):
                 file.writelines(lines)
         elif type == 2:
             self.object_description = entry
+        elif type == 3:
+            if entry.isnumeric() and int(entry) <= (len(self.scene_samples) - 1):
+                self.video_scene = int(entry)
+                self.data_idx = 0
+                for i in range(self.video_scene):
+                    self.data_idx += self.scene_samples[i]
+                self.video_length.set(self.scene_samples[self.video_scene])
+                self.update_info_label()
+            else:
+                self.show_message(f"Insert an integer between 0 and {len(self.scene_samples) -1}")
+                return
         
         popup.destroy()
 
@@ -695,6 +707,9 @@ class BaseApp(tk.Tk):
             return False
         
         self.video_folder = f"videos/video_{self.data_idx}_{self.video_length.get()}"
+        if hasattr(self, "video_scene"):
+            self.video_folder += f"_scene{self.video_scene}"
+
         if os.path.isdir(self.video_folder):
             shutil.rmtree(self.video_folder)
         os.makedirs(self.video_folder)
