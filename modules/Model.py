@@ -67,7 +67,7 @@ class Model():
         self.init_model(args)
         
         self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
-        self.dataloader_name = self.dataset.metadata['version']
+        self.dataset_name = self.dataset.metadata['version']
         self.class_names = self.dataset.CLASSES
         self.num_layers = self.cfg.model.pts_bbox_head.transformer.decoder.num_layers
         self.num_heads = self.cfg.model.pts_bbox_head.transformer.decoder.transformerlayers.attn_cfgs[0].num_heads
@@ -138,12 +138,13 @@ class Model():
             init_dist(args["launcher"], **cfg.dist_params)
 
         dataset = build_dataset(cfg.data.val)
-        data_loader = build_dataloader(
-            dataset,
-            samples_per_gpu=samples_per_gpu,
-            workers_per_gpu=cfg.data.workers_per_gpu,
-            dist=distributed,
-            shuffle=False)
+
+        # data_loader = build_dataloader(
+        #     dataset,
+        #     samples_per_gpu=samples_per_gpu,
+        #     workers_per_gpu=cfg.data.workers_per_gpu,
+        #     dist=distributed,
+        #     shuffle=False)
 
         # build the model and load checkpoint
         cfg.model.train_cfg = None
@@ -177,7 +178,7 @@ class Model():
         else:
             self.model = MMDistributedDataParallel(model.cuda(), device_ids=[torch.cuda.current_device()], broadcast_buffers=False)
 
-        self.dataset = data_loader.dataset
+        self.dataset = dataset
         self.cfg = cfg
 
 

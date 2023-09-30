@@ -25,27 +25,37 @@ val = \
      'scene-1060', 'scene-1061', 'scene-1062', 'scene-1063', 'scene-1064', 'scene-1065', 'scene-1066', 'scene-1067',
      'scene-1068', 'scene-1069', 'scene-1070', 'scene-1071', 'scene-1072', 'scene-1073']
 
+# 0553
 
 # NuScenes object loads the full trainval dataset and can be used for analyzing each scene
 nusc = NuScenes(version='v1.0-trainval', dataroot='data/nuscenes/', verbose=True)
 
 # Extract the number of samples for each scene in the validation set
-samples_scene = []
+scene_samples = []
+scene_name = []
+scene_description = []
+
 for val_scene in val:
     for scene in nusc.scene:
         if val_scene == scene["name"]:
-            samples_scene.append(scene["nbr_samples"])
+            scene_samples.append(scene["nbr_samples"])
+            scene_name.append(scene["name"])
+            scene_description.append(scene["description"])
             break
 
 # For testing, the sum of the samples of the whole validation split should be 6019
 sum = 0
-for samples in samples_scene:
+for samples in scene_samples:
     sum += samples
 
-filename = "scene_samples.txt"
+# Write the scene samples to a txt file
+filename = "scene_descr.txt"
 
 with open(filename, "w") as file:
-    for samples in samples_scene:
-        file.write(str(samples) + "\n")
+    for samples, name, description in zip(scene_samples, scene_name, scene_description):
+        file.write(str(samples) + " | " + name + " | " + description + "\n")
 
 debug = 0
+
+
+# TO-DO: Extract scene description

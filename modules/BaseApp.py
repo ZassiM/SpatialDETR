@@ -151,9 +151,10 @@ class BaseApp(tk.Tk):
         videolength_opt = tk.Menu(self.menubar)
         video_lengths = np.arange(0, 1200, 100)
         video_lengths[0] = 10
-        video_lengths[-1] = 6019
+        video_lengths[-1] = len(self.ObjectDetector.dataset)
         self.video_length = tk.IntVar()
-        self.video_length.set(video_lengths[0])
+        #self.video_length.set(video_lengths[0])
+        self.video_length.set(795)
         for i in range(len(video_lengths)):
             videolength_opt.add_radiobutton(label=video_lengths[i], variable=self.video_length , value=video_lengths[i])
 
@@ -586,7 +587,7 @@ class BaseApp(tk.Tk):
             idx = self.data_idx
         if info is None:
             info = f'Model: {self.ObjectDetector.model_name} | '\
-                   f'Dataloader: {self.ObjectDetector.dataloader_name} | '\
+                   f'Dataset: {self.ObjectDetector.dataset_name} ({len(self.ObjectDetector.dataset)}) | '\
                    f'Sample index: {idx} | '\
                    f'Mechanism: {self.selected_expl_type.get()} | '\
                    f'Head Fusion: {self.selected_head_fusion.get().capitalize()} | '\
@@ -855,6 +856,7 @@ class BaseApp(tk.Tk):
             self.target_classes = [[i for i, tensor in enumerate(self.img_labels) if target_class in tensor.tolist()] for target_class in target_classes]
         else:
             self.update_objects_list(labels=[])
+            # self.target_classes = [[]]
 
         items = os.listdir(self.video_folder)
         if any(os.path.isdir(os.path.join(self.video_folder, item)) for item in items):
@@ -889,8 +891,8 @@ class BaseApp(tk.Tk):
         else:
             self.info_text_video.set("KEYLEFT: back, KEYRIGHT: forward, SPACE: pause/resume")
 
-        self.selected_filter.set(10)
         self.show_message(f"Video loaded ({self.video_length.get()} images).")
+
         if not self.video_loaded:
             self.menubar.add_command(label="Show video", command=self.show_video)
             self.add_separator("|")

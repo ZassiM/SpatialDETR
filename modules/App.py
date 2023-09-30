@@ -331,36 +331,31 @@ class App(BaseApp):
         self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="LiDAR/", show_gt=self.GT_bool.get(), show=True, snapshot=False, file_name=file_name, pipeline=None, score_thr=self.selected_threshold.get())
 
     def show_video(self):
+        if self.canvas and not self.video_gen_bool or not self.canvas:
+            if self.canvas:
+                self.canvas.get_tk_widget().pack_forget()
+            end_idx = self.menubar.index('end')
+            self.menubar.delete(end_idx-1, end_idx)
 
-        if not self.video_loaded:
-            self.show_message("First load a video from a folder")
-            return        
-        else:
-            if self.canvas and not self.video_gen_bool or not self.canvas:
-                if self.canvas:
-                    self.canvas.get_tk_widget().pack_forget()
-                end_idx = self.menubar.index('end')
-                self.menubar.delete(end_idx-1, end_idx)
+            self.bind('<space>', self.pause_resume)
+            self.bind('<Right>', self.update_index)
+            self.bind('<Left>', self.update_index)
+            self.bind('<Up>', self.update_index)
+            self.bind('<Down>', self.update_index)
 
-                self.bind('<space>', self.pause_resume)
-                self.bind('<Right>', self.update_index)
-                self.bind('<Left>', self.update_index)
-                self.bind('<Up>', self.update_index)
-                self.bind('<Down>', self.update_index)
+            self.canvas = tk.Canvas(self)
+            self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+            self.canvas_frame = self.canvas.create_image(0, 0, image=None, anchor='nw', tags="img_tag")
+            self.canvas.update()
+            self.video_gen_bool = True
 
-                self.canvas = tk.Canvas(self)
-                self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-                self.canvas_frame = self.canvas.create_image(0, 0, image=None, anchor='nw', tags="img_tag")
-                self.canvas.update()
-                self.video_gen_bool = True
-
-            self.update_object_filter()
-            self.info_label_video.pack_forget()
-            self.info_label_video.pack(side=tk.TOP)
-            self.paused = False
-            self.old_w, self.old_h = None, None
-            self.layer_idx = self.layers_video - 1
-            self.flag = False
-            self.delay = 20  # Initial delay
-            self.show_sequence()
+        self.update_object_filter()
+        self.info_label_video.pack_forget()
+        self.info_label_video.pack(side=tk.TOP)
+        self.paused = False
+        self.old_w, self.old_h = None, None
+        self.layer_idx = self.layers_video - 1
+        self.flag = False
+        self.delay = 20  # Initial delay
+        self.show_sequence()
     
