@@ -18,7 +18,7 @@ def main():
         "perturbation_type": "negative",  #  'positive', 'negative'
         "pred_threshold": 0.4,
         "discard_threshold": 0.3,
-        "head_fusion_method": "max",      #  'max', 'min', 'mean'
+        "head_fusion_method": "zero_clamp_mean",      #  'max', 'min', 'mean'
         "layer_fusion_method": "max",    #  'max', 'min', 'mean', 'last'
         "maps_quality": "High",
         "remove_pad": True,
@@ -26,8 +26,8 @@ def main():
         "grad_rollout_apply_rule": True,
     }
 
-    # 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 
-    perturbation_steps = [0.90, 0.92, 0.94, 0.96, 0.98, 0.99]
+    # 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80,
+    perturbation_steps = [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.92, 0.94, 0.96, 0.98, 0.99]
 
     model = Model()
     model.load_from_config(gpu_id=0)
@@ -46,7 +46,7 @@ def main():
     eval_folder = f"eval_results/{config['mechanism']}"
     if not os.path.exists(eval_folder):
         os.makedirs(eval_folder)
-    file_name = f"{model.model_name}_{model.dataloader_name}"
+    file_name = f"{model.model_name}_{model.dataset_name}"
     file_path = os.path.join(eval_folder, file_name)
     counter = 1
     while os.path.exists(file_path+".txt"):
