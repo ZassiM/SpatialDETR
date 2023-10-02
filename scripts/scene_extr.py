@@ -25,18 +25,22 @@ val = \
      'scene-1060', 'scene-1061', 'scene-1062', 'scene-1063', 'scene-1064', 'scene-1065', 'scene-1066', 'scene-1067',
      'scene-1068', 'scene-1069', 'scene-1070', 'scene-1071', 'scene-1072', 'scene-1073']
 
-# 0553
 
 # NuScenes object loads the full trainval dataset and can be used for analyzing each scene
 nusc = NuScenes(version='v1.0-trainval', dataroot='data/nuscenes/', verbose=True)
 
-# Extract the number of samples for each scene in the validation set
+# Need to sort the scenes list based on their timestamp
+scenes = [(nusc.get('sample', record['first_sample_token'])['timestamp'], record) for record in
+        nusc.scene]
+scenes = sorted(scenes)
+scenes = [scene[1] for scene in scenes]
+
+# Now the 850 scenes (full set) are sorted, it is possible to extract the information of 150 scenes from the validation set
 scene_samples = []
 scene_name = []
 scene_description = []
-
-for val_scene in val:
-    for scene in nusc.scene:
+for scene in scenes:
+    for val_scene in val:
         if val_scene == scene["name"]:
             scene_samples.append(scene["nbr_samples"])
             scene_name.append(scene["name"])
@@ -49,13 +53,10 @@ for samples in scene_samples:
     sum += samples
 
 # Write the scene samples to a txt file
-filename = "scene_descr.txt"
+filename = "scene.txt"
 
 with open(filename, "w") as file:
-    for samples, name, description in zip(scene_samples, scene_name, scene_description):
-        file.write(str(samples) + " | " + name + " | " + description + "\n")
+    for i, (samples, name, description) in enumerate(zip(scene_samples, scene_name, scene_description)):
+        file.write("[" + str(i) + "] " + str(samples) + " | " + description + "\n")
 
 debug = 0
-
-
-# TO-DO: Extract scene description

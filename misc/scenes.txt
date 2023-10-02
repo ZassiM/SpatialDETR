@@ -1,0 +1,150 @@
+[0] 39 | Construction zone, stopped at red light, parked cars
+[1] 40 | Parked bicycles, peds sitting outside the restaurant, parked scooter
+[2] 40 | Peds, pedestrian walk on the roadside, motorcycles
+[3] 39 | Overtake parked car, parked bicycle
+[4] 39 | Stopped for oncoming car, motorcycle
+[5] 39 | Barriers, peds loading car trunk, luggage on sidewalk, parked bicycles, lane change
+[6] 40 | Peds, construction zone, construction workers, barriers, cars, jaywalker
+[7] 40 | Peds, bus, barriers, stopped at intersection
+[8] 40 | Intersection, peds, cars, scooter, parked bicycle
+[9] 40 | Jaywalker, peds, parked bike
+[10] 40 | Motorcycle suddenly rushes out, truck, peds
+[11] 39 | Pedestrian crossing, stopped vehicle
+[12] 40 | Nature, bus stop, parked cars, bus exits from the intersection
+[13] 40 | Follow bus, parked cars, trash cans, parked bicycles, nature
+[14] 40 | Follow bus, cross intersection, nature
+[15] 40 | Narrow road, following bus, bus on opposite lane, parked cars
+[16] 40 | Turn left, people on both sides, parked vans
+[17] 40 | Barriers, peds, arriving at busy intersection
+[18] 40 | Merge left, turn into unloading zone
+[19] 40 | Parking lots, trash can, bump, scooter, peds, potential jaywalkers, bus stop, oncoming bus
+[20] 40 | Parked bicycle, construction, peds, workers, construction vehicle, bike racks
+[21] 40 | Parked construction vehicles, peds, garbage
+[22] 40 | Busy street, parked cars, parking lot, ped sitting at bus stop, motorcycle driving
+[23] 40 | Drive through passage, peds walking alongside lane
+[24] 39 | Turn right, parking lots, cross intersection
+[25] 40 | Oncoming cyclist, cars, wait at intersection
+[26] 39 | Wait at intersection, peds occluded, start driving
+[27] 39 | Cross busy intersection, cyclist nearby, construction barriers and cones
+[28] 39 | Wait at red light, turns green, cross intersection
+[29] 39 | Parked cars, peds, bus stop, bicycle rack, sign trailer, bicyclist, ped carrying object, bridge
+[30] 39 | Parked vans, switch lane, construction zone in the right, bike following in rear, passed by active motorcycle
+[31] 40 | Wait at red light, oncoming cyclist, peds, parked bicycle, parked construction car
+[32] 40 | Concrete mixer spinning, traffic cones, wait at red light, move onto bridge, lane change
+[33] 40 | Turn right at intersection, cross bridge, many peds
+[34] 40 | Many peds right, wait for turning car, long bike rack left, cyclist
+[35] 39 | Start car, cross intersection, skyscraper occluded by traffic light, parked bicycles, parked cars, cross intersection
+[36] 39 | Parking lots, peds, parked cars, cars on elevated bridge, truck
+[37] 40 | Drive between buildings under construction, slow down at intersection, several traffic cones and temporary barriers
+[38] 40 | Cross busy intersection, bendy bus changing lane
+[39] 39 | Construction zone, waiting for car to pass, turn right
+[40] 40 | Cross roundabout, construction vehicle, ped walking along the road side
+[41] 40 | Parked car with open bonnet, parked cars, oncoming truck, oncoming cyclists
+[42] 40 | Parking lot, barrier, exit parking lot
+[43] 40 | Wait at intersection, construction, bus, scooter
+[44] 39 | Cross the intersection, construction, scooter, turn right, parked buses, navigated through traffic cones
+[45] 40 | Cross intersection, scooter, nature, peds crossing
+[46] 39 | Parked trucks, parked cars, avoid parked truck, ped, turn right
+[47] 39 | Ped walking along the road, bus stops with waiting passenger, dense parked cars at the left
+[48] 39 | Heavy truck, container, turn left
+[49] 40 | Peds crossing, parked cars
+[50] 41 | Bendy bus, school bus, parking lot, turn left, parked bus, overtake truck
+[51] 41 | Wait at intersection, bicycle, large truck, peds crossing crosswalk, ped with stroller
+[52] 41 | Wait at intersection, ped crossing, ped with stroller, cyclist, barriers
+[53] 40 | Cross intersection, construction, big truck
+[54] 41 | Passing under flyover, oncoming truck, pedestrians, parked cars
+[55] 41 | Pedestrian, parked vehicles
+[56] 40 | Parking lot, ped, parked bicycle, peds crossing crosswalk
+[57] 40 | Parked bicycle, pedestrian, parked cars, cyclist, construction zone
+[58] 40 | Oncoming bus, parked car on center divider, pedestrian, roundabout, parked trucks
+[59] 41 | Parking lot, parked truck, pedestrian, oncoming truck
+[60] 40 | Stationary ego vehicle, parking lot, ped on road
+[61] 41 | Stationary ego vehicle, person getting out of ego vehicle, parking lot, peds
+[62] 41 | Stationary ego vehicle, parking lot, peds, truck, cars pass by
+[63] 40 | Stationary ego vehicle, parking lot, person getting inside ego vehicle
+[64] 40 | Parking lot, U turn, parked cars, peds
+[65] 41 | Parked cars, stop at red light, jaywalker, peds, bus
+[66] 40 | Stop at red light, bus, low traffic, peds, ped crossing crosswalk
+[67] 41 | Parked cars, peds, crossing intersection, bus, trailer, cones
+[68] 41 | Cars, parked cars, overtaking a bus, peds, parked scooter, truck, arrive at intersection, cones
+[69] 41 | Waiting at intersection, parked cars, bus, peds, flags
+[70] 40 | Turn left, oncoming vehicle, pedestrian, parked truck, passengers exiting car
+[71] 40 | Parked cars, pedestrian, stopped at intersection, oncoming vehicle
+[72] 41 | Turning right, parked cars, peds, parked bicycle
+[73] 41 | Passing intersection, pedestrian, parked cars, construction zone, construction vehicles
+[74] 40 | Arrive at intersection, parked cars, statue, peds, ped with stroller, flag, bendy bus
+[75] 40 | Wait at intersection, turning left, cars turning together, parking lot
+[76] 40 | Parked cars, pedestrians, pedestrians on flyover, parked bicycles on bikeracks, barricades, passing below flyover
+[77] 40 | Change lane and stop, slight traffic congestion due to traffic light, ped on overpass, parked cars, cyclist
+[78] 40 | Parked car, pedestrian, turning right, construction zone
+[79] 40 | Turning right, pedestrian with suitcase, pedestrian, construction zone, parked car
+[80] 40 | Rain, peds, construction
+[81] 40 | Rain, construction, bendy bus, roundabout
+[82] 41 | Rain, industrial
+[83] 40 | Rain, industrial, turn twice
+[84] 41 | Rain, construction, fence, special construction vehicle, nature, crane, wait at intersection, parking lot, cross intersection
+[85] 40 | Rain, industrial, turn right, turn right, parked cars
+[86] 40 | Rain, industrial, parked trucks at parking lot
+[87] 40 | Rain, industrial, parking lot, semi backing up
+[88] 40 | Stationary in rain, semi backing up
+[89] 40 | Rain, turn right, parked trucks
+[90] 40 | Rain, parked cars, peds, jaywalker, water reflections, parked bicycle, ped with umbrella, cross intersection
+[91] 41 | Rain, turn left, water reflections, jaywalker, parked cars
+[92] 41 | Rain, parked cars, bus, peds, barriers, cross intersection, ped crossing crosswalk, construction site, cones, scooter, arrive at intersection
+[93] 40 | Rain, construction site, barriers, cones, peds crossing crosswalk, ship, parked cars, truck, peds, large truck
+[94] 41 | Rain, parked cars, parked bicycle, peds, cones, cross intersection, parking lot, turning right
+[95] 40 | Rain, turn right, parked cars, parking lot, peds, bus, truck, waiting
+[96] 41 | Rain, parked cars, truck, parked scooter, cones, ped
+[97] 40 | Rain, ped, cones, parked cars, construction site, construction vehicle, parking lot, barriers
+[98] 40 | Rain, parked cars, sign trailer, construction, construction vehicle, crane, cones, truck, ped with umbrella, cross intersection, bicycle, peds crossing crosswalk, bicyclist, potential jaywalkers
+[99] 40 | Rain, parked cars, trucks, peds crossing crosswalk, peds, parked bicycles, bicycle rack
+[100] 40 | Rain, parked cars, trucks, parking lot, construction vehicle
+[101] 40 | Rain, parked cars, semi trailers, barriers, construction vehicle, parking lot, parked buses
+[102] 41 | Rain, parking lot, bicycle rack, buses, jaywalker, parked scooter, arrive at intersection
+[103] 41 | Rain, parked cars, turn left, peds, bus, truck, ped crossing crosswalk, suitcase, cones
+[104] 41 | Bus, many peds, changing lane, parked van, cones, low traffic
+[105] 40 | Motorcycle, wait at intersection, cones, cars, bus
+[106] 41 | Many peds, construction, peds unloading trucks, narrow road, avoidance, parked scooter, parking lot, parked bicycles
+[107] 41 | Peds on sidewalk, parked cars, parked motorcycle
+[108] 41 | Wait at intersection, peds on sidewalk, turn right, cones, cross intersection
+[109] 40 | Cones, cars, many peds, changing lane, parking lot, parked cars, parked motorcycles
+[110] 40 | Cross T junction, peds, parked motorcycles, turn right, jaywalker
+[111] 41 | Parked bicycles, peds, ped walk along the road, parked cars, motorcycle, bus
+[112] 40 | Wait at intersection, many vehicles, motorcycles, light turns green
+[113] 40 | Motorcycle, cars, trucks, bus, cross intersection, stopped bus, cones, peds on sidewalk
+[114] 40 | Scooter, peds on sidewalk, bus, cars, truck, fake construction worker, bicycle, cross intersection, car overtaking us
+[115] 40 | Cars, bus passing by, car overtaking us, wait
+[116] 40 | Start at intersection, dense traffic, stopped scooter, parked bicycles, cross intersection, truck, bus, peds
+[117] 40 | Cars, cross intersection, motorcycle overtaking us, parking lot, truck, arrive at intersection
+[118] 40 | Peds on sidewalk, cones, bus, cross intersection, parked bicycle
+[119] 41 | Cones, cross intersection, peds on sidewalk, parking lot, parked bicycle
+[120] 41 | Parking lot, bicycle rack, parked bicycles, bus, many peds, parked scooters, parked motorcycle
+[121] 41 | Peds, jaywalkers, nature, parking lot, bus, turn left
+[122] 41 | Greeneries, parking lot, parked car, ped, motorcycle
+[123] 41 | Motorcycle, parked cars, peds, truck
+[124] 41 | Bus, peds, truck, turn left
+[125] 41 | Buses, peds
+[126] 40 | Parked cars, peds on sidewalk, peds, trees, pole, intersection
+[127] 40 | Cleaner cleaning street, nature, parked car, trash can, parked vehicles, parked bicycle, parking lot, bump, parked bicycle
+[128] 40 | Wait, peds crossing crosswalk, bus
+[129] 41 | Intersection, turn right, ped on the sidewalk, cars, stopped car, parked vehicles
+[130] 40 | Parked cars, peds on sidewalk, peds, trees, intersection
+[131] 40 | Peds on sidewalk, parked cars, intersection, peds on sidewalk, turn right, motorcycle, parked vehicles, tree
+[132] 40 | Ped, car, turn right, peds on sidewalk, pole, signboard, intersection
+[133] 40 | Intersection, ped on sidewalk, motorcycle, parked cars, bushes
+[134] 40 | Turn right, parked scooters, nature, parking lot, peds, bump, arrive at parking bay
+[135] 40 | Night, residential, car turning
+[136] 40 | Night, rain, turn, ped in dark
+[137] 41 | Night, turn, trash can, residential
+[138] 40 | Night, difficult lighting, parked bicycle, wait at intersection, construction
+[139] 40 | Night, bump, ped, difficult lighting, trash bins, residential area
+[140] 40 | Night, trash cans, wait for scooter, turn right, parking lot
+[141] 40 | Rain, Night, bump, motorcycle, difficult lighting, overtake parked car
+[142] 40 | Night, bump, scooter, difficult lighting
+[143] 40 | Night, rain, bump, ped in dark, arrive at intersection
+[144] 40 | Night, wait at intersection, motorcycle, turn left
+[145] 40 | Night, truck, congestion, parked bicycle
+[146] 41 | Night, congestion, peds, motorcycle
+[147] 40 | Night, scooters, peds, parked bicycle, bus stop, cross intersection,  ped with bag near road
+[148] 40 | Night, bus stop, scooter, trash can pushable / pullables, residential
+[149] 40 | Night, scooters, turn left, dense traffic

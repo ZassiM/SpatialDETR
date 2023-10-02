@@ -1,1 +1,0 @@
-python mmdetection3d/tools/create_data.py nuscenes --root-path ./data/nuscenes --out-dir ./datatest/nuscenes --extra-tag nuscenes

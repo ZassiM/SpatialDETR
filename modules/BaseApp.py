@@ -53,8 +53,17 @@ class BaseApp(tk.Tk):
         self.img_labels = None
         self.video_loaded = False
         self.layers_video = 0
-        with open('scene_samples.txt', 'r') as file:
-            self.scene_samples = [int(line.strip()) for line in file]
+
+        self.scene_samples = []
+        self.scene_descriptions = []
+        with open('misc/scenes.txt', 'r') as file:
+            for line in file:
+                parts = line.split('|')
+                if len(parts) >= 2:
+                    number = int(parts[0].strip().split()[-1])
+                    sentence = parts[1].strip()
+                    self.scene_samples.append(number)
+                    self.scene_descriptions.append(sentence)
         
         self.bbox_coords, self.saliency_maps_objects = [], []
         
@@ -127,7 +136,6 @@ class BaseApp(tk.Tk):
         values = np.arange(0.0, 1, 0.1).round(1)
         for i in values:
             thr_opt.add_radiobutton(label=i, variable=self.selected_threshold)
-
 
         self.select_idx_opt.add_command(label="         Insert index", command=lambda: self.insert_entry(type=0))
         self.selected_data_idx = tk.IntVar()
@@ -575,7 +583,8 @@ class BaseApp(tk.Tk):
                 for i in range(self.video_scene):
                     self.data_idx += self.scene_samples[i]
                 self.video_length.set(self.scene_samples[self.video_scene])
-                self.update_info_label()
+                self.scene_description = self.scene_descriptions[self.video_scene]
+                # self.update_info_label()
             else:
                 self.show_message(f"Insert an integer between 0 and {len(self.scene_samples) -1}")
                 return
@@ -587,7 +596,7 @@ class BaseApp(tk.Tk):
             idx = self.data_idx
         if info is None:
             info = f'Model: {self.ObjectDetector.model_name} | '\
-                   f'Dataset: {self.ObjectDetector.dataset_name} ({len(self.ObjectDetector.dataset)}) | '\
+                   f'Dataset: {self.ObjectDetector.dataset_name} | '\
                    f'Sample index: {idx} | '\
                    f'Mechanism: {self.selected_expl_type.get()} | '\
                    f'Head Fusion: {self.selected_head_fusion.get().capitalize()} | '\
@@ -595,6 +604,8 @@ class BaseApp(tk.Tk):
             if self.video_gen_bool:
                 if self.layers_video > 1:
                     info += f" | Layer {self.layer_idx}"
+            # if hasattr(self, "scene_description"):
+            #     info += f"\n{self.scene_description}"
         self.info_text.set(info)
 
     def update_objects_list(self, labels=None, single_select=False, all_select=True):
@@ -707,9 +718,11 @@ class BaseApp(tk.Tk):
             self.show_message(f"Video lenght should be between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
             return False
         
-        self.video_folder = f"videos/video_{self.data_idx}_{self.video_length.get()}"
+        self.video_folder = f"videos/video"
         if hasattr(self, "video_scene"):
             self.video_folder += f"_scene{self.video_scene}"
+        else:
+            self.video_folder += f"_{self.data_idx}_{self.video_length.get()}"
 
         if os.path.isdir(self.video_folder):
             shutil.rmtree(self.video_folder)
@@ -848,6 +861,20 @@ class BaseApp(tk.Tk):
             return
         labels_file = os.path.join(self.video_folder, "labels.pkl")
         self.img_labels = None
+
+        parts = self.video_folder.split('_')
+        scene_number = None
+        for part in parts:
+            if 'scene' in part:
+                scene_number_str = part.replace('scene', '')
+                if scene_number_str.isdigit():
+                    scene_number = int(scene_number_str)
+                    break  
+
+        if scene_number is not None:
+            self.scene_description = self.scene_descriptions[scene_number]
+            self.update_info_label()
+
         target_classes = np.arange(0, 10, 1)
         if os.path.exists(labels_file):
             with open(labels_file, 'rb') as f:
@@ -886,10 +913,14 @@ class BaseApp(tk.Tk):
         if hasattr(self, "scale"):
             self.scale.configure(to=self.video_length.get())
 
+        text = "KEYLEFT: back, KEYRIGHT: forward, SPACE: pause/resume"
+
         if self.layers_video > 1:
-           self.info_text_video.set("KEYLEFT: back, KEYRIGHT: forward, SPACE: pause/resume, KEYUP: previous layer, KEYDOWN: next layer")
-        else:
-            self.info_text_video.set("KEYLEFT: back, KEYRIGHT: forward, SPACE: pause/resume")
+            text += ", KEYUP: previous layer, KEYDOWN: next layer"
+        if hasattr(self, "scene_description"):
+            text += f"\n{self.scene_description}"
+            
+        self.info_text_video.set(text)
 
         self.show_message(f"Video loaded ({self.video_length.get()} images).")
 
