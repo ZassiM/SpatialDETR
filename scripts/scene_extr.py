@@ -35,8 +35,16 @@ scene_samples = []
 scene_name = []
 scene_description = []
 
-for val_scene in val:
-    for scene in nusc.scene:
+
+scenes = [(nusc.get('sample', record['first_sample_token'])['timestamp'], record) for record in
+        nusc.scene]
+
+scenes = sorted(scenes)
+scenes = [scene[1] for scene in scenes]
+
+
+for scene in scenes:
+    for val_scene in val:
         if val_scene == scene["name"]:
             scene_samples.append(scene["nbr_samples"])
             scene_name.append(scene["name"])
@@ -56,6 +64,3 @@ with open(filename, "w") as file:
         file.write(str(samples) + " | " + name + " | " + description + "\n")
 
 debug = 0
-
-
-# TO-DO: Extract scene description
