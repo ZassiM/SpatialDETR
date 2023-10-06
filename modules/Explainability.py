@@ -264,8 +264,8 @@ class ExplainableTransformer:
             R_q_i_addition = torch.matmul(self.R_q_q.t(), cam_q_i)
 
         if not apply_rule:
-            R_qi_addition = cam_q_i
-        R_qi_addition[torch.isnan(R_qi_addition)] = 0
+            R_q_i_addition = cam_q_i
+        R_q_i_addition[torch.isnan(R_q_i_addition)] = 0
         self.R_q_i += R_q_i_addition
 
     def generate_gradroll(self, camidx, rollout=True, apply_normalization=True, apply_rule=True):
