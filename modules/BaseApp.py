@@ -245,6 +245,14 @@ class BaseApp(tk.Tk):
                 value=opt,
                 command=self.update_info_label
             )
+        
+        # TODO: Generation of all XAI techniques and visualization of the aggregated saliency maps on a single shot. Useful for screenshots.
+        expl_type_opt.add_radiobutton(
+            label="All",
+            variable=self.selected_expl_type,
+            value="All",
+            command=self.update_info_label
+        )
 
         # Layer Fusion Selection
         self.layer_fusion_options = ["max", "min", "mean", "last", "zero_clamp_mean"]
