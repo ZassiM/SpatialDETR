@@ -6,7 +6,7 @@ import mmcv
 import os
 import random
 import pickle
-import tomli
+import shutil
 from tkinterhtml import HtmlFrame
 import markdown
 import codecs
@@ -247,12 +247,12 @@ class BaseApp(tk.Tk):
             )
         
         # TODO: Generation of all XAI techniques and visualization of the aggregated saliency maps on a single shot. Useful for screenshots.
-        expl_type_opt.add_radiobutton(
-            label="All",
-            variable=self.selected_expl_type,
-            value="All",
-            command=self.update_info_label
-        )
+        # expl_type_opt.add_radiobutton(
+        #     label="All",
+        #     variable=self.selected_expl_type,
+        #     value="All",
+        #     command=self.update_info_label
+        # )
 
         # Layer Fusion Selection
         self.layer_fusion_options = ["max", "min", "mean", "last", "zero_clamp_mean"]
