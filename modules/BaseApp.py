@@ -65,6 +65,7 @@ class BaseApp(tk.Tk):
                     self.scene_samples.append(number)
                     self.scene_descriptions.append(sentence)
         
+        self.cam_idx = [2, 0, 1, 5, 3, 4]
         self.bbox_coords, self.saliency_maps_objects = [], []
         
         # Main Tkinter menu in which all other cascade menus are added
@@ -130,23 +131,23 @@ class BaseApp(tk.Tk):
         self.info_label_video = tk.Label(self.frame, textvariable=self.info_text_video, anchor=tk.CENTER)
 
         # Cascade menu for Data settings
-        dataidx_opt, self.select_idx_opt, thr_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
+        self.dataidx_opt, self.select_idx_opt, self.thr_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.selected_threshold = tk.DoubleVar()
         self.selected_threshold.set(0.5)
         values = np.arange(0.0, 1, 0.1).round(1)
         for i in values:
-            thr_opt.add_radiobutton(label=i, variable=self.selected_threshold)
+            self.thr_opt.add_radiobutton(label=i, variable=self.selected_threshold)
 
         self.select_idx_opt.add_command(label="         Insert index", command=lambda: self.insert_entry(type=0))
         self.selected_data_idx = tk.IntVar()
         with open(self.indices_file, 'r') as file:
             for line in file:
                 self.select_idx_opt.add_radiobutton(label=line.strip(), variable=self.selected_data_idx, command=self.update_idx, value=line.split()[0])
-        dataidx_opt.add_cascade(label=" Select sample index", menu=self.select_idx_opt)
-        dataidx_opt.add_command(label=" Select random sample", command=self.random_data_idx)
-        dataidx_opt.add_cascade(label=" Select prediction threshold", menu=thr_opt)
-        dataidx_opt.add_separator()
-        dataidx_opt.add_command(label=" Show LiDAR", command=self.show_lidar)
+        self.dataidx_opt.add_cascade(label=" Select sample index", menu=self.select_idx_opt)
+        self.dataidx_opt.add_command(label=" Select random sample", command=self.random_data_idx)
+
+        self.dataidx_opt.add_separator()
+        self.dataidx_opt.add_command(label=" Show LiDAR", command=self.show_lidar)
 
         delay_opt = tk.Menu(self.menubar)
         video_delays = np.arange(0, 35, 5)
@@ -184,17 +185,22 @@ class BaseApp(tk.Tk):
         video_opt.add_cascade(label=" Filter object", menu=filter_opt)
         video_opt.add_checkbutton(label=" Aggregate layers", onvalue=1, offvalue=0, variable=self.aggregate_layers)
 
-        # Cascade menu for Camera
-        self.cameras = {'Front': 0, 'Front-Right': 1, 'Front-Left': 2, 'Back': 3, 'Back-Left': 4, 'Back-Right': 5}
-        self.cam_idx = [2, 0, 1, 5, 3, 4]  # Used for visualizing camera outputs properly
+        # Cascade menus for object selection
+        self.bbox_opt = tk.Menu(self.menubar)
+        self.single_bbox = tk.BooleanVar()
+        self.select_all_bboxes = tk.BooleanVar()
+        self.select_all_bboxes.set(True)
+        self.bbox_opt.add_checkbutton(label=" Single object", onvalue=1, offvalue=0, variable=self.single_bbox, command=self.single_bbox_select) 
+        self.bbox_opt.add_checkbutton(label=" Select all", onvalue=1, offvalue=0, variable=self.select_all_bboxes, command=self.initialize_bboxes)
+        self.bbox_opt.add_separator()
 
         # Cascade menus for Explainable options
-        expl_opt = tk.Menu(self.menubar)
-        raw_attention, grad_cam, grad_rollout = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
+        self.expl_opt = tk.Menu(self.menubar)
+        self.raw_attention_menu, self.grad_cam_menu, self.grad_rollout_menu = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.expl_options = ["Raw Attention", "Grad-CAM", "Gradient Rollout", "Self Attention"]
 
         # Head Fusion Method
-        expl_opt.add_cascade(label=self.expl_options[0], menu=raw_attention)
+        # self.expl_opt.add_cascade(label=self.expl_options[0], menu=raw_attention)
         self.head_fusion_options = ["max", "min", "mean", "zero_clamp_mean"]
         self.selected_head_fusion = tk.StringVar()
         self.selected_head_fusion.set(self.head_fusion_options[0])
@@ -213,29 +219,29 @@ class BaseApp(tk.Tk):
                 variable=self.selected_head_fusion,
                 value=str(head)
             )
-        raw_attention.add_cascade(label=" Head", menu=hf_opt)
+
+        self.raw_attention_menu.add_cascade(label=" Head", menu=hf_opt)
 
         # Grad-CAM
-        expl_opt.add_cascade(label=self.expl_options[1], menu=grad_cam)
+        # self.expl_opt.add_cascade(label=self.expl_options[1], menu=self.grad_cam_menu)
         self.grad_cam_types = ["default"]
         self.selected_gradcam_type = tk.StringVar()
         self.selected_gradcam_type.set(self.grad_cam_types[0])
         for i in range(len(self.grad_cam_types)):
-            grad_cam.add_radiobutton(label=self.grad_cam_types[i].capitalize(), variable=self.selected_gradcam_type, value=self.grad_cam_types[i])
+            self.grad_cam_menu.add_radiobutton(label=self.grad_cam_types[i].capitalize(), variable=self.selected_gradcam_type, value=self.grad_cam_types[i])
 
         # Gradient Rollout
-        expl_opt.add_cascade(label=self.expl_options[2], menu=grad_rollout)
+        # self.expl_opt.add_cascade(label=self.expl_options[2], menu=self.grad_rollout_menu)
         self.handle_residual, self.apply_rule = tk.BooleanVar(), tk.BooleanVar()
         self.handle_residual.set(True)
         self.apply_rule.set(True)
-        grad_rollout.add_checkbutton(label=" Handle residual", variable=self.handle_residual, onvalue=1, offvalue=0)
-        grad_rollout.add_checkbutton(label=" Apply rule", variable=self.apply_rule, onvalue=1, offvalue=0)
+        self.grad_rollout_menu.add_checkbutton(label=" Handle residual", variable=self.handle_residual, onvalue=1, offvalue=0)
+        self.grad_rollout_menu.add_checkbutton(label=" Apply rule", variable=self.apply_rule, onvalue=1, offvalue=0)
 
-        expl_opt.add_separator()
 
         # Explainable mechanism selection
         expl_type_opt = tk.Menu(self.menubar)
-        expl_opt.add_cascade(label="Mechanism", menu=expl_type_opt)
+        self.expl_opt.add_cascade(label="Mechanism", menu=expl_type_opt)
         self.selected_expl_type = tk.StringVar()
         self.selected_expl_type.set(self.expl_options[0])
         for opt in self.expl_options:
@@ -256,17 +262,18 @@ class BaseApp(tk.Tk):
 
         # Layer Fusion Selection
         self.layer_fusion_options = ["max", "min", "mean", "last", "zero_clamp_mean"]
-        layer_fusion_type_opt = tk.Menu(self.menubar)
-        expl_opt.add_cascade(label="Layer Fusion", menu=layer_fusion_type_opt)
+        self.layer_fusion_type_opt = tk.Menu(self.menubar)
         self.selected_layer_fusion_type = tk.StringVar()
         self.selected_layer_fusion_type.set(self.layer_fusion_options[0])
         for opt in self.layer_fusion_options:
-            layer_fusion_type_opt.add_radiobutton(
+            self.layer_fusion_type_opt.add_radiobutton(
                 label=opt.capitalize(),
                 variable=self.selected_layer_fusion_type,
                 value=opt,
                 command=self.update_info_label
             )
+
+
 
         # Perturbation Menu
         pert_step_opt, pert_type_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
@@ -302,24 +309,22 @@ class BaseApp(tk.Tk):
             variable=self.selected_pert_colour, value="red")
 
         # Perturbation Menu
-        pert_opt = tk.Menu(self.menubar)
-        pert_opt.add_cascade(label="Step", menu=pert_step_opt)
-        pert_opt.add_cascade(label="Type", menu=pert_type_opt)
-        pert_opt.add_cascade(label="PosNeg", menu=pert_pos_neg_opt)
-        pert_opt.add_cascade(label="Colour", menu=pert_colour_opt)
-        expl_opt.add_cascade(label="Perturbation", menu=pert_opt)
+        self.pert_opt = tk.Menu(self.menubar)
+        self.pert_opt.add_cascade(label="Step", menu=pert_step_opt)
+        self.pert_opt.add_cascade(label="Type", menu=pert_type_opt)
+        self.pert_opt.add_cascade(label="PosNeg", menu=pert_pos_neg_opt)
+        self.pert_opt.add_cascade(label="Colour", menu=pert_colour_opt)
 
         # Sanity Check
-        sancheck_opt = tk.Menu(self.menubar)
+        self.sancheck_opt = tk.Menu(self.menubar)
         self.selected_sancheck_layer = []
         for layer in range(self.ObjectDetector.num_layers):
             var = tk.IntVar()
             self.selected_sancheck_layer.append(var)
-            sancheck_opt.add_checkbutton(label=layer,  onvalue=1, offvalue=0, variable=var)
-        expl_opt.add_cascade(label="Sanity check", menu=sancheck_opt)
+            self.sancheck_opt.add_checkbutton(label=layer,  onvalue=1, offvalue=0, variable=var)
 
         # Discard ratio for attention weights
-        dr_opt, int_opt, beta_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
+        self.dr_opt, self.int_opt, self.beta_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.gen_segmentation = tk.BooleanVar()
         self.selected_discard_threshold = tk.DoubleVar()
         self.selected_intensity = tk.IntVar()
@@ -332,25 +337,14 @@ class BaseApp(tk.Tk):
         self.selected_intensity.set(intensities[3])
         self.selected_beta.set(betas[6])
         for i in discard_ratios:
-            dr_opt.add_radiobutton(label=i, variable=self.selected_discard_threshold)
+            self.dr_opt.add_radiobutton(label=i, variable=self.selected_discard_threshold)
         for i in intensities:
-            int_opt.add_radiobutton(label=i, variable=self.selected_intensity)
+            self.int_opt.add_radiobutton(label=i, variable=self.selected_intensity)
         for i in betas:
-            beta_opt.add_radiobutton(label=i, variable=self.selected_beta)
-        expl_opt.add_cascade(label="Discard threshold", menu=dr_opt)
-        expl_opt.add_cascade(label="Saliency map intensity", menu=int_opt)
-        # expl_opt.add_cascade(label="Saliency map beta", menu=beta_opt)
-        expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
+            self.beta_opt.add_radiobutton(label=i, variable=self.selected_beta)
 
 
-        # Cascade menus for object selection
-        self.bbox_opt = tk.Menu(self.menubar)
-        self.single_bbox = tk.BooleanVar()
-        self.select_all_bboxes = tk.BooleanVar()
-        self.select_all_bboxes.set(True)
-        self.bbox_opt.add_checkbutton(label=" Single object", onvalue=1, offvalue=0, variable=self.single_bbox, command=self.single_bbox_select) 
-        self.bbox_opt.add_checkbutton(label=" Select all", onvalue=1, offvalue=0, variable=self.select_all_bboxes, command=self.initialize_bboxes)
-        self.bbox_opt.add_separator()
+        self.expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
 
         quality_opt = tk.Menu(self.menubar)
         map_qualities = ["Low", "Medium", "High"]
@@ -373,21 +367,38 @@ class BaseApp(tk.Tk):
         add_opt.add_checkbutton(label=" Show Ground Truth OBB", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Capture saliency maps", onvalue=1, offvalue=0, variable=self.capture_object)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
+        add_opt.add_command(label=" Advanced Mode", command=self.show_advanced_options)
 
         # Adding all cascade menus ro the main menubar menu
         self.add_separator()
-        self.menubar.add_cascade(label="Data", menu=dataidx_opt)
+        self.menubar.add_cascade(label="Data", menu=self.dataidx_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Video", menu=video_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Objects", menu=self.bbox_opt)
         self.add_separator()
-        self.menubar.add_cascade(label="Explainability", menu=expl_opt)
+        self.menubar.add_cascade(label="Explainability", menu=self.expl_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Settings", menu=add_opt)
         self.add_separator("|")
         self.menubar.add_command(label="Visualize", command=self.visualize)
         self.add_separator("|")
+
+
+    def show_advanced_options(self):
+
+        self.dataidx_opt.insert_cascade(2, label=" Select prediction threshold", menu=self.thr_opt)
+
+        self.expl_opt.insert_cascade(0, label=self.expl_options[0], menu=self.raw_attention_menu)
+        self.expl_opt.insert_cascade(1, label=self.expl_options[1], menu=self.grad_cam_menu)
+        self.expl_opt.insert_cascade(2, label=self.expl_options[2], menu=self.grad_rollout_menu)
+        self.expl_opt.insert_separator(3)
+        self.expl_opt.insert_cascade(5, label="Layer Fusion", menu=self.layer_fusion_type_opt)
+        self.expl_opt.insert_cascade(6, label="Perturbation", menu=self.pert_opt)
+        self.expl_opt.insert_cascade(7, label="Sanity check", menu=self.sancheck_opt)
+        self.expl_opt.insert_cascade(8, label="Discard threshold", menu=self.dr_opt)
+        self.expl_opt.insert_cascade(9, label="Saliency map intensity", menu=self.int_opt)
+        # self.expl_opt.add_cascade(label="Saliency map beta", menu=beta_opt)
 
     def show_car(self):
         image_window = tk.Toplevel()
