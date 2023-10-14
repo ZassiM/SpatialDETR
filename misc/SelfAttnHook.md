@@ -2,6 +2,7 @@
 /deps/mmcv/mmcv/cnn/bricks/transformer.py
 
 ```python
+
 class MultiheadAttentionGrad(nn.MultiheadAttention):
     def __init__(self, embed_dim, num_heads, dropout=0, bias=True, add_bias_kv=False, add_zero_attn=False, kdim=None, vdim=None, batch_first=False, device=None, dtype=None) -> None:
         super().__init__(embed_dim, num_heads, dropout, bias, add_bias_kv, add_zero_attn, kdim, vdim, batch_first, device, dtype)
@@ -60,6 +61,7 @@ class MultiheadAttentionGrad(nn.MultiheadAttention):
 
 /opt/conda/lib/python3.7/site-packages/torch/nn/functional.py
 ```python
+
 def multi_head_attention_forward(
     query: Tensor,
     key: Tensor,
