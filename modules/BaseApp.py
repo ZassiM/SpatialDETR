@@ -150,14 +150,6 @@ class BaseApp(tk.Tk):
         self.dataidx_opt.add_separator()
         self.dataidx_opt.add_command(label=" Show LiDAR", command=self.show_lidar)
 
-        delay_opt = tk.Menu(self.menubar)
-        video_delays = np.arange(0, 35, 5)
-        video_delays[0] = 1
-        self.video_delay = tk.IntVar()
-        self.video_delay.set(video_delays[0])
-        for i in range(len(video_delays)):
-            delay_opt.add_radiobutton(label=video_delays[i], variable=self.video_delay, value=video_delays[i])
-
         videolength_opt = tk.Menu(self.menubar)
         video_lengths = np.arange(0, 1200, 100)
         video_lengths[0] = 10
@@ -168,23 +160,28 @@ class BaseApp(tk.Tk):
         for i in range(len(video_lengths)):
             videolength_opt.add_radiobutton(label=video_lengths[i], variable=self.video_length , value=video_lengths[i])
 
-        filter_opt = tk.Menu(self.menubar)
+        self.filter_opt = tk.Menu(self.menubar)
         self.selected_filter = tk.IntVar()
         for label, class_name in enumerate(self.ObjectDetector.class_names):
-            filter_opt.add_radiobutton(label=class_name.replace("_", " ", 1).capitalize(), variable=self.selected_filter, value=label, command=self.update_object_filter)
-        filter_opt.add_radiobutton(label="All", variable=self.selected_filter, value=label+1,  command=self.update_object_filter)
+            self.filter_opt.add_radiobutton(label=class_name.replace("_", " ", 1).capitalize(), variable=self.selected_filter, value=label, command=self.update_object_filter)
+        self.filter_opt.add_radiobutton(label="All", variable=self.selected_filter, value=label+1,  command=self.update_object_filter)
         self.selected_filter.set(label+1)
 
+        self.delay_opt = tk.Menu(self.menubar)
+        video_delays = np.arange(0, 35, 5)
+        video_delays[0] = 1
+        self.video_delay = tk.IntVar()
+        self.video_delay.set(video_delays[0])
+        for i in range(len(video_delays)):
+            self.delay_opt.add_radiobutton(label=video_delays[i], variable=self.video_delay, value=video_delays[i])
+        
         self.aggregate_layers = tk.BooleanVar()
         self.aggregate_layers.set(True)
-        video_opt = tk.Menu(self.menubar)
-        video_opt.add_command(label=" Generate", command=self.generate_video)
-        video_opt.add_command(label=" Load", command=self.load_video)
-        video_opt.add_cascade(label=" Video length", menu=videolength_opt)
-        video_opt.add_command(label=" Select scene", command=lambda: self.insert_entry(type=3))
-        video_opt.add_cascade(label=" Video delay", menu=delay_opt)
-        video_opt.add_cascade(label=" Filter object", menu=filter_opt)
-        video_opt.add_checkbutton(label=" Aggregate layers", onvalue=1, offvalue=0, variable=self.aggregate_layers)
+        self.video_opt = tk.Menu(self.menubar)
+        self.video_opt.add_command(label=" Generate", command=self.generate_video)
+        self.video_opt.add_command(label=" Load", command=self.load_video)
+        self.video_opt.add_cascade(label=" Video length", menu=videolength_opt)
+        self.video_opt.add_command(label=" Select scene", command=lambda: self.insert_entry(type=3))
 
         # Cascade menus for object selection
         self.bbox_opt = tk.Menu(self.menubar)
@@ -372,7 +369,7 @@ class BaseApp(tk.Tk):
         self.add_separator()
         self.menubar.add_cascade(label="Data", menu=self.dataidx_opt)
         self.add_separator()
-        self.menubar.add_cascade(label="Video", menu=video_opt)
+        self.menubar.add_cascade(label="Video", menu=self.video_opt)
         self.add_separator()
         self.menubar.add_cascade(label="Objects", menu=self.bbox_opt)
         self.add_separator()
@@ -388,6 +385,10 @@ class BaseApp(tk.Tk):
         if not self.advanced_mode:
             self.dataidx_opt.insert_cascade(2, label=" Select prediction threshold", menu=self.thr_opt)
 
+            self.video_opt.add_cascade(label=" Video delay", menu=self.delay_opt)
+            self.video_opt.add_cascade(label=" Filter object", menu=self.filter_opt)
+            self.video_opt.add_checkbutton(label=" Aggregate layers", onvalue=1, offvalue=0, variable=self.aggregate_layers)
+
             self.expl_opt.add_separator()
             self.expl_opt.add_cascade(label=self.expl_options[0], menu=self.raw_attention_menu)
             self.expl_opt.add_cascade(label=self.expl_options[1], menu=self.grad_cam_menu)
@@ -402,6 +403,10 @@ class BaseApp(tk.Tk):
             self.advanced_mode = True
         else:
             self.dataidx_opt.delete(2)
+
+            end_idx = self.video_opt.index('end')
+            self.video_opt.delete(end_idx-4, end_idx)
+
             end_idx = self.expl_opt.index('end')
             self.expl_opt.delete(1, end_idx)
             self.advanced_mode = False
@@ -632,9 +637,15 @@ class BaseApp(tk.Tk):
             if self.video_gen_bool:
                 if self.layers_video > 1:
                     info += f" | Layer {self.layer_idx}"
-            # if hasattr(self, "scene_description"):
-            #     info += f"\n{self.scene_description}"
         self.info_text.set(info)
+
+    def update_info_video_label(self):
+        text = "KEYLEFT: back, KEYRIGHT: forward, SPACE: pause/resume"
+        if self.layers_video > 1:
+            text += ", KEYUP: previous layer, KEYDOWN: next layer"
+        if hasattr(self, "scene_description"):
+            text += f"\n{self.scene_description}"
+        self.info_text_video.set(text)
 
     def update_objects_list(self, labels=None, single_select=False, all_select=True):
         if labels is None:
@@ -890,19 +901,6 @@ class BaseApp(tk.Tk):
         labels_file = os.path.join(self.video_folder, "labels.pkl")
         self.img_labels = None
 
-        parts = self.video_folder.split('_')
-        scene_number = None
-        for part in parts:
-            if 'scene' in part:
-                scene_number_str = part.replace('scene', '')
-                if scene_number_str.isdigit():
-                    scene_number = int(scene_number_str)
-                    break  
-
-        if scene_number is not None:
-            self.scene_description = self.scene_descriptions[scene_number]
-            self.update_info_label()
-
         target_classes = np.arange(0, 10, 1)
         if os.path.exists(labels_file):
             with open(labels_file, 'rb') as f:
@@ -938,17 +936,39 @@ class BaseApp(tk.Tk):
             self.show_message("The folder should contain at least one image!")
             return
 
+        # Extract video scene description from folder name
+        parts = self.video_folder.split('_')
+        scene_index = None
+        for part in parts:
+            if 'scene' in part:
+                scene_index_str = part.replace('scene', '')
+                if scene_index_str.isdigit():
+                    scene_index = int(scene_index_str)
+                    break 
+        # Extract video scene descriptions from start index and video_lenght
+        if scene_index is None:
+            self.scene_indices = {}
+            sum_samples = 0
+            for i, samples in enumerate(self.scene_samples):
+                sum_samples += samples
+                if sum_samples >= self.start_video_idx:
+                    self.scene_indices[sum_samples] = i 
+                if sum_samples >= self.video_length.get():
+                    break
+            scene_index = list(self.scene_indices.values())[0] 
+
+        self.scene_description = self.scene_descriptions[scene_index]
+
+        self.update_info_video_label()
+        # text = "KEYLEFT: back, KEYRIGHT: forward, SPACE: pause/resume"
+        # if self.layers_video > 1:
+        #     text += ", KEYUP: previous layer, KEYDOWN: next layer"
+        # if hasattr(self, "scene_description"):
+        #     text += f"\n{self.scene_description}"
+        # self.info_text_video.set(text)
+
         if hasattr(self, "scale"):
             self.scale.configure(to=self.video_length.get())
-
-        text = "KEYLEFT: back, KEYRIGHT: forward, SPACE: pause/resume"
-
-        if self.layers_video > 1:
-            text += ", KEYUP: previous layer, KEYDOWN: next layer"
-        if hasattr(self, "scene_description"):
-            text += f"\n{self.scene_description}"
-            
-        self.info_text_video.set(text)
 
         self.show_message(f"Video loaded ({self.video_length.get()} images).")
 
@@ -1013,7 +1033,6 @@ class BaseApp(tk.Tk):
             img_frame = self.img_frames[self.layer_idx][self.target_class[self.idx_video.get()]]
 
             self.w, self.h = self.canvas.winfo_width(), self.canvas.winfo_height()
-
             if (self.old_w, self.old_h) != (self.w, self.h):
                 img_w, img_h = img_frame.width, img_frame.height
                 canvas_ratio, img_ratio = self.w / self.h, img_w / img_h
@@ -1034,6 +1053,11 @@ class BaseApp(tk.Tk):
             
             self.data_idx = self.start_video_idx + self.target_class[self.idx_video.get()]
             self.update_info_label()
+            if hasattr(self, "scene_indices"):
+                if self.data_idx in self.scene_indices:
+                    scene_index = self.scene_indices[self.data_idx] + 1
+                    self.scene_description = self.scene_descriptions[scene_index]
+                    self.update_info_video_label()
 
             if not forced:
                 self.idx_video.set(self.idx_video.get() + 1)

@@ -388,5 +388,6 @@ class App(BaseApp):
         self.layer_idx = self.layers_video - 1
         self.flag = False
         self.delay = 20  # Initial delay
+        
         self.show_sequence()
     
