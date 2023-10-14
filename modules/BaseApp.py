@@ -49,8 +49,9 @@ class BaseApp(tk.Tk):
         self.file_suffix = 0
         self.bg_color = self.option_get('background', '*')
         self.started_app = False
-        self.video_gen_bool = False
+        self.advanced_mode = False
         self.img_labels = None
+        self.video_gen_bool = False
         self.video_loaded = False
         self.layers_video = 0
 
@@ -199,28 +200,44 @@ class BaseApp(tk.Tk):
         self.raw_attention_menu, self.grad_cam_menu, self.grad_rollout_menu = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.expl_options = ["Raw Attention", "Grad-CAM", "Gradient Rollout", "Self Attention"]
 
-        # Head Fusion Method
-        # self.expl_opt.add_cascade(label=self.expl_options[0], menu=raw_attention)
+        # Head Fusion Selection
         self.head_fusion_options = ["max", "min", "mean", "zero_clamp_mean"]
         self.selected_head_fusion = tk.StringVar()
         self.selected_head_fusion.set(self.head_fusion_options[0])
 
-        hf_opt = tk.Menu(self.menubar)
+        head_fusion_opt = tk.Menu(self.menubar)
         for opt in self.head_fusion_options:
-            hf_opt.add_radiobutton(
+            head_fusion_opt.add_radiobutton(
                 label=opt.capitalize(),
                 variable=self.selected_head_fusion,
                 value=opt,
                 command=self.update_info_label
             )
         for head in range(self.ObjectDetector.num_heads):
-            hf_opt.add_radiobutton(
+            head_fusion_opt.add_radiobutton(
                 label=str(head),
                 variable=self.selected_head_fusion,
                 value=str(head)
             )
 
-        self.raw_attention_menu.add_cascade(label=" Head", menu=hf_opt)
+        self.raw_attention_menu.add_cascade(label=" Head Fusion", menu=head_fusion_opt)
+
+        # Layer Fusion Selection
+        self.layer_fusion_options = ["max", "min", "mean", "last", "zero_clamp_mean"]
+        layer_fusion_opt = tk.Menu(self.menubar)
+        self.selected_layer_fusion_type = tk.StringVar()
+        self.selected_layer_fusion_type.set(self.layer_fusion_options[0])
+        for opt in self.layer_fusion_options:
+            layer_fusion_opt.add_radiobutton(
+                label=opt.capitalize(),
+                variable=self.selected_layer_fusion_type,
+                value=opt,
+                command=self.update_info_label
+            )
+
+        self.raw_attention_menu.add_cascade(label=" Layer Fusion", menu=layer_fusion_opt)
+
+
 
         # Grad-CAM
         # self.expl_opt.add_cascade(label=self.expl_options[1], menu=self.grad_cam_menu)
@@ -259,21 +276,6 @@ class BaseApp(tk.Tk):
         #     value="All",
         #     command=self.update_info_label
         # )
-
-        # Layer Fusion Selection
-        self.layer_fusion_options = ["max", "min", "mean", "last", "zero_clamp_mean"]
-        self.layer_fusion_type_opt = tk.Menu(self.menubar)
-        self.selected_layer_fusion_type = tk.StringVar()
-        self.selected_layer_fusion_type.set(self.layer_fusion_options[0])
-        for opt in self.layer_fusion_options:
-            self.layer_fusion_type_opt.add_radiobutton(
-                label=opt.capitalize(),
-                variable=self.selected_layer_fusion_type,
-                value=opt,
-                command=self.update_info_label
-            )
-
-
 
         # Perturbation Menu
         pert_step_opt, pert_type_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
@@ -343,9 +345,6 @@ class BaseApp(tk.Tk):
         for i in betas:
             self.beta_opt.add_radiobutton(label=i, variable=self.selected_beta)
 
-
-        self.expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
-
         quality_opt = tk.Menu(self.menubar)
         map_qualities = ["Low", "Medium", "High"]
         self.selected_map_quality = tk.StringVar()
@@ -367,7 +366,7 @@ class BaseApp(tk.Tk):
         add_opt.add_checkbutton(label=" Show Ground Truth OBB", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Capture saliency maps", onvalue=1, offvalue=0, variable=self.capture_object)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
-        add_opt.add_command(label=" Advanced Mode", command=self.show_advanced_options)
+        add_opt.add_command(label=" Advanced Mode", command=self.toggle_advanced_mode)
 
         # Adding all cascade menus ro the main menubar menu
         self.add_separator()
@@ -385,20 +384,29 @@ class BaseApp(tk.Tk):
         self.add_separator("|")
 
 
-    def show_advanced_options(self):
+    def toggle_advanced_mode(self):
+        if not self.advanced_mode:
+            self.dataidx_opt.insert_cascade(2, label=" Select prediction threshold", menu=self.thr_opt)
 
-        self.dataidx_opt.insert_cascade(2, label=" Select prediction threshold", menu=self.thr_opt)
-
-        self.expl_opt.insert_cascade(0, label=self.expl_options[0], menu=self.raw_attention_menu)
-        self.expl_opt.insert_cascade(1, label=self.expl_options[1], menu=self.grad_cam_menu)
-        self.expl_opt.insert_cascade(2, label=self.expl_options[2], menu=self.grad_rollout_menu)
-        self.expl_opt.insert_separator(3)
-        self.expl_opt.insert_cascade(5, label="Layer Fusion", menu=self.layer_fusion_type_opt)
-        self.expl_opt.insert_cascade(6, label="Perturbation", menu=self.pert_opt)
-        self.expl_opt.insert_cascade(7, label="Sanity check", menu=self.sancheck_opt)
-        self.expl_opt.insert_cascade(8, label="Discard threshold", menu=self.dr_opt)
-        self.expl_opt.insert_cascade(9, label="Saliency map intensity", menu=self.int_opt)
-        # self.expl_opt.add_cascade(label="Saliency map beta", menu=beta_opt)
+            self.expl_opt.add_separator()
+            self.expl_opt.add_cascade(label=self.expl_options[0], menu=self.raw_attention_menu)
+            self.expl_opt.add_cascade(label=self.expl_options[1], menu=self.grad_cam_menu)
+            self.expl_opt.add_cascade(label=self.expl_options[2], menu=self.grad_rollout_menu)
+            self.expl_opt.add_separator()
+            self.expl_opt.add_cascade(label="Perturbation", menu=self.pert_opt)
+            self.expl_opt.add_cascade(label="Sanity check", menu=self.sancheck_opt)
+            self.expl_opt.add_cascade(label="Discard threshold", menu=self.dr_opt)
+            self.expl_opt.add_cascade(label="Saliency map intensity", menu=self.int_opt)
+            self.expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
+            
+            self.advanced_mode = True
+        else:
+            self.dataidx_opt.delete(2)
+            end_idx = self.expl_opt.index('end')
+            self.expl_opt.delete(1, end_idx)
+            self.advanced_mode = False
+        
+        self.update_info_label()
 
     def show_car(self):
         image_window = tk.Toplevel()
@@ -617,9 +625,10 @@ class BaseApp(tk.Tk):
             info = f'Model: {self.ObjectDetector.model_name} | '\
                    f'Dataset: {self.ObjectDetector.dataset_name} | '\
                    f'Sample index: {idx} | '\
-                   f'Mechanism: {self.selected_expl_type.get()} | '\
-                   f'Head Fusion: {self.selected_head_fusion.get().capitalize()} | '\
-                   f'Layer Fusion: {self.selected_layer_fusion_type.get().capitalize()}'
+                   f'Mechanism: {self.selected_expl_type.get()}'
+            if self.advanced_mode and self.selected_expl_type.get() == "Raw Attention":
+                info += f'| Head Fusion: {self.selected_head_fusion.get().capitalize()} | '\
+                        f'Layer Fusion: {self.selected_layer_fusion_type.get().capitalize()}'
             if self.video_gen_bool:
                 if self.layers_video > 1:
                     info += f" | Layer {self.layer_idx}"
