@@ -9,33 +9,29 @@ import os
 from mmcv.cnn import xavier_init
 
 class App(BaseApp):
-    '''
-    Application User Interface
-    '''
+    ''' Application User Interface. '''
+
     def __init__(self):
-        '''
-        Tkinter initialization with model loading option.
-        '''
+        ''' Tkinter initialization with model loading option. '''
+
         super().__init__()
 
-        # Speeding up the testing
+        # Loading model and dataset from config.toml
         self.load_model(from_config=True)
 
     def visualize(self):
-        '''
-        Visualizes predicted bounding boxes on all the cameras and shows
-        the attention map in the middle of the plot.
-        '''
+        ''' Visualizes predicted bounding boxes on all the cameras and shows
+            the attention map in the middle of the plot. '''
+        
         if self.canvas is None or self.video_gen_bool:
             # Create canvas with the figure embedded in it, and update it after each visualization
             if self.video_gen_bool:
+                # Remove video canvas
                 self.canvas.pack_forget()
                 self.scale.pack_forget()
                 self.info_label_video.pack_forget()
                 for key in ['<space>', '<Right>', '<Left>', '<Up>', '<Down>']:
                     self.unbind(key)
-                # end_idx = self.menubar.index('end')
-                # self.menubar.delete(end_idx-1, end_idx)
                 self.menubar.add_command(label="Show video", command=self.show_video)
                 self.add_separator("|")
             self.fig = plt.figure()
@@ -43,19 +39,22 @@ class App(BaseApp):
             self.canvas = FigureCanvasTkAgg(self.fig, master=self)
             self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-        self.bind('<BackSpace>', self.capture)
-
         self.fig.clear()
 
+        # Extract some options from menu
         sancheck_layers = [layer.get() for layer in self.selected_sancheck_layer]
         self.selected_layers = [index for index, value in enumerate(sancheck_layers) if value == 1]
+
+        # This uses the Configs class: if one element is changed, the function update_data() is invoked.
         self.data_configs.configs = [self.data_idx, self.selected_threshold.get(), self.ObjectDetector.model_name, self.selected_pert_step.get(), self.selected_pert_type.get(), self.selected_layers]
 
         if self.video_gen_bool:
             self.video_gen_bool = False
 
+        # Extract the selected objects from menu
         self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
-    
+
+        # Set up the canvas grid depending if a single object is selected or not
         if self.single_bbox.get():
             self.spec = self.fig.add_gridspec(3, 3, wspace=0, hspace=0)
         else:
@@ -66,7 +65,10 @@ class App(BaseApp):
                 print("Calculating gradients...")
                 self.update_data(gradients=True, initialize_bboxes=False)
 
+            # This uses the Configs class: if one element is changed, the function generate_explainability() is invoked.
             self.expl_configs.configs = [self.selected_expl_type.get(), self.selected_head_fusion.get(), self.handle_residual.get(), self.apply_rule.get(), self.outputs]  
+            
+            # Generates the xai maps by using different user-defined parameters. 
             self.ExplainableModel.select_explainability(
                 self.nms_idxs, self.bbox_idx,
                 self.selected_discard_threshold.get(),
@@ -177,7 +179,8 @@ class App(BaseApp):
         torch.cuda.empty_cache() 
 
     def show_xai_self_attention(self):
-
+        ''' Visualized self-attention scores of a selected object 
+            with all other objects present in the scene. '''
         if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
             text_color = "white"
         else:
@@ -189,7 +192,6 @@ class App(BaseApp):
         bar_width = 0.1
         ax = self.fig.add_subplot(self.spec[2, :])
         group_centers = torch.arange(num_layers) * group_width
-
         max_height = 0
 
         # First loop to find the maximum height across all layers
@@ -200,9 +202,7 @@ class App(BaseApp):
             max_height = max(max_height, (topk_values / topk_values.sum() * 100).max().item())
 
         max_height += 2
-
         cmap = plt.cm.get_cmap('Reds') 
-        #cmap = plt.cm.get_cmap('YlOrRd') 
         self.color_dict = []
 
         for i in range(num_layers):
@@ -212,16 +212,14 @@ class App(BaseApp):
             topk_values, topk_indices = torch.topk(query_self_attn, k)
 
             bar_x = group_centers[i] - (group_width - bar_width) / 2 + torch.arange(k) * bar_width
-            bars = ax.bar(bar_x, topk_values / topk_values.sum() * 100, bar_width)  # Use the group color here
+            bars = ax.bar(bar_x, topk_values / topk_values.sum() * 100, bar_width) 
 
-            # Normalize the bar color depending on its relative position in the sorted group, not on the actual value.
             norm = plt.Normalize(vmin=0, vmax=k-1)
-
             sorted_indices = torch.argsort(topk_values)
 
             for j, bar in enumerate(bars):
-                if topk_values[j] == topk_values.min():  # If this bar has the lowest score
-                    bar.set_color('grey')  # Set color to blue
+                if topk_values[j] == topk_values.min():  
+                    bar.set_color('grey')  
                 else:
                     bar_color = cmap(norm(sorted_indices[j]))  
                     bar.set_color(bar_color)
@@ -231,7 +229,6 @@ class App(BaseApp):
                     self.color_dict.append(index)
 
             group_center = (bar_x[0] + bar_x[-1]) / 2
-
             ax.text(group_center, -5, f"Layer {i}", ha='center', va='bottom', color=text_color, fontsize = 10)
 
             # Set edge color for bbox_idx[0] if it is in the top-k indices
@@ -259,15 +256,13 @@ class App(BaseApp):
 
                 ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() / 2, object_class, ha='center', va='center', color='white', fontsize=fontsize)
 
-        # Remove the spines and set other plot parameters
         for spine in ax.spines.values():
             spine.set_visible(False)
         ax.set(xticks=[], yticks=[], facecolor='none')
 
     def show_xai_cross_attention(self):
-        '''
-        Shows the saliency map for explainability.
-        '''
+        ''' Shows the saliency map for a selected object. '''
+
         if self.selected_expl_type.get() != "Gradient Rollout":
             # Select the center of the grid to plot the attentions and add 2x2 subgrid
             layer_grid = self.spec[1, 1].subgridspec(2, 3)
@@ -279,36 +274,28 @@ class App(BaseApp):
                 if self.bbox_idx[0] == b[0]:
                     self.extr_bbox_coord = b[1]
                     break
-
+        
+        # Saves saliency maps in a folder if the option is activated in the settings
         if self.capture_object.get():
             class_name = self.ObjectDetector.class_names[self.labels[self.bbox_idx[0]].item()]
-            # folder_path = f"maps/{self.ObjectDetector.model_name}/{self.data_idx}_{self.selected_expl_type.get().replace(' ', '_')}_{self.selected_layer_fusion_type.get()}_{class_name}"
-            # if self.object_description:
-            #     folder_path += f"_{self.object_description}"
-            # if len(self.selected_layers) > 0:
-            #     folder_path += "_"
-            #     for layer in self.selected_layers:
-            #         folder_path += f"{layer}"
-            # score = self.bbox_scores[self.thr_idxs][self.bbox_idx].item()
-            # score = int(score*100)
-            # folder_path += f"_{score}"
-
-            folder_path = f"maps/{self.selected_expl_type.get().replace(' ', '_')}"
-            if self.selected_expl_type.get() == "Raw Attention":
-                folder_path += f"_{self.selected_layer_fusion_type.get()}"
-            # if self.object_description:
-            #     folder_path = os.path.join(folder_path, self.object_description)
-            # else:
-            #     folder_path = os.path.join(folder_path, class_name)
+            folder_path = f"maps/{self.ObjectDetector.model_name}/{self.data_idx}_{self.selected_expl_type.get().replace(' ', '_')}_{self.selected_layer_fusion_type.get()}_{class_name}"
+            if len(self.selected_layers) > 0:
+                folder_path += "_"
+                for layer in self.selected_layers:
+                    folder_path += f"{layer}"
+            score = self.bbox_scores[self.thr_idxs][self.bbox_idx].item()
+            score = int(score*100)
+            folder_path += f"_{score}"
+            folder_path = os.path.join(folder_path, class_name)
             if not os.path.exists(folder_path):
                 os.makedirs(folder_path)
-            # file_name = 0
-            # file_path = os.path.join(folder_path, str(file_name))
-            # while os.path.exists(file_path):
-            #     file_name += 1
-            #     file_name_new = file_name
-            #     file_path = os.path.join(folder_path, str(file_name_new))
-            # folder_path = file_path
+            file_name = 0
+            file_path = os.path.join(folder_path, str(file_name))
+            while os.path.exists(file_path):
+                file_name += 1
+                file_name_new = file_name
+                file_path = os.path.join(folder_path, str(file_name_new))
+            folder_path = file_path
     
         for i in range(len(self.saliency_maps_objects)):
 
@@ -340,7 +327,6 @@ class App(BaseApp):
                 ax_save.imshow(att_nobbx_obj, vmin=0, vmax=1)
                 ax_save.axis('off')  # Turn off axis
 
-                
                 fig_name = 0
                 file_path = os.path.join(folder_path, str(fig_name))
                 while os.path.exists(file_path + ".png"):
@@ -358,10 +344,12 @@ class App(BaseApp):
         self.fig.tight_layout()
 
     def show_lidar(self):
+        ''' Shows LiDAR point clouds of the scene. '''
         file_name = f"{self.data_idx}_{self.ObjectDetector.model_name}"
         self.ObjectDetector.dataset.show_mod(self.outputs, index=self.data_idx, out_dir="LiDAR/", show_gt=self.GT_bool.get(), show=True, snapshot=False, file_name=file_name, pipeline=None, score_thr=self.selected_threshold.get())
 
     def show_video(self):
+        ''' Shows the loaded video. '''
         if self.canvas and not self.video_gen_bool or not self.canvas:
             if self.canvas:
                 self.canvas.get_tk_widget().pack_forget()

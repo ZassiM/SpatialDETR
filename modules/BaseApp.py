@@ -35,26 +35,29 @@ class BaseApp(tk.Tk):
 
         # Tkinter-related settings
         self.tk.call("source", "misc/theme/azure.tcl")
-        self.tk.call("set_theme", "dark")
+        self.tk.call("set_theme", "light")
         self.title('Explainable Multi-Sensor 3D Object Detection with Transformers')
         self.geometry('1500x1500')
         self.protocol("WM_DELETE_WINDOW", self.quit)
-        self.canvas, self.fig, self.spec, self.single_object_window, self.single_object_canvas = None, None, None, None, None
+        self.bg_color = self.option_get('background', '*')      # Background color changes when theme is changed
 
-        # Model object
-        self.ObjectDetector = Model()
+        # Canvas-related settings for plotting on Tkinter window
+        self.canvas, self.fig, self.spec = None, None, None
+        
+        self.file_suffix = 0            # Used for saving screenshots with different naming
+        self.started_app = False        # True when model & dataset are loaded
+        self.advanced_mode = False      # True when advanced mode is selected
+        self.video_gen_bool = False     # True when a video has been generated
+        self.video_loaded = False       # True when a video has been generated
+        self.layers_video = 0           # Number of layers from the loaded video
+        self.img_labels = None          # Object labels from the loaded video
+
+        # Load/create txt file containing saved dataset indices
         self.indices_file = 'misc/indices.txt'
         if not os.path.exists(self.indices_file):
             open(self.indices_file, 'w').close()
-        self.file_suffix = 0
-        self.bg_color = self.option_get('background', '*')
-        self.started_app = False
-        self.advanced_mode = False
-        self.img_labels = None
-        self.video_gen_bool = False
-        self.video_loaded = False
-        self.layers_video = 0
 
+        # Load scenes information from NuScenes. Used when visualizing video
         self.scene_samples = []
         self.scene_descriptions = []
         with open('misc/scenes.txt', 'r') as file:
@@ -65,8 +68,9 @@ class BaseApp(tk.Tk):
                     sentence = parts[1].strip()
                     self.scene_samples.append(number)
                     self.scene_descriptions.append(sentence)
+
         
-        self.cam_idx = [2, 0, 1, 5, 3, 4]
+        self.cam_idx = [2, 0, 1, 5, 3, 4]       # Used while plotting the images from the 6 camers
         self.bbox_coords, self.saliency_maps_objects = [], []
         
         # Main Tkinter menu in which all other cascade menus are added
@@ -80,7 +84,6 @@ class BaseApp(tk.Tk):
         file_opt.add_command(label=" Load model", command=self.load_model)
         file_opt.add_command(label=" Load model from config file", command=lambda: self.load_model(from_config=True))
         file_opt.add_command(label=" Save index", command=lambda: self.insert_entry(type=1))
-        # file_opt.add_command(label=" Object description", command=lambda: self.insert_entry(type=2))
         file_opt.add_command(label=" Capture screen", command=self.capture)
         file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
         file_opt.add_separator()
@@ -94,6 +97,9 @@ class BaseApp(tk.Tk):
         self.menubar.add_cascade(label=" File", menu=file_opt)
 
     def load_model(self, from_config=False):
+        ''' Loading of the model and dataset from cfg file into the ObjectDetector object.'''
+        self.ObjectDetector = Model()
+
         if not from_config:
             self.ObjectDetector.load_model(gpu_id=self.gpu_id.get())
         else:
@@ -131,7 +137,7 @@ class BaseApp(tk.Tk):
         self.info_text_video = tk.StringVar()
         self.info_label_video = tk.Label(self.frame, textvariable=self.info_text_video, anchor=tk.CENTER)
 
-        # Cascade menu for Data settings
+        # **Cascade menu** for Data settings
         self.dataidx_opt, self.select_idx_opt, self.thr_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.selected_threshold = tk.DoubleVar()
         self.selected_threshold.set(0.5)
@@ -146,17 +152,16 @@ class BaseApp(tk.Tk):
                 self.select_idx_opt.add_radiobutton(label=line.strip(), variable=self.selected_data_idx, command=self.update_idx, value=line.split()[0])
         self.dataidx_opt.add_cascade(label=" Select sample index", menu=self.select_idx_opt)
         self.dataidx_opt.add_command(label=" Select random sample", command=self.random_data_idx)
-
         self.dataidx_opt.add_separator()
         self.dataidx_opt.add_command(label=" Show LiDAR", command=self.show_lidar)
 
+        # **Cascade menu** for Video settings
         videolength_opt = tk.Menu(self.menubar)
         video_lengths = np.arange(0, 1200, 100)
         video_lengths[0] = 10
         video_lengths[-1] = len(self.ObjectDetector.dataset)
         self.video_length = tk.IntVar()
-        #self.video_length.set(video_lengths[0])
-        self.video_length.set(795)
+        self.video_length.set(video_lengths[0])
         for i in range(len(video_lengths)):
             videolength_opt.add_radiobutton(label=video_lengths[i], variable=self.video_length , value=video_lengths[i])
 
@@ -181,9 +186,9 @@ class BaseApp(tk.Tk):
         self.video_opt.add_command(label=" Generate", command=self.generate_video)
         self.video_opt.add_command(label=" Load", command=self.load_video)
         self.video_opt.add_cascade(label=" Video length", menu=videolength_opt)
-        self.video_opt.add_command(label=" Select scene", command=lambda: self.insert_entry(type=3))
+        self.video_opt.add_command(label=" Select scene", command=lambda: self.insert_entry(type=2))
 
-        # Cascade menus for object selection
+        # **Cascade menu** for object selection
         self.bbox_opt = tk.Menu(self.menubar)
         self.single_bbox = tk.BooleanVar()
         self.select_all_bboxes = tk.BooleanVar()
@@ -192,10 +197,23 @@ class BaseApp(tk.Tk):
         self.bbox_opt.add_checkbutton(label=" Select all", onvalue=1, offvalue=0, variable=self.select_all_bboxes, command=self.initialize_bboxes)
         self.bbox_opt.add_separator()
 
-        # Cascade menus for Explainable options
+        # **Cascade menu** for Explainable options
         self.expl_opt = tk.Menu(self.menubar)
         self.raw_attention_menu, self.grad_cam_menu, self.grad_rollout_menu = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.expl_options = ["Raw Attention", "Grad-CAM", "Gradient Rollout", "Self Attention"]
+
+        # Explainable mechanism selection
+        expl_type_opt = tk.Menu(self.menubar)
+        self.expl_opt.add_cascade(label="Mechanism", menu=expl_type_opt)
+        self.selected_expl_type = tk.StringVar()
+        self.selected_expl_type.set(self.expl_options[0])
+        for opt in self.expl_options:
+            expl_type_opt.add_radiobutton(
+                label=opt,
+                variable=self.selected_expl_type,
+                value=opt,
+                command=self.update_info_label
+            )
 
         # Head Fusion Selection
         self.head_fusion_options = ["max", "min", "mean", "zero_clamp_mean"]
@@ -234,10 +252,7 @@ class BaseApp(tk.Tk):
 
         self.raw_attention_menu.add_cascade(label=" Layer Fusion", menu=layer_fusion_opt)
 
-
-
         # Grad-CAM
-        # self.expl_opt.add_cascade(label=self.expl_options[1], menu=self.grad_cam_menu)
         self.grad_cam_types = ["default"]
         self.selected_gradcam_type = tk.StringVar()
         self.selected_gradcam_type.set(self.grad_cam_types[0])
@@ -245,34 +260,11 @@ class BaseApp(tk.Tk):
             self.grad_cam_menu.add_radiobutton(label=self.grad_cam_types[i].capitalize(), variable=self.selected_gradcam_type, value=self.grad_cam_types[i])
 
         # Gradient Rollout
-        # self.expl_opt.add_cascade(label=self.expl_options[2], menu=self.grad_rollout_menu)
         self.handle_residual, self.apply_rule = tk.BooleanVar(), tk.BooleanVar()
         self.handle_residual.set(True)
         self.apply_rule.set(True)
         self.grad_rollout_menu.add_checkbutton(label=" Handle residual", variable=self.handle_residual, onvalue=1, offvalue=0)
         self.grad_rollout_menu.add_checkbutton(label=" Apply rule", variable=self.apply_rule, onvalue=1, offvalue=0)
-
-
-        # Explainable mechanism selection
-        expl_type_opt = tk.Menu(self.menubar)
-        self.expl_opt.add_cascade(label="Mechanism", menu=expl_type_opt)
-        self.selected_expl_type = tk.StringVar()
-        self.selected_expl_type.set(self.expl_options[0])
-        for opt in self.expl_options:
-            expl_type_opt.add_radiobutton(
-                label=opt,
-                variable=self.selected_expl_type,
-                value=opt,
-                command=self.update_info_label
-            )
-        
-        # TODO: Generation of all XAI techniques and visualization of the aggregated saliency maps on a single shot. Useful for screenshots.
-        # expl_type_opt.add_radiobutton(
-        #     label="All",
-        #     variable=self.selected_expl_type,
-        #     value="All",
-        #     command=self.update_info_label
-        # )
 
         # Perturbation Menu
         pert_step_opt, pert_type_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
@@ -354,7 +346,6 @@ class BaseApp(tk.Tk):
         self.GT_bool, self.overlay_bool, self.bbox_2d, self.capture_object, self.remove_pad, self.draw_bboxes = \
             tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.overlay_bool.set(True)
-        #self.bbox_2d.set(True)
         self.remove_pad.set(True)
         self.draw_bboxes.set(True)
         add_opt.add_checkbutton(label=" Show predicted OBB", onvalue=1, offvalue=0, variable=self.draw_bboxes)
@@ -365,7 +356,7 @@ class BaseApp(tk.Tk):
         add_opt.add_command(label=" Change theme", command=self.change_theme)
         add_opt.add_command(label=" Advanced Mode", command=self.toggle_advanced_mode)
 
-        # Adding all cascade menus ro the main menubar menu
+        # Adding all cascade menus to the main Menu
         self.add_separator()
         self.menubar.add_cascade(label="Data", menu=self.dataidx_opt)
         self.add_separator()
@@ -380,15 +371,14 @@ class BaseApp(tk.Tk):
         self.menubar.add_command(label="Visualize", command=self.visualize)
         self.add_separator("|")
 
-
     def toggle_advanced_mode(self):
+        ''' Gives more flexibility to the user/developer for exploring XAI. '''
         if not self.advanced_mode:
             self.dataidx_opt.insert_cascade(2, label=" Select prediction threshold", menu=self.thr_opt)
 
             self.video_opt.add_cascade(label=" Video delay", menu=self.delay_opt)
             self.video_opt.add_cascade(label=" Filter object", menu=self.filter_opt)
             self.video_opt.add_checkbutton(label=" Aggregate layers", onvalue=1, offvalue=0, variable=self.aggregate_layers)
-
             self.expl_opt.add_separator()
             self.expl_opt.add_cascade(label=self.expl_options[0], menu=self.raw_attention_menu)
             self.expl_opt.add_cascade(label=self.expl_options[1], menu=self.grad_cam_menu)
@@ -399,14 +389,15 @@ class BaseApp(tk.Tk):
             self.expl_opt.add_cascade(label="Discard threshold", menu=self.dr_opt)
             self.expl_opt.add_cascade(label="Saliency map intensity", menu=self.int_opt)
             self.expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
-            
+    
             self.advanced_mode = True
+
         else:
+            # Disactivate Advanced Mode
             self.dataidx_opt.delete(2)
 
             end_idx = self.video_opt.index('end')
             self.video_opt.delete(end_idx-4, end_idx)
-
             end_idx = self.expl_opt.index('end')
             self.expl_opt.delete(1, end_idx)
             self.advanced_mode = False
@@ -414,6 +405,7 @@ class BaseApp(tk.Tk):
         self.update_info_label()
 
     def show_car(self):
+        ''' Shows the sensor setup of the car used by nuScenes.'''
         image_window = tk.Toplevel()
         image_path = 'misc/car.jpg'
         image = Image.open(image_path)
@@ -423,31 +415,34 @@ class BaseApp(tk.Tk):
         image_window.mainloop()
         
     def update_idx(self):
+        ''' Updates the selected dataset index and the info label. '''
         self.data_idx = self.selected_data_idx.get()
         self.update_info_label()
 
     def open_md_file(self):
+        ''' Opens README file in the markdown format. '''
         input_file = codecs.open("README.md", mode="r", encoding="utf-8")
         text = input_file.read()
         html = markdown.markdown(text)
         return html
 
     def show_app_info(self):
+        ''' Visualizes the README file. '''
         top = tk.Toplevel(self)
         frame = HtmlFrame(top, horizontal_scrollbar="auto")
         frame.grid(sticky=tk.NSEW)
         frame.set_content(self.open_md_file())
 
     def random_data_idx(self):
+        ''' Generates a random index for the dataset. '''
         idx = random.randint(0, len(self.ObjectDetector.dataset)-1)
         self.data_idx = idx
         self.selected_pert_step.set(-1)
         self.update_info_label()
 
     def update_data(self, gradients=False, initialize_bboxes=True):
-        '''
-        Predict bboxes and extracts attentions.
-        '''
+        ''' Extract data, update required parameters'''
+
         # Load selected data from dataloader, manual DataContainer fixes are needed
         data = self.ObjectDetector.dataset[self.data_idx]
         metas = [[data['img_metas'][0].data]]
@@ -465,7 +460,6 @@ class BaseApp(tk.Tk):
         else:
             outputs = self.ExplainableModel.extract_attentions(self.data)
 
-
         # Those are needed to index the bboxes decoded by the NMS-Free decoder
         self.nms_idxs = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_indexes()
         self.bbox_scores = self.ObjectDetector.model.module.pts_bbox_head.bbox_coder.get_scores()
@@ -474,6 +468,7 @@ class BaseApp(tk.Tk):
         self.labels = self.outputs['labels_3d'][self.thr_idxs]
         self.pred_bboxes = self.outputs["boxes_3d"][self.thr_idxs]
         
+        # Verify if no objects are detected
         self.no_object = False
         if len(self.labels) == 0:
             self.no_object = True
@@ -484,7 +479,6 @@ class BaseApp(tk.Tk):
         # Extract image metas which contain, for example, the lidar to camera projection matrices
         self.img_metas = self.data["img_metas"][0]._data[0][0]
         self.data_description = None
-        self.object_description = None
         self.color_dict = None
 
         if self.selected_pert_step.get() > 0:
@@ -563,6 +557,7 @@ class BaseApp(tk.Tk):
             self.info_label.config(fg="black")
 
     def show_model_info(self, event=None):
+        ''' Show information about model when clicking on the label. '''
         popup = tk.Toplevel(self)
         popup.geometry("700x1000")
         popup.title(f"Model {self.ObjectDetector.model_name}")
@@ -577,7 +572,7 @@ class BaseApp(tk.Tk):
         text.configure(state="disabled")
 
     def insert_entry(self, type=0):
-        # Type 0: data index; type 1: video lenght; type 2: frame rate
+        ''' Inserting input from user. '''
         popup = tk.Toplevel(self)
         popup.geometry("80x50")
 
@@ -588,6 +583,7 @@ class BaseApp(tk.Tk):
         button.pack()
 
     def close_entry(self, popup, type):
+        ''' Type 0: data index; type 1: save data index; type 2: scene selection. '''
         entry = self.entry.get()
         if type == 0:
             if entry.isnumeric() and int(entry) <= (len(self.ObjectDetector.dataset)-1):
@@ -607,8 +603,6 @@ class BaseApp(tk.Tk):
             with open(self.indices_file, 'w') as file:
                 file.writelines(lines)
         elif type == 2:
-            self.object_description = entry
-        elif type == 3:
             if entry.isnumeric() and int(entry) <= (len(self.scene_samples) - 1):
                 self.video_scene = int(entry)
                 self.data_idx = 0
@@ -624,6 +618,7 @@ class BaseApp(tk.Tk):
         popup.destroy()
 
     def update_info_label(self, info=None, idx=None):
+        ''' Updates the info text each time a value changes. '''
         if idx is None:
             idx = self.data_idx
         if info is None:
@@ -640,6 +635,7 @@ class BaseApp(tk.Tk):
         self.info_text.set(info)
 
     def update_info_video_label(self):
+        ''' Updated the info while visualizing a video scene. '''
         text = "KEYLEFT: back, KEYRIGHT: forward, SPACE: pause/resume"
         if self.layers_video > 1:
             text += ", KEYUP: previous layer, KEYDOWN: next layer"
@@ -648,6 +644,7 @@ class BaseApp(tk.Tk):
         self.info_text_video.set(text)
 
     def update_objects_list(self, labels=None, single_select=False, all_select=True):
+        ''' Updates the object menu with the objects present in the data. '''
         if labels is None:
             labels = self.labels
         self.bboxes = []
@@ -662,6 +659,7 @@ class BaseApp(tk.Tk):
         self.initialize_bboxes(single_select, all_select)
 
     def initialize_bboxes(self, single_select=False, all_select=False):
+        ''' Initializes the selected objects depending on the user. '''
         if all_select:
             self.select_all_bboxes.set(True)
         if single_select:
@@ -678,6 +676,7 @@ class BaseApp(tk.Tk):
                     # self.bboxes[next(self.indx_obj)].set(True)
 
     def single_bbox_select(self, idx=None, single_select=False):
+        ''' Selects the first object and deselect all others. '''
         self.select_all_bboxes.set(False)
         if single_select:
             self.single_bbox.set(True)
@@ -689,6 +688,7 @@ class BaseApp(tk.Tk):
                     self.bboxes[i].set(False)
 
     def get_object_camera(self):
+        ''' Gets the camera index with the highest score for a selected object. '''
         scores = self.ExplainableModel.scores
         if not scores:
             return -1
@@ -696,9 +696,8 @@ class BaseApp(tk.Tk):
         return cam_obj
 
     def capture(self, event=None):
+        ''' Takes screenshot of the whole window. '''
         screenshots_path = "screenshots/"
-        # if self.selected_pert_step.get() != -1:
-        #     screenshots_path = "perturb/"
 
         if not os.path.exists(screenshots_path):
             os.makedirs(screenshots_path)
@@ -719,15 +718,8 @@ class BaseApp(tk.Tk):
         self.fig.savefig(path, dpi=300, transparent=True)
         print(f"Screenshot saved in {path}.")
 
-
-        x = self.winfo_rootx()
-        y = self.winfo_rooty() - 26
-        h = self.winfo_height()
-        w = self.winfo_width()
-        # You can modify the bbox (bounding box) coordinates if you need only a part of window.
-        ImageGrab.grab(bbox=(x, y, x+w, y+h)).save("full_window.png")
-
     def change_theme(self):
+        ''' Toggle theme between light and dark. '''
         if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
             self.tk.call("set_theme", "light")
             self.bg_color = "white"
@@ -739,6 +731,7 @@ class BaseApp(tk.Tk):
         self.canvas.draw()
 
     def generate_saliency_map(self, img, xai_map):
+        ''' Generates saliency map by blending an XAI map onto the image, '''
         xai_map_colored = cv2.applyColorMap(np.uint8(xai_map * self.selected_intensity.get()), cv2.COLORMAP_TURBO)
         xai_map_colored = cv2.resize(xai_map_colored, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)
         xai_map_colored = np.float32(xai_map_colored)
@@ -753,6 +746,7 @@ class BaseApp(tk.Tk):
         return img
 
     def generate_video(self):
+        ''' Generates video with the selected options from the menu. '''
         if self.video_length.get() > (len(self.ObjectDetector.dataset) - self.data_idx):
             self.show_message(f"Video lenght should be between 2 and {len(self.ObjectDetector.dataset) - self.data_idx}") 
             return False
@@ -773,9 +767,8 @@ class BaseApp(tk.Tk):
         self.video_gen_bool = True
         print(f"\nGenerating video frames inside \"{self.video_folder}\"...")
         prog_bar = mmcv.ProgressBar(self.video_length.get())
-        #self.indx_obj = iter([0,0,2,2,0,0,0,0,0,6,5,15,10,13,18,9,17,23,20,20,11,17,13,14,13,14,22,17,21,32,8,10,11,8,6,13,15,7,9])
-        #self.indx_obj = iter([2,2,2,2,2,1,3,2,0,0,2,8,3,9,4]) # 1368 - 1382. length=13
-        # self.indx_obj = iter([5,2,0,0,2,2,0,0,1,0,0,0,1,1]) #  1569- 1382. length=13
+
+        # Loop through the dataset for generating the frame
         for i in range(self.data_idx, self.data_idx + self.video_length.get()):
             self.data_idx = i
             labels = self.generate_video_frame()
@@ -792,16 +785,19 @@ class BaseApp(tk.Tk):
         self.show_message(f"Video generated inside \"{self.video_folder}\" folder")
     
     def generate_video_frame(self):
+        ''' Generates a single frame composed of 6 (cameras) saliency maps. '''
 
+        # Extract camera images
         self.update_data(initialize_bboxes=True)
 
+        # Check if only one object is selected
         if self.single_bbox.get():
             self.update_objects_list(single_select=True, all_select=False)
             self.bbox_idx = [i for i, x in enumerate(self.bboxes) if x.get()]
-
         else:
             self.bbox_idx = list(range(len(self.labels)))
 
+        # Generates XAI maps
         if self.overlay_bool.get():
             if self.selected_expl_type.get() in ["Grad-CAM", "Gradient Rollout"]:
                 self.update_data(gradients=True, initialize_bboxes=False)
@@ -821,14 +817,13 @@ class BaseApp(tk.Tk):
                     layer_fusion_method=self.selected_layer_fusion_type.get())
 
                 if self.single_bbox.get():
-                    # Extract camera with highest attention
                     cam_obj = self.get_object_camera()
                     if cam_obj == -1:
                         self.show_message("Please change the selected options")
                         return
                     self.selected_camera = cam_obj
         
-        # Generate images list with bboxes on it
+        # Generate saliency maps for the 6 images
         cam_imgs = []  
         for camidx in range(len(self.imgs)):
             
@@ -851,12 +846,6 @@ class BaseApp(tk.Tk):
                 if self.aggregate_layers.get():
                     xai_map = self.ExplainableModel.xai_maps[camidx]
                     saliency_map = self.generate_saliency_map(img, xai_map)        
-                    # Used for following a single object and showing its camera contributions for detection
-                    # if self.selected_expl_type.get() != "Self Attention" and self.single_bbox.get():
-                    #     h, w, _ = saliency_map.shape
-                    #     score = self.ExplainableModel.scores[camidx] 
-                    #     score_bar_width = int((score/100) * w)
-                    #     cv2.rectangle(saliency_map, (0, 0), (score_bar_width, 15), (0,100,0), -1)
                     saliency_map = cv2.cvtColor(saliency_map, cv2.COLOR_BGR2RGB)
                     cam_layers.append(saliency_map)
                 else:
@@ -872,6 +861,7 @@ class BaseApp(tk.Tk):
                 cam_layers.append(img)
                 cam_imgs.append(cam_layers)  
 
+        # Generate a single image by concatenating the 6 images and save it as a frame.
         for layer in range(len(cam_imgs[0])):
             hori = np.concatenate((cam_imgs[2][layer], cam_imgs[0][layer], cam_imgs[1][layer]), axis=1)
             ver = np.concatenate((cam_imgs[5][layer], cam_imgs[3][layer], cam_imgs[4][layer]), axis=1)
@@ -891,6 +881,7 @@ class BaseApp(tk.Tk):
         return self.labels
 
     def load_video(self):
+        ''' MLoads a selected video folder and its labels and scene information. '''
         self.video_folder = fd.askdirectory(
                 title='Load video directory',
                 initialdir='/workspace/videos/')
@@ -909,13 +900,12 @@ class BaseApp(tk.Tk):
             self.target_classes = [[i for i, tensor in enumerate(self.img_labels) if target_class in tensor.tolist()] for target_class in target_classes]
         else:
             self.update_objects_list(labels=[])
-            # self.target_classes = [[]]
 
         items = os.listdir(self.video_folder)
         if any(os.path.isdir(os.path.join(self.video_folder, item)) for item in items):
             layer_folders = [f for f in items if f.startswith('layer_') and os.path.isdir(os.path.join(self.video_folder, f))]
             layer_folders.sort(key=lambda x: int(x.split('_')[-1]))  # Sort the folders by the layer number
-        else:  # If there are no directories, consider the entire folder as a single layer
+        else:  
             layer_folders = ['']
 
         self.img_frames = []
@@ -960,12 +950,6 @@ class BaseApp(tk.Tk):
         self.scene_description = self.scene_descriptions[scene_index]
 
         self.update_info_video_label()
-        # text = "KEYLEFT: back, KEYRIGHT: forward, SPACE: pause/resume"
-        # if self.layers_video > 1:
-        #     text += ", KEYUP: previous layer, KEYDOWN: next layer"
-        # if hasattr(self, "scene_description"):
-        #     text += f"\n{self.scene_description}"
-        # self.info_text_video.set(text)
 
         if hasattr(self, "scale"):
             self.scale.configure(to=self.video_length.get())
@@ -978,6 +962,7 @@ class BaseApp(tk.Tk):
             self.video_loaded = True
 
     def update_object_filter(self):
+        ''' Manages the visualization of the frames containing a specific object class. '''
         self.target_class = self.target_classes[self.selected_filter.get()]
         if len(self.target_class) == 0:
             self.show_message(f"No {self.ObjectDetector.class_names[self.selected_filter.get()]} found")
@@ -992,6 +977,7 @@ class BaseApp(tk.Tk):
         self.scale.pack(fill='x')
 
     def update_index(self, event=None):
+        ''' Updates the video index if arrow keys are pressed and shows the frame. '''
         if self.paused:
             if not isinstance(event, str):
                 if self.flag: 
@@ -1013,6 +999,7 @@ class BaseApp(tk.Tk):
                 self.update_objects_list(labels=labels, single_select=True)
 
     def pause_resume(self, event=None):
+        ''' Manages the pausing/resuming of the video.'''
         if not self.paused:
             self.after_cancel(self.after_seq_id)
             self.paused = True
@@ -1026,6 +1013,7 @@ class BaseApp(tk.Tk):
         self.frame.focus_set()
 
     def show_sequence(self, forced=False):
+        ''' Shows the loaded video frame by frame. '''
         if not self.paused or forced:
             if self.idx_video.get() >= self.video_length.get():
                 self.idx_video.set(0)
@@ -1033,6 +1021,7 @@ class BaseApp(tk.Tk):
             img_frame = self.img_frames[self.layer_idx][self.target_class[self.idx_video.get()]]
 
             self.w, self.h = self.canvas.winfo_width(), self.canvas.winfo_height()
+            # If window is resized, update the canvas
             if (self.old_w, self.old_h) != (self.w, self.h):
                 img_w, img_h = img_frame.width, img_frame.height
                 canvas_ratio, img_ratio = self.w / self.h, img_w / img_h

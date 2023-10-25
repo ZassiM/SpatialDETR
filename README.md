@@ -68,6 +68,7 @@ python scripts/main.py
 ```
 2. A GUI will appear. Select **File-Load model** to load the model configuration and the checkpoints. Otherwise, if the same configurations are used each time, modify the **config.toml** file accordinly and select **File-Load from config file**.
 3. Change the visualization settings with the drop-down menus. Then, click **Visualize**. 
+4. For Advanced Mode click **Settings-Advanced Mode**.
 
 ## Usage
 The application provides a GUI with a series of dropdown menus for customization.
@@ -76,7 +77,7 @@ The application provides a GUI with a series of dropdown menus for customization
 
 **Prediction Threshold**: Set your prediction threshold. This helps to disregard low score queries and focus on confident predictions. The default threshold of 0.5 will streamline visualization by eliminating redundant queries.
 
-**Explainability Methods**: Choose between Raw Attention, Grad-CAM, or Gradient Rollout to understand the model's decisions. Each method offers unique insights. With Raw Attention, you can select a specific head or fuse them using maximum, minimum, or mean. You can also set a discard threshold to filter out lower attention maps.
+**Explainability Methods**: Choose between Raw Attention, Grad-CAM, or Gradient Rollout to understand the model's decisions. Each method offers unique insights. With Raw Attention, you can select a specific head or fuse them using maximum, minimum, or mean. In Advanced Mode, you can also set a discard threshold to filter out lower attention maps, do perturbation or sanity tests.
 
 **Saliency Maps Generation**: The app will then generate saliency maps—heat maps of the model's "attention"—across all six cameras for your chosen sample data. 
 
