@@ -1,0 +1,70 @@
+**********************************************
+Evaluating Grad-CAM with negative perturbation
+**********************************************
+mechanism: Grad-CAM
+perturbation_type: negative
+pred_threshold: 0.4
+discard_threshold: 0.3
+head_fusion_method: max
+layer_fusion_method: max
+maps_quality: High
+remove_pad: True
+grad_rollout_handle_residual: True
+grad_rollout_apply_rule: True
+**********************************************
+Number of tokens: 90 %
+mAP: 0.12684606768148804
+mATE: 0.9969
+mASE: 0.3298
+mAOE: 0.7313
+mAVE: 1.0625
+mAAE: 0.2804
+NDS: 0.2295751240043657
+--------------------------
+Number of tokens: 92 %
+mAP: 0.10515677700131394
+mATE: 1.0085
+mASE: 0.3472
+mAOE: 0.7849
+mAVE: 1.1357
+mAAE: 0.3024
+NDS: 0.20913521134199717
+--------------------------
+Number of tokens: 94 %
+mAP: 0.07867585825104027
+mATE: 1.0357
+mASE: 0.3699
+mAOE: 0.8228
+mAVE: 1.191
+mAAE: 0.3225
+NDS: 0.18781701830497297
+--------------------------
+Number of tokens: 96 %
+mAP: 0.04775989509965965
+mATE: 1.0491
+mASE: 0.5011
+mAOE: 0.8823
+mAVE: 1.0427
+mAAE: 0.4979
+NDS: 0.13575058197343276
+--------------------------
+Number of tokens: 98 %
+mAP: 0.015132277921819499
+mATE: 1.0912
+mASE: 0.5349
+mAOE: 1.0137
+mAVE: 1.2383
+mAAE: 0.5393
+NDS: 0.1001384460091203
+--------------------------
+Number of tokens: 99 %
+mAP: 0.005327883263283524
+mATE: 1.0565
+mASE: 0.7703
+mAOE: 0.9918
+mAVE: 1.186
+mAAE: 0.8875
+NDS: 0.037709175017619126
+--------------------------
+--------------------------
+Elapsed time: 259938.2277083397

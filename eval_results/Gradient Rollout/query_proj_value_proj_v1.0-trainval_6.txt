@@ -1,0 +1,41 @@
+******************************************************
+Evaluating Gradient Rollout with positive perturbation
+******************************************************
+mechanism: Gradient Rollout
+perturbation_type: positive
+pred_threshold: 0.4
+discard_threshold: 0.3
+head_fusion_method: zero_clamp_mean
+layer_fusion_method: max
+maps_quality: High
+remove_pad: True
+grad_rollout_handle_residual: True
+grad_rollout_apply_rule: True
+******************************************************
+Number of tokens: 10 %
+mAP: 0.07916930161351893
+mATE: 1.0354
+mASE: 0.312
+mAOE: 0.7896
+mAVE: 0.9495
+mAAE: 0.2624
+NDS: 0.20823289243243276
+--------------------------
+Number of tokens: 20 %
+mAP: 0.03188183931293914
+mATE: 1.0888
+mASE: 0.3303
+mAOE: 0.9025
+mAVE: 1.0544
+mAAE: 0.2969
+NDS: 0.1629695016229833
+--------------------------
+Number of tokens: 30 %
+mAP: 0.014681159650455036
+mATE: 1.1309
+mASE: 0.3525
+mAOE: 0.9868
+mAVE: 0.9896
+mAAE: 0.3173
+NDS: 0.1427233863804736
+--------------------------

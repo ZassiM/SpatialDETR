@@ -1,0 +1,112 @@
+***************************************************
+Evaluating Raw Attention with negative perturbation
+***************************************************
+Number of tokens: 20 %
+mAP: 0.3024904357826646
+mATE: 0.8411
+mASE: 0.2744
+mAOE: 0.4748
+mAVE: 0.7848
+mAAE: 0.2046
+NDS: 0.3932757969881667
+--------------------------
+Number of tokens: 30 %
+mAP: 0.29907530336285726
+mATE: 0.8435
+mASE: 0.2746
+mAOE: 0.4943
+mAVE: 0.8
+mAAE: 0.2068
+NDS: 0.38762538393483625
+--------------------------
+Number of tokens: 40 %
+mAP: 0.2934379969708055
+mATE: 0.8502
+mASE: 0.2753
+mAOE: 0.5013
+mAVE: 0.8109
+mAAE: 0.2074
+NDS: 0.38219868782975863
+--------------------------
+Number of tokens: 50 %
+mAP: 0.2832161841240953
+mATE: 0.8595
+mASE: 0.2759
+mAOE: 0.5153
+mAVE: 0.8339
+mAAE: 0.2039
+NDS: 0.3727642053191327
+--------------------------
+Number of tokens: 60 %
+mAP: 0.26767031638076555
+mATE: 0.8672
+mASE: 0.2788
+mAOE: 0.522
+mAVE: 0.8822
+mAAE: 0.2026
+NDS: 0.35856204124299235
+--------------------------
+Number of tokens: 70 %
+mAP: 0.24280587593579347
+mATE: 0.8888
+mASE: 0.2842
+mAOE: 0.5323
+mAVE: 0.9308
+mAAE: 0.2082
+NDS: 0.3369701784352022
+--------------------------
+Number of tokens: 80 %
+mAP: 0.2054115460549375
+mATE: 0.9187
+mASE: 0.2952
+mAOE: 0.5919
+mAVE: 0.994
+mAAE: 0.2193
+NDS: 0.3007948437237881
+--------------------------
+Number of tokens: 90 %
+mAP: 0.13635942333053852
+mATE: 0.9711
+mASE: 0.3281
+mAOE: 0.7069
+mAVE: 1.1251
+mAAE: 0.2743
+NDS: 0.240144450466499
+--------------------------
+--------------------------
+Elapsed time: 193191.12751936913
+
+***************************************************
+Evaluating Raw Attention with negative perturbation
+***************************************************
+mechanism: Raw Attention
+perturbation_type: negative
+pred_threshold: 0.4
+discard_threshold: 0.3
+head_fusion_method: max
+layer_fusion_method: max
+maps_quality: High
+remove_pad: True
+grad_rollout_handle_residual: True
+grad_rollout_apply_rule: True
+***************************************************
+Number of tokens: 98 %
+mAP: 0.018827867227267536
+mATE: 1.0787
+mASE: 0.5274
+mAOE: 0.9627
+mAVE: 1.2081
+mAAE: 0.5372
+NDS: 0.10667471331731189
+--------------------------
+Number of tokens: 99 %
+mAP: 0.006646202711382343
+mATE: 1.0505
+mASE: 0.7655
+mAOE: 0.9705
+mAVE: 1.2006
+mAAE: 0.8822
+NDS: 0.04150318198701127
+--------------------------
+--------------------------
+Elapsed time: 56088.441361904144

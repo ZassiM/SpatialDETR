@@ -1,0 +1,70 @@
+********************************************
+Evaluating Random with positive perturbation
+********************************************
+mechanism: Random
+perturbation_type: positive
+pred_threshold: 0.4
+discard_threshold: 0.3
+head_fusion_method: max
+layer_fusion_method: max
+maps_quality: High
+remove_pad: True
+grad_rollout_handle_residual: True
+grad_rollout_apply_rule: True
+********************************************
+Number of tokens: 20 %
+mAP: 0.16187663869093885
+mATE: 0.9419
+mASE: 0.298
+mAOE: 0.681
+mAVE: 0.9362
+mAAE: 0.2514
+NDS: 0.2700880215849767
+--------------------------
+Number of tokens: 30 %
+mAP: 0.129691160162789
+mATE: 0.9682
+mASE: 0.3071
+mAOE: 0.7237
+mAVE: 0.9889
+mAAE: 0.2777
+NDS: 0.2382827713837897
+--------------------------
+Number of tokens: 40 %
+mAP: 0.10324463274180865
+mATE: 0.9806
+mASE: 0.3198
+mAOE: 0.7549
+mAVE: 1.0579
+mAAE: 0.3036
+NDS: 0.2157358060191242
+--------------------------
+Number of tokens: 50 %
+mAP: 0.07893640226750624
+mATE: 1.0133
+mASE: 0.3338
+mAOE: 0.7894
+mAVE: 1.0979
+mAAE: 0.3183
+NDS: 0.19531438144047933
+--------------------------
+Number of tokens: 60 %
+mAP: 0.054675231442331454
+mATE: 1.0487
+mASE: 0.3469
+mAOE: 0.8914
+mAVE: 1.156
+mAAE: 0.3475
+NDS: 0.16874829928418342
+--------------------------
+Number of tokens: 70 %
+mAP: 0.02922919367608231
+mATE: 1.0851
+mASE: 0.3674
+mAOE: 0.9993
+mAVE: 1.2037
+mAAE: 0.3735
+NDS: 0.14060366070227975
+--------------------------
+--------------------------
+Elapsed time: 64875.317680597305

@@ -1,0 +1,97 @@
+***************************************************
+Evaluating Raw Attention with positive perturbation
+***************************************************
+mechanism: Raw Attention
+perturbation_type: positive
+pred_threshold: 0.4
+discard_threshold: 0.3
+head_fusion_method: max
+layer_fusion_method: max
+maps_quality: High
+remove_pad: True
+grad_rollout_handle_residual: True
+grad_rollout_apply_rule: True
+***************************************************
+Number of tokens: 20 %
+mAP: 0.018724221071564403
+mATE: 1.1454
+mASE: 0.3516
+mAOE: 0.9611
+mAVE: 0.9703
+mAAE: 0.3037
+NDS: 0.15068946174826714
+--------------------------
+Number of tokens: 30 %
+mAP: 0.006679686915666366
+mATE: 1.1737
+mASE: 0.4402
+mAOE: 1.0065
+mAVE: 0.9981
+mAAE: 0.4375
+NDS: 0.11576576948610398
+--------------------------
+Number of tokens: 40 %
+mAP: 0.001824511352221192
+mATE: 1.1514
+mASE: 0.575
+mAOE: 1.0023
+mAVE: 1.1872
+mAAE: 0.6718
+NDS: 0.07623326576432263
+--------------------------
+Number of tokens: 50 %
+mAP: 0.00028604239563109675
+mATE: 1.1132
+mASE: 0.7086
+mAOE: 1.1444
+mAVE: 0.992
+mAAE: 0.7358
+NDS: 0.056501141697499535
+--------------------------
+Number of tokens: 60 %
+mAP: 2.111787071386232e-06
+mATE: 1.072
+mASE: 0.8075
+mAOE: 1.0859
+mAVE: 1.0823
+mAAE: 0.8588
+NDS: 0.03336996385730234
+--------------------------
+Number of tokens: 70 %
+mAP: 0.0
+mATE: 1.0788
+mASE: 0.8085
+mAOE: 1.0965
+mAVE: 1.0968
+mAAE: 0.8602
+NDS: 0.03313488926900252
+--------------------------
+Number of tokens: 80 %
+mAP: 0.0
+mATE: 1.0544
+mASE: 0.8583
+mAOE: 1.1056
+mAVE: 1.1183
+mAAE: 0.8558
+NDS: 0.028588182336485978
+--------------------------
+Number of tokens: 90 %
+mAP: 0.0
+mATE: 1.0548
+mASE: 0.8573
+mAOE: 1.1119
+mAVE: 1.1053
+mAAE: 0.8457
+NDS: 0.029698765807760374
+--------------------------
+Number of tokens: 95 %
+mAP: 0.0
+mATE: 1.0554
+mASE: 0.8561
+mAOE: 1.1136
+mAVE: 1.0836
+mAAE: 0.8445
+NDS: 0.029939861714946246
+--------------------------
+--------------------------
+Elapsed time: 70774.96003603935

@@ -1,68 +1,43 @@
 ***************************************************
-Evaluating Raw Attention with positive perturbation
+Evaluating Raw Attention with negative perturbation
 ***************************************************
-Number of tokens: 9 %
-mAP: 0.06428599237771894
-mATE: 1.0521
-mASE: 0.3173
-mAOE: 0.8208
-mAVE: 0.9728
-mAAE: 0.2745
-NDS: 0.19361069276259912
+mechanism: Raw Attention
+perturbation_type: negative
+pred_threshold: 0.4
+discard_threshold: 0.3
+head_fusion_method: max
+layer_fusion_method: max
+maps_quality: High
+remove_pad: True
+grad_rollout_handle_residual: True
+grad_rollout_apply_rule: True
+***************************************************
+Number of tokens: 92 %
+mAP: 0.11412226938722596
+mATE: 1.004
+mASE: 0.3415
+mAOE: 0.7355
+mAVE: 1.1866
+mAAE: 0.2985
+NDS: 0.21950597331214244
 --------------------------
-Number of tokens: 10 %
-mAP: 0.056580098759507126
-mATE: 1.0712
-mASE: 0.3199
-mAOE: 0.84
-mAVE: 0.98
-mAAE: 0.2743
-NDS: 0.18686290830252983
+Number of tokens: 94 %
+mAP: 0.08789482002999008
+mATE: 1.0379
+mASE: 0.3588
+mAOE: 0.7604
+mAVE: 1.2494
+mAAE: 0.3344
+NDS: 0.19858964916606076
 --------------------------
-Number of tokens: 11 %
-mAP: 0.04969369011633451
-mATE: 1.0819
-mASE: 0.3216
-mAOE: 0.8495
-mAVE: 0.9645
-mAAE: 0.2716
-NDS: 0.18411688184488134
---------------------------
-Number of tokens: 12 %
-mAP: 0.044403127334276725
-mATE: 1.0867
-mASE: 0.3253
-mAOE: 0.8695
-mAVE: 0.9718
-mAAE: 0.2822
-NDS: 0.1773279609575675
---------------------------
-Number of tokens: 13 %
-mAP: 0.03964066392347258
-mATE: 1.0948
-mASE: 0.3282
-mAOE: 0.8762
-mAVE: 0.9707
-mAAE: 0.2872
-NDS: 0.17360349474676623
---------------------------
-Number of tokens: 14 %
-mAP: 0.035385021536687
-mATE: 1.1058
-mASE: 0.3296
-mAOE: 0.9062
-mAVE: 0.9632
-mAAE: 0.2894
-NDS: 0.1688509233756468
---------------------------
-Number of tokens: 15 %
-mAP: 0.03144338212964982
-mATE: 1.1108
-mASE: 0.3334
-mAOE: 0.9262
-mAVE: 0.9731
-mAAE: 0.2951
-NDS: 0.1629470386138247
+Number of tokens: 96 %
+mAP: 0.05477032098736453
+mATE: 1.0281
+mASE: 0.495
+mAOE: 0.8435
+mAVE: 1.0988
+mAAE: 0.5003
+NDS: 0.1435136645996544
 --------------------------
 --------------------------
-Elapsed time: 180333.54144883156
+Elapsed time: 71919.97203683853
