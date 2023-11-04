@@ -26,7 +26,6 @@ class CustomMultiheadAttention(nn.MultiheadAttention):
         self.attn_gradients = None
 
     def save_attn_gradients(self, attn_gradients):
-        print("CROSS ATT GRADS", attn_gradients.sum())
         self.attn_gradients = attn_gradients
         
     def get_attn_gradients(self):
