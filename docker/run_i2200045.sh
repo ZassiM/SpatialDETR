@@ -18,8 +18,8 @@ docker run \
 --name spatial_detr_container \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
 --shm-size=16g \
---env DISPLAY=${DISPLAY} \
 --net=host \
+--env DISPLAY=${DISPLAY} \
 --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
 --volume $HOME/.Xauthority:/root/.Xauthority:rw \
 --mount source=$repo_dir,target=/workspace,type=bind,consistency=cached \

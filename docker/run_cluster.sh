@@ -17,6 +17,7 @@ docker run \
 --name $CONTAINER_NAME \
 --rm \
 --gpus 'all,"capabilities=compute,utility,graphics"' \
+--shm-size=64g \
 --net=host \
 --env DISPLAY=${DISPLAY} \
 --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
