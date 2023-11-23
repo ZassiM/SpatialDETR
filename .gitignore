@@ -145,3 +145,7 @@ backups/*
 maps/
 *.mp4
 modules/test.py
+backup/*
+eval_results_final/*
+results.txt
+misc/model_info/*

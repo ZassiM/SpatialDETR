@@ -44,7 +44,6 @@ class BaseApp(tk.Tk):
         # Canvas-related settings for plotting on Tkinter window
         self.canvas, self.fig, self.spec = None, None, None
         
-        self.file_suffix = 0            # Used for saving screenshots with different naming
         self.started_app = False        # True when model & dataset are loaded
         self.advanced_mode = False      # True when advanced mode is selected
         self.video_gen_bool = False     # True when a video has been generated
@@ -71,6 +70,7 @@ class BaseApp(tk.Tk):
 
         
         self.cam_idx = [2, 0, 1, 5, 3, 4]       # Used while plotting the images from the 6 camers
+        self.cam_names = ["Front-left", "Front", "Front-right", "Back-left", "Back", "Back-right"]
         self.bbox_coords, self.saliency_maps_objects = [], []
         
         # Main Tkinter menu in which all other cascade menus are added
@@ -78,13 +78,16 @@ class BaseApp(tk.Tk):
 
         # Cascade menus for loading model and selecting the GPU
         self.config(menu=self.menubar)
-        file_opt, gpu_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
+        file_opt, gpu_opt, screenshot_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.gpu_id = tk.IntVar()
         self.gpu_id.set(0)
+        self.screenshot_cam = tk.IntVar()
+        self.screenshot_cam.set(-1)
         file_opt.add_command(label=" Load model", command=self.load_model)
         file_opt.add_command(label=" Load model from config file", command=lambda: self.load_model(from_config=True))
         file_opt.add_command(label=" Save index", command=lambda: self.insert_entry(type=1))
-        file_opt.add_command(label=" Capture screen", command=self.capture)
+        # file_opt.add_command(label=" Capture screen", command=self.capture)
+        file_opt.add_cascade(label=" Screenshot", menu=screenshot_opt)
         file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
         file_opt.add_separator()
         file_opt.add_command(label=" Show car setup", command=self.show_car)
@@ -93,6 +96,10 @@ class BaseApp(tk.Tk):
         message = "You need to reload the model to apply GPU change."
         for i in range(torch.cuda.device_count()):
             gpu_opt.add_radiobutton(label=f"GPU {i}", variable=self.gpu_id, value=i, command=lambda: self.show_message(message))
+
+        screenshot_opt.add_radiobutton(label=f"Full", variable=self.screenshot_cam, value=-1, command=self.capture)
+        for i, cam_name in zip(self.cam_idx, self.cam_names):
+            screenshot_opt.add_radiobutton(label=f"{cam_name} camera", variable=self.screenshot_cam, value=i, command=self.capture)
 
         self.menubar.add_cascade(label=" File", menu=file_opt)
 
@@ -354,7 +361,8 @@ class BaseApp(tk.Tk):
         add_opt.add_checkbutton(label=" Show Ground Truth OBB", onvalue=1, offvalue=0, variable=self.GT_bool)
         add_opt.add_checkbutton(label=" Capture saliency maps", onvalue=1, offvalue=0, variable=self.capture_object)
         add_opt.add_command(label=" Change theme", command=self.change_theme)
-        add_opt.add_command(label=" Advanced Mode", command=self.toggle_advanced_mode)
+        add_opt.add_separator()
+        add_opt.add_checkbutton(label=" Advanced Mode", command=self.toggle_advanced_mode)
 
         # Adding all cascade menus to the main Menu
         self.add_separator()
@@ -389,7 +397,8 @@ class BaseApp(tk.Tk):
             self.expl_opt.add_cascade(label="Discard threshold", menu=self.dr_opt)
             self.expl_opt.add_cascade(label="Saliency map intensity", menu=self.int_opt)
             self.expl_opt.add_checkbutton(label="Generate segmentation map", onvalue=1, offvalue=0, variable=self.gen_segmentation)
-    
+
+            self.title('Explainable Multi-Sensor 3D Object Detection with Transformers   |   ADVANCED MODE')
             self.advanced_mode = True
 
         else:
@@ -397,9 +406,10 @@ class BaseApp(tk.Tk):
             self.dataidx_opt.delete(2)
 
             end_idx = self.video_opt.index('end')
-            self.video_opt.delete(end_idx-4, end_idx)
+            self.video_opt.delete(end_idx-2, end_idx)
             end_idx = self.expl_opt.index('end')
             self.expl_opt.delete(1, end_idx)
+            self.title('Explainable Multi-Sensor 3D Object Detection with Transformers')
             self.advanced_mode = False
         
         self.update_info_label()
@@ -697,7 +707,7 @@ class BaseApp(tk.Tk):
 
     def capture(self, event=None):
         ''' Takes screenshot of the whole window. '''
-        screenshots_path = "screenshots/"
+        screenshots_path = "screenshots/cameras/"
 
         if not os.path.exists(screenshots_path):
             os.makedirs(screenshots_path)
@@ -709,13 +719,19 @@ class BaseApp(tk.Tk):
             path = screenshots_path + f"{self.ObjectDetector.model_name}_{expl_string}_{self.data_idx}"
             if self.selected_pert_step.get() != -1:
                 path += f"_p{int(self.selected_pert_step.get()*100)}"
-            if os.path.exists(path+"_"+str(self.file_suffix)+".png"):
-                self.file_suffix += 1
-            else:
-                self.file_suffix = 0
-            path += "_" + str(self.file_suffix) + ".png"
         
-        self.fig.savefig(path, dpi=300, transparent=True)
+        if self.screenshot_cam.get() == -1:
+            path += ".png"
+            self.fig.savefig(path, dpi=300, transparent=True)
+        else:
+            fig_save, ax_save = plt.subplots()
+            ax_save.imshow(self.cam_imgs[self.screenshot_cam.get()])
+            ax_save.axis('off')  # Turn off axis
+
+            path += "_" + self.cam_names[self.cam_idx.index(self.screenshot_cam.get())] + ".png"
+            fig_save.savefig(path, transparent=True, bbox_inches='tight', pad_inches=0)
+            plt.close(fig_save)    
+            
         print(f"Screenshot saved in {path}.")
 
     def change_theme(self):

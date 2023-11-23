@@ -1,5 +1,6 @@
 """
-This script extracts the number of samples for each scene from the validation split of the v1.0-tranval dataset
+This script extracts the number of samples for each scene from the validation split of the v1.0-tranval dataset.
+It has been used to allow the selection of a particular scene for the video visualization feature.
 """
 from nuscenes.nuscenes import NuScenes
 

@@ -278,17 +278,12 @@ class App(BaseApp):
         # Saves saliency maps in a folder if the option is activated in the settings
         if self.capture_object.get():
             class_name = self.ObjectDetector.class_names[self.labels[self.bbox_idx[0]].item()]
-            folder_path = f"maps/{self.ObjectDetector.model_name}/{self.data_idx}_{self.selected_expl_type.get().replace(' ', '_')}_{self.selected_layer_fusion_type.get()}_{class_name}"
+            folder_path = f"screenshots/maps/{self.ObjectDetector.model_name}/{self.data_idx}_{self.selected_expl_type.get().replace(' ', '_')}_{self.selected_layer_fusion_type.get()}"
             if len(self.selected_layers) > 0:
                 folder_path += "_"
                 for layer in self.selected_layers:
                     folder_path += f"{layer}"
-            score = self.bbox_scores[self.thr_idxs][self.bbox_idx].item()
-            score = int(score*100)
-            folder_path += f"_{score}"
             folder_path = os.path.join(folder_path, class_name)
-            if not os.path.exists(folder_path):
-                os.makedirs(folder_path)
             file_name = 0
             file_path = os.path.join(folder_path, str(file_name))
             while os.path.exists(file_path):
@@ -296,6 +291,8 @@ class App(BaseApp):
                 file_name_new = file_name
                 file_path = os.path.join(folder_path, str(file_name_new))
             folder_path = file_path
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path)
     
         for i in range(len(self.saliency_maps_objects)):
 
@@ -311,33 +308,21 @@ class App(BaseApp):
                 ax_obj_seg = self.fig.add_subplot(self.spec[1, 2])
                 ax_obj_seg.imshow(att_nobbx_obj, vmin=0, vmax=1)
                 ax_obj_seg.axis('off')             
-            
-            # if self.capture_object.get():
-            #     fig_save, ax_save = plt.subplots()
-            #     ax_save.imshow(att_nobbx_obj, vmin=0, vmax=1)
-            #     ax_save.axis('off')  # Turn off axis
-            #     fig_name = f"layer_{i}.png"
-            #     if i == len(self.saliency_maps_objects) - 1:
-            #         fig_name = "full.png"
-            #     fig_save.savefig(os.path.join(folder_path, fig_name), transparent=True, bbox_inches='tight', pad_inches=0)
-            #     plt.close(fig_save)
 
-            if self.capture_object.get() and i == len(self.saliency_maps_objects) - 1:
+            if self.capture_object.get():
                 fig_save, ax_save = plt.subplots()
                 ax_save.imshow(att_nobbx_obj, vmin=0, vmax=1)
                 ax_save.axis('off')  # Turn off axis
 
-                fig_name = 0
+                fig_name = f"layer_{i}.png"
+                if i == len(self.saliency_maps_objects) - 1:
+                    fig_name = "full.png"
                 file_path = os.path.join(folder_path, str(fig_name))
-                while os.path.exists(file_path + ".png"):
-                    fig_name += 1
-                    file_path = os.path.join(folder_path, str(fig_name))
 
-                fig_save.savefig(os.path.join(folder_path, str(fig_name)), transparent=True, bbox_inches='tight', pad_inches=0)
+                file_path += ".png"
+                fig_save.savefig(file_path, transparent=True, bbox_inches='tight', pad_inches=0)
                 plt.close(fig_save)
 
-
-                
         if self.capture_object.get():
             print(f"Saliency maps saved in {folder_path}.")
 
