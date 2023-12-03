@@ -68,15 +68,15 @@ class BaseApp(tk.Tk):
                     self.scene_samples.append(number)
                     self.scene_descriptions.append(sentence)
 
-        
-        self.cam_idx = [2, 0, 1, 5, 3, 4]       # Used while plotting the images from the 6 camers
+        # Used while plotting the images from the 6 camers
+        self.cam_idx = [2, 0, 1, 5, 3, 4]      
         self.cam_names = ["Front-left", "Front", "Front-right", "Back-left", "Back", "Back-right"]
         self.bbox_coords, self.saliency_maps_objects = [], []
         
         # Main Tkinter menu in which all other cascade menus are added
         self.menubar = tk.Menu(self)
 
-        # Cascade menus for loading model and selecting the GPU
+        # Cascade menus for loading model, selecting the GPU and screenshot
         self.config(menu=self.menubar)
         file_opt, gpu_opt, screenshot_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.gpu_id = tk.IntVar()
@@ -86,21 +86,23 @@ class BaseApp(tk.Tk):
         file_opt.add_command(label=" Load model", command=self.load_model)
         file_opt.add_command(label=" Load model from config file", command=lambda: self.load_model(from_config=True))
         file_opt.add_command(label=" Save index", command=lambda: self.insert_entry(type=1))
-        # file_opt.add_command(label=" Capture screen", command=self.capture)
         file_opt.add_cascade(label=" Screenshot", menu=screenshot_opt)
         file_opt.add_cascade(label=" Gpu", menu=gpu_opt)
         file_opt.add_separator()
         file_opt.add_command(label=" Show car setup", command=self.show_car)
         file_opt.add_command(label=" How to use", command=self.show_app_info)
         
+        # Adding all possible GPUs available
         message = "You need to reload the model to apply GPU change."
         for i in range(torch.cuda.device_count()):
             gpu_opt.add_radiobutton(label=f"GPU {i}", variable=self.gpu_id, value=i, command=lambda: self.show_message(message))
 
+        # Ability to select which camera to use for taking a screenshot
         screenshot_opt.add_radiobutton(label=f"Full", variable=self.screenshot_cam, value=-1, command=self.capture)
         for i, cam_name in zip(self.cam_idx, self.cam_names):
             screenshot_opt.add_radiobutton(label=f"{cam_name} camera", variable=self.screenshot_cam, value=i, command=self.capture)
 
+        # The complete File menu
         self.menubar.add_cascade(label=" File", menu=file_opt)
 
     def load_model(self, from_config=False):
@@ -112,6 +114,7 @@ class BaseApp(tk.Tk):
         else:
             self.ObjectDetector.load_from_config()
 
+        # ExplainableTransformer object used through the app
         self.ExplainableModel = ExplainableTransformer(self.ObjectDetector)
 
         # Synced configurations: when a value is changed, the triggered function is called
@@ -119,32 +122,34 @@ class BaseApp(tk.Tk):
         self.data_configs = Configs(data_configs, triggered_function=self.update_data, type=0)
         self.expl_configs = Configs(expl_configs, triggered_function=self.ExplainableModel.generate_explainability, type=1)
 
+        # This initializes all the other Tkinter menus
         if not self.started_app:
             print("Starting app...")
-            self.start_app()
+            self.start_app()   
             self.random_data_idx()
             self.started_app = True
             print("Completed.\n")
 
+        # Updates the information text each time a new model is loaded
         self.update_info_label()
 
     def start_app(self):
         '''
-        It starts the UI after loading the model. Variables are initialized.
+        It starts the UI after loading the model by adding all other menus. Variables are initialized.
         '''
         self.frame = tk.Frame(self)
         self.frame.pack(fill=tk.Y)
         self.info_text = tk.StringVar()
         self.info_label = tk.Label(self.frame, textvariable=self.info_text, anchor=tk.CENTER)
         self.info_label.bind("<Button-1>", lambda event: self.show_model_info())
-        self.info_label.bind("<Enter>", lambda event: self.red_text())
+        self.info_label.bind("<Enter>", lambda event: self.red_text())  # Text becomes red while hovering on top of it
         self.info_label.bind("<Leave>", lambda event: self.black_text())
         self.info_label.pack(side=tk.TOP)
 
         self.info_text_video = tk.StringVar()
         self.info_label_video = tk.Label(self.frame, textvariable=self.info_text_video, anchor=tk.CENTER)
 
-        # **Cascade menu** for Data settings
+        # ***Main Menu*** for Data settings
         self.dataidx_opt, self.select_idx_opt, self.thr_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.selected_threshold = tk.DoubleVar()
         self.selected_threshold.set(0.5)
@@ -162,7 +167,7 @@ class BaseApp(tk.Tk):
         self.dataidx_opt.add_separator()
         self.dataidx_opt.add_command(label=" Show LiDAR", command=self.show_lidar)
 
-        # **Cascade menu** for Video settings
+        # ***Main Menu*** for Video settings
         videolength_opt = tk.Menu(self.menubar)
         video_lengths = np.arange(0, 1200, 100)
         video_lengths[0] = 10
@@ -172,6 +177,7 @@ class BaseApp(tk.Tk):
         for i in range(len(video_lengths)):
             videolength_opt.add_radiobutton(label=video_lengths[i], variable=self.video_length , value=video_lengths[i])
 
+        # ***Advanced Options*** Select a particular class of objects during video visualization
         self.filter_opt = tk.Menu(self.menubar)
         self.selected_filter = tk.IntVar()
         for label, class_name in enumerate(self.ObjectDetector.class_names):
@@ -179,6 +185,7 @@ class BaseApp(tk.Tk):
         self.filter_opt.add_radiobutton(label="All", variable=self.selected_filter, value=label+1,  command=self.update_object_filter)
         self.selected_filter.set(label+1)
 
+        # ***Advanced Options*** Select a particular video delay between frames
         self.delay_opt = tk.Menu(self.menubar)
         video_delays = np.arange(0, 35, 5)
         video_delays[0] = 1
@@ -187,7 +194,7 @@ class BaseApp(tk.Tk):
         for i in range(len(video_delays)):
             self.delay_opt.add_radiobutton(label=video_delays[i], variable=self.video_delay, value=video_delays[i])
         
-        self.aggregate_layers = tk.BooleanVar()
+        self.aggregate_layers = tk.BooleanVar()    
         self.aggregate_layers.set(True)
         self.video_opt = tk.Menu(self.menubar)
         self.video_opt.add_command(label=" Generate", command=self.generate_video)
@@ -195,7 +202,7 @@ class BaseApp(tk.Tk):
         self.video_opt.add_cascade(label=" Video length", menu=videolength_opt)
         self.video_opt.add_command(label=" Select scene", command=lambda: self.insert_entry(type=2))
 
-        # **Cascade menu** for object selection
+        # ***Main Menu*** for object selection
         self.bbox_opt = tk.Menu(self.menubar)
         self.single_bbox = tk.BooleanVar()
         self.select_all_bboxes = tk.BooleanVar()
@@ -204,7 +211,7 @@ class BaseApp(tk.Tk):
         self.bbox_opt.add_checkbutton(label=" Select all", onvalue=1, offvalue=0, variable=self.select_all_bboxes, command=self.initialize_bboxes)
         self.bbox_opt.add_separator()
 
-        # **Cascade menu** for Explainable options
+        # ***Main Menu*** for Explainable options
         self.expl_opt = tk.Menu(self.menubar)
         self.raw_attention_menu, self.grad_cam_menu, self.grad_rollout_menu = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.expl_options = ["Raw Attention", "Grad-CAM", "Gradient Rollout", "Self Attention"]
@@ -222,7 +229,7 @@ class BaseApp(tk.Tk):
                 command=self.update_info_label
             )
 
-        # Head Fusion Selection
+        # ***Advanced Options*** Head Fusion Selection
         self.head_fusion_options = ["max", "min", "mean", "zero_clamp_mean"]
         self.selected_head_fusion = tk.StringVar()
         self.selected_head_fusion.set(self.head_fusion_options[0])
@@ -244,7 +251,7 @@ class BaseApp(tk.Tk):
 
         self.raw_attention_menu.add_cascade(label=" Head Fusion", menu=head_fusion_opt)
 
-        # Layer Fusion Selection
+        # ***Advanced Options*** Layer Fusion Selection
         self.layer_fusion_options = ["max", "min", "mean", "last", "zero_clamp_mean"]
         layer_fusion_opt = tk.Menu(self.menubar)
         self.selected_layer_fusion_type = tk.StringVar()
@@ -259,21 +266,21 @@ class BaseApp(tk.Tk):
 
         self.raw_attention_menu.add_cascade(label=" Layer Fusion", menu=layer_fusion_opt)
 
-        # Grad-CAM
+        # ***Advanced Options*** Grad-CAM
         self.grad_cam_types = ["default"]
         self.selected_gradcam_type = tk.StringVar()
         self.selected_gradcam_type.set(self.grad_cam_types[0])
         for i in range(len(self.grad_cam_types)):
             self.grad_cam_menu.add_radiobutton(label=self.grad_cam_types[i].capitalize(), variable=self.selected_gradcam_type, value=self.grad_cam_types[i])
 
-        # Gradient Rollout
+        # ***Advanced Options*** Gradient Rollout
         self.handle_residual, self.apply_rule = tk.BooleanVar(), tk.BooleanVar()
         self.handle_residual.set(True)
         self.apply_rule.set(True)
         self.grad_rollout_menu.add_checkbutton(label=" Handle residual", variable=self.handle_residual, onvalue=1, offvalue=0)
         self.grad_rollout_menu.add_checkbutton(label=" Apply rule", variable=self.apply_rule, onvalue=1, offvalue=0)
 
-        # Perturbation Menu
+        # ***Advanced Options*** Perturbation Menu
         pert_step_opt, pert_type_opt = tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.selected_pert_step = tk.DoubleVar()
         self.selected_pert_step.set(-1)
@@ -288,7 +295,7 @@ class BaseApp(tk.Tk):
             pert_type_opt.add_radiobutton(label=mask_type,
                 variable=self.selected_pert_type, value=mask_type)
 
-        # Positive Negative Perturbation
+        # ***Advanced Options*** Positive Negative Perturbation
         pert_pos_neg_opt = tk.Menu(self.menubar)
         self.selected_pert_pos_neg = tk.StringVar()
         self.selected_pert_pos_neg.set("Positive")
@@ -297,7 +304,7 @@ class BaseApp(tk.Tk):
         pert_pos_neg_opt.add_radiobutton(label="Negative",
             variable=self.selected_pert_pos_neg, value="Negative")
 
-        # Visualization Colour of Perturbation
+        # ***Advanced Options*** Visualization Colour of Perturbation
         pert_colour_opt = tk.Menu(self.menubar)
         self.selected_pert_colour = tk.StringVar()
         self.selected_pert_colour.set("mean")
@@ -306,14 +313,14 @@ class BaseApp(tk.Tk):
         pert_colour_opt.add_radiobutton(label="Red",
             variable=self.selected_pert_colour, value="red")
 
-        # Perturbation Menu
+        # ***Advanced Options*** Perturbation Menu
         self.pert_opt = tk.Menu(self.menubar)
         self.pert_opt.add_cascade(label="Step", menu=pert_step_opt)
         self.pert_opt.add_cascade(label="Type", menu=pert_type_opt)
         self.pert_opt.add_cascade(label="PosNeg", menu=pert_pos_neg_opt)
         self.pert_opt.add_cascade(label="Colour", menu=pert_colour_opt)
 
-        # Sanity Check
+        # ***Advanced Options*** Sanity Check
         self.sancheck_opt = tk.Menu(self.menubar)
         self.selected_sancheck_layer = []
         for layer in range(self.ObjectDetector.num_layers):
@@ -321,7 +328,7 @@ class BaseApp(tk.Tk):
             self.selected_sancheck_layer.append(var)
             self.sancheck_opt.add_checkbutton(label=layer,  onvalue=1, offvalue=0, variable=var)
 
-        # Discard ratio for attention weights
+        # ***Advanced Options*** Discard ratio for attention weights
         self.dr_opt, self.int_opt, self.beta_opt = tk.Menu(self.menubar), tk.Menu(self.menubar), tk.Menu(self.menubar)
         self.gen_segmentation = tk.BooleanVar()
         self.selected_discard_threshold = tk.DoubleVar()
@@ -348,23 +355,23 @@ class BaseApp(tk.Tk):
         for i in range(len(map_qualities)):
             quality_opt.add_radiobutton(label=map_qualities[i], variable=self.selected_map_quality, value=map_qualities[i])
 
-        # Cascade menus for Additional options
-        add_opt = tk.Menu(self.menubar)
+        # ***Main Menu*** for additional settings
+        add_settings = tk.Menu(self.menubar)
         self.GT_bool, self.overlay_bool, self.bbox_2d, self.capture_object, self.remove_pad, self.draw_bboxes = \
             tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         self.overlay_bool.set(True)
         self.remove_pad.set(True)
         self.draw_bboxes.set(True)
-        add_opt.add_checkbutton(label=" Show predicted OBB", onvalue=1, offvalue=0, variable=self.draw_bboxes)
-        add_opt.add_checkbutton(label=" Show saliency maps", onvalue=1, offvalue=0, variable=self.overlay_bool)
-        add_opt.add_checkbutton(label=" 2D OBB", onvalue=1, offvalue=0, variable=self.bbox_2d)
-        add_opt.add_checkbutton(label=" Show Ground Truth OBB", onvalue=1, offvalue=0, variable=self.GT_bool)
-        add_opt.add_checkbutton(label=" Capture saliency maps", onvalue=1, offvalue=0, variable=self.capture_object)
-        add_opt.add_command(label=" Change theme", command=self.change_theme)
-        add_opt.add_separator()
-        add_opt.add_checkbutton(label=" Advanced Mode", command=self.toggle_advanced_mode)
+        add_settings.add_checkbutton(label=" Show predicted OBB", onvalue=1, offvalue=0, variable=self.draw_bboxes)
+        add_settings.add_checkbutton(label=" Show saliency maps", onvalue=1, offvalue=0, variable=self.overlay_bool)
+        add_settings.add_checkbutton(label=" 2D OBB", onvalue=1, offvalue=0, variable=self.bbox_2d)
+        add_settings.add_checkbutton(label=" Show Ground Truth OBB", onvalue=1, offvalue=0, variable=self.GT_bool)
+        add_settings.add_checkbutton(label=" Capture saliency maps", onvalue=1, offvalue=0, variable=self.capture_object)
+        add_settings.add_command(label=" Change theme", command=self.change_theme)
+        add_settings.add_separator()
+        add_settings.add_checkbutton(label=" Advanced Mode", command=self.toggle_advanced_mode)
 
-        # Adding all cascade menus to the main Menu
+        # Adding all menus to the main maenubar
         self.add_separator()
         self.menubar.add_cascade(label="Data", menu=self.dataidx_opt)
         self.add_separator()
@@ -374,7 +381,7 @@ class BaseApp(tk.Tk):
         self.add_separator()
         self.menubar.add_cascade(label="Explainability", menu=self.expl_opt)
         self.add_separator()
-        self.menubar.add_cascade(label="Settings", menu=add_opt)
+        self.menubar.add_cascade(label="Settings", menu=add_settings)
         self.add_separator("|")
         self.menubar.add_command(label="Visualize", command=self.visualize)
         self.add_separator("|")
@@ -402,7 +409,7 @@ class BaseApp(tk.Tk):
             self.advanced_mode = True
 
         else:
-            # Disactivate Advanced Mode
+            # Deactivate Advanced Mode
             self.dataidx_opt.delete(2)
 
             end_idx = self.video_opt.index('end')
@@ -523,7 +530,7 @@ class BaseApp(tk.Tk):
                 img_pert_list.append(img_pert)
 
             if len(img_pert_list) > 0:
-                # save_img the perturbed 6 camera images into the data input
+                # Save_img the perturbed 6 camera images into the data input
                 img_pert_list = torch.from_numpy(np.stack(img_pert_list))
                 img = [img_pert_list.permute(0, 3, 1, 2).unsqueeze(0)] # img = [torch.Size([1, 6, 3, 928, 1600])
                 self.data['img'][0] = DC(img)
@@ -544,6 +551,7 @@ class BaseApp(tk.Tk):
             imgs[i] = mmcv.imdenormalize(imgs[i], mean, std, to_bgr=False)
         self.imgs = imgs.astype(np.uint8)
 
+        # By default, when new data is loadedm all objects are selected for visualizing all bounding boxes
         all_select = True
         if self.selected_pert_step.get() > 0:
             all_select = False
@@ -620,7 +628,6 @@ class BaseApp(tk.Tk):
                     self.data_idx += self.scene_samples[i]
                 self.video_length.set(self.scene_samples[self.video_scene])
                 self.scene_description = self.scene_descriptions[self.video_scene]
-                # self.update_info_label()
             else:
                 self.show_message(f"Insert an integer between 0 and {len(self.scene_samples) -1}")
                 return
@@ -683,7 +690,6 @@ class BaseApp(tk.Tk):
             else:
                 if len(self.bboxes) > 0:
                     self.bboxes[0].set(True)
-                    # self.bboxes[next(self.indx_obj)].set(True)
 
     def single_bbox_select(self, idx=None, single_select=False):
         ''' Selects the first object and deselect all others. '''
@@ -698,7 +704,7 @@ class BaseApp(tk.Tk):
                     self.bboxes[i].set(False)
 
     def get_object_camera(self):
-        ''' Gets the camera index with the highest score for a selected object. '''
+        ''' Extracts the camera index with the highest score for a selected object. '''
         scores = self.ExplainableModel.scores
         if not scores:
             return -1
@@ -706,7 +712,7 @@ class BaseApp(tk.Tk):
         return cam_obj
 
     def capture(self, event=None):
-        ''' Takes screenshot of the whole window. '''
+        ''' Takes screenshot of the whole window or of a selected camera. '''
         screenshots_path = "screenshots/cameras/"
 
         if not os.path.exists(screenshots_path):
@@ -721,9 +727,11 @@ class BaseApp(tk.Tk):
                 path += f"_p{int(self.selected_pert_step.get()*100)}"
         
         if self.screenshot_cam.get() == -1:
+            # Whole window screenshot
             path += ".png"
             self.fig.savefig(path, dpi=300, transparent=True)
         else:
+            # Particular camera view screenshot
             fig_save, ax_save = plt.subplots()
             ax_save.imshow(self.cam_imgs[self.screenshot_cam.get()])
             ax_save.axis('off')  # Turn off axis
@@ -777,7 +785,6 @@ class BaseApp(tk.Tk):
             shutil.rmtree(self.video_folder)
         os.makedirs(self.video_folder)
 
-        #self.select_all_bboxes.set(True)
         self.img_labels = []
         self.start_video_idx = self.data_idx
         self.video_gen_bool = True
@@ -933,13 +940,13 @@ class BaseApp(tk.Tk):
             self.img_frames.append(images)
 
         # Assuming that there's at least one image
-        if len(folder_images) > 0:
+        if len(self.img_frames) > 0:
             self.start_video_idx = int(folder_images[0].split('.')[0].split('_')[-1])
             self.video_length.set(len(self.img_frames[0]))
             self.layers_video = len(self.img_frames)
             self.target_classes.append(list(range(self.video_length.get())))
         else:
-            self.show_message("The folder should contain at least one image!")
+            self.show_message("The folder should contain at least one image or a folder with images!")
             return
 
         # Extract video scene description from folder name
@@ -951,6 +958,7 @@ class BaseApp(tk.Tk):
                 if scene_index_str.isdigit():
                     scene_index = int(scene_index_str)
                     break 
+
         # Extract video scene descriptions from start index and video_lenght
         if scene_index is None:
             self.scene_indices = {}
@@ -963,8 +971,8 @@ class BaseApp(tk.Tk):
                     break
             scene_index = list(self.scene_indices.values())[0] 
 
+        # Update scene description accordingly
         self.scene_description = self.scene_descriptions[scene_index]
-
         self.update_info_video_label()
 
         if hasattr(self, "scale"):
@@ -1034,9 +1042,10 @@ class BaseApp(tk.Tk):
             if self.idx_video.get() >= self.video_length.get():
                 self.idx_video.set(0)
 
+            # Extracts the image frame and adapt the Tkinter canvas for it
             img_frame = self.img_frames[self.layer_idx][self.target_class[self.idx_video.get()]]
-
             self.w, self.h = self.canvas.winfo_width(), self.canvas.winfo_height()
+
             # If window is resized, update the canvas
             if (self.old_w, self.old_h) != (self.w, self.h):
                 img_w, img_h = img_frame.width, img_frame.height
@@ -1061,7 +1070,11 @@ class BaseApp(tk.Tk):
             if hasattr(self, "scene_indices"):
                 if self.data_idx in self.scene_indices:
                     scene_index = self.scene_indices[self.data_idx] + 1
-                    self.scene_description = self.scene_descriptions[scene_index]
+                    if self.scene_description != self.scene_descriptions[scene_index]:
+                        self.scene_description = self.scene_descriptions[scene_index]
+                    else:
+                        self.scene_description = self.scene_descriptions[scene_index-1]
+                    print(self.data_idx, scene_index, self.scene_description)
                     self.update_info_video_label()
 
             if not forced:

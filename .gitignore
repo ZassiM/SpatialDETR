@@ -135,17 +135,8 @@ data/sunrgbd/OFFICIAL_SUNRGBD/
 mmdet3d/core/evaluation/waymo_utils/compute_detection_metrics_main
 
 # Others
-testing.py
 screenshots/
 training_logs/*
-config.toml
 videos/
-Thesis/
-backups/*
-maps/
-*.mp4
-modules/test.py
 backup/*
-eval_results_final/*
-results.txt
 misc/model_info/*
