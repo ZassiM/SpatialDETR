@@ -13,12 +13,16 @@ from mmcv.cnn import xavier_init
 
 
 class Model():
+    ''' Model class. It manages the loading of the model, the weights and the dataset. '''
 
     def __init__(self):
         self.num_layers = 0
         self.use_mini_dataset = False
 
     def load_from_config(self, gpu_id=None):
+        ''' Allows a fast loading if the model and dataset do not change.
+            The moedl/dataset config file and weights can be defined inside config.toml. '''
+        
         with open("/workspace/config.toml", mode="rb") as argsF:
             args = tomli.load(argsF)
             
@@ -31,6 +35,8 @@ class Model():
         self.load_model(cfg_file, weights_file, gpu_id, launcher)
 
     def load_model(self, cfg_file=None, weights_file=None, gpu_id=None, launcher="single"):
+        ''' Loads the model with its weights and initialize all necessary objects. '''
+
         cfg_filetypes = (
             ('Config', '*.py'),
         )
@@ -38,12 +44,14 @@ class Model():
             ('Pickle', '*.pth'),
         )
         
+        # Model config selection
         if cfg_file is None:
             cfg_file = fd.askopenfilename(
                 title='Load model file',
                 initialdir='/workspace/configs/submission/',
                 filetypes=cfg_filetypes)
         
+        # Model weights selection
         if cfg_file:
             if weights_file is None:
                 weights_file = fd.askopenfilename(
@@ -64,6 +72,7 @@ class Model():
         args["checkpoint"] = weights_file
         args["launcher"] = launcher
 
+        # Model initialization 
         self.init_model(args)
         
         self.model_name = os.path.splitext(os.path.basename(cfg_file))[0]
@@ -78,7 +87,7 @@ class Model():
         print("\nModel loaded.\n")
 
     def init_model(self, args):
-        ''' Loads the model from a config file and loads the weights from a trained checkpoint '''
+        ''' Loads and initializes the model from a config file and loads the weights from a trained checkpoint '''
 
         cfg = Config.fromfile(args["config"])
 
@@ -139,6 +148,7 @@ class Model():
 
         dataset = build_dataset(cfg.data.val)
 
+        ''' To use if necessary. '''
         # data_loader = build_dataloader(
         #     dataset,
         #     samples_per_gpu=samples_per_gpu,
@@ -146,7 +156,7 @@ class Model():
         #     dist=distributed,
         #     shuffle=False)
 
-        # build the model and load checkpoint
+        # Build the model and load checkpoint
         cfg.model.train_cfg = None
         model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
         fp16_cfg = cfg.get('fp16', None)
@@ -155,20 +165,20 @@ class Model():
 
         checkpoint = load_checkpoint(model, args["checkpoint"], map_location='cpu')
 
-        # old versions did not save class info in checkpoints, this walkaround is for backward compatibility
+        # Old versions did not save class info in checkpoints, this walkaround is for backward compatibility
         if 'CLASSES' in checkpoint.get('meta', {}):
             model.CLASSES = checkpoint['meta']['CLASSES']
         else:
             model.CLASSES = dataset.CLASSES
 
-        # palette for visualization in segmentation tasks
+        # Palette for visualization in segmentation tasks
         if 'PALETTE' in checkpoint.get('meta', {}):
             model.PALETTE = checkpoint['meta']['PALETTE']
         elif hasattr(dataset, 'PALETTE'):
             # segmentation dataset has `PALETTE` attribute
             model.PALETTE = dataset.PALETTE
 
-        # For Sanity Check
+        ''' For Sanity Check. '''
         # model.pts_bbox_head.transformer.init_layers()
         # model.pts_bbox_head.transformer.init_weights()
         # model.img_backbone.init_weights()

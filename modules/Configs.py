@@ -1,7 +1,8 @@
 import torch
 
-
 class Configs:
+    ''' Configuration class. It checks when one parameter is changed before an update function is executed.
+        It speeds up the visualization of XAI when no parameters are changed.'''
     def __init__(self, initial_values, triggered_function, type, nms_idx=0):
         self.old_configs = initial_values.copy()
         self.new_configs = initial_values.copy()

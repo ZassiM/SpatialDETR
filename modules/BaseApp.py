@@ -1074,7 +1074,6 @@ class BaseApp(tk.Tk):
                         self.scene_description = self.scene_descriptions[scene_index]
                     else:
                         self.scene_description = self.scene_descriptions[scene_index-1]
-                    print(self.data_idx, scene_index, self.scene_description)
                     self.update_info_video_label()
 
             if not forced:
