@@ -140,3 +140,4 @@ training_logs/*
 videos/
 backup/*
 misc/model_info/*
+maps/

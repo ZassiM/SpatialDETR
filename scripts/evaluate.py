@@ -15,18 +15,20 @@ def main():
 
     config = {
         "mechanism": "Gradient Rollout",     #  'Raw Attention', 'Grad-CAM', 'Gradient Rollout', 'Random'
-        "perturbation_type": "negative",  #  'positive', 'negative'
+        "perturbation_type": "positive",  #  'positive', 'negative'
         "pred_threshold": 0.4,
         "discard_threshold": 0.3,
-        "head_fusion_method": "zero_clamp_mean",      #  'max', 'min', 'mean'
-        "layer_fusion_method": "max",    #  'max', 'min', 'mean', 'last'
+        "head_fusion_method": "max",      #  'max', 'min', 'mean', 'zero_clamp_mean'
+        "layer_fusion_method": "max",    #  'max', 'min', 'mean', 'zero_clamp_mean', 'last'
         "maps_quality": "High",
         "remove_pad": True,
         "grad_rollout_handle_residual": True,
         "grad_rollout_apply_rule": True,
     }
-    
-    perturbation_steps = [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.92, 0.94, 0.96, 0.98, 0.99]
+
+    # negative: [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.92, 0.94, 0.96, 0.98, 0.99]
+    # positive: [0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90]
+    perturbation_steps = [0.30]
 
     model = Model()
     model.load_from_config(gpu_id=0)
